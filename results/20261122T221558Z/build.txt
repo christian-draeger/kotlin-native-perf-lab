@@ -1,0 +1,19 @@
+> Task :kmpPartiallyResolvedDependenciesChecker
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :compileKotlinJvm UP-TO-DATE
+> Task :compileJvmMainJava NO-SOURCE
+> Task :jvmProcessResources NO-SOURCE
+> Task :processJvmMainResources SKIPPED
+> Task :jvmMainClasses UP-TO-DATE
+> Task :jvmJar UP-TO-DATE
+> Task :jvmDist UP-TO-DATE
+> Task :downloadKotlinNativeDistribution UP-TO-DATE
+> Task :compileKotlinNative UP-TO-DATE
+> Task :linkReleaseExecutableNative UP-TO-DATE
+
+BUILD SUCCESSFUL in 4s
+7 actionable tasks: 1 executed, 6 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.7.0/userguide/configuration_cache_enabling.html
+   Compiling axum-baseline v0.1.0 (/tmp/knpl-codex-phase0/rust-axum)
+    Finished `release` profile [optimized] target(s) in 7.57s
+Built Ktor JVM, Ktor Native and Rust Axum.

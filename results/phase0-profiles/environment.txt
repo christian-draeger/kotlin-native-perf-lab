@@ -1,0 +1,12 @@
+Diagnostic CPU sampling: /users/123, local HTTP/1.1, 2 wrk threads, 16 connections.
+Ten seconds of warm-up; about 15 seconds of profiling, one process per variant.
+git_sha=27d38135f7433b065d8321c21c06a95c9c9986de
+kernel=Linux 7.0.0-1017-azure
+machine=x86_64
+CPU(s):                                  4
+Vendor ID:                               AuthenticAMD
+Model name:                              AMD EPYC 7763 64-Core Processor
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)
+perf version 7.0.14

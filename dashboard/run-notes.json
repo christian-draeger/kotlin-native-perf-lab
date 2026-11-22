@@ -1,0 +1,12 @@
+{
+  "20261122T221558Z": {
+    "label": "Phase 0 · Mac baseline",
+    "kind": "Exploratory local run",
+    "host": "Apple M3 Max",
+    "note": "wrk and the servers shared one host. Ubuntu x86_64 ran under translation on Apple Silicon. JVM steady state remains unverified.",
+    "links": [
+      {"label": "Toolchains", "path": "results/toolchains.md"},
+      {"label": "Diagnostic profiles", "path": "results/profiles.md"}
+    ]
+  }
+}

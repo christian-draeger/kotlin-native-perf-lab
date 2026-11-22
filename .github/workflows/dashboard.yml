@@ -1,0 +1,211 @@
+name: Benchmark dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'results/**'
+      - 'dashboard/**'
+      - 'scripts/**'
+      - '.github/workflows/dashboard.yml'
+  pull_request:
+    paths:
+      - 'results/**'
+      - 'dashboard/**'
+      - 'scripts/**'
+      - '.github/workflows/dashboard.yml'
+  workflow_dispatch:
+    inputs:
+      run_benchmark:
+        description: Run the Ubuntu x86_64 and ARM64 benchmarks before publishing
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || 'benchmark-dashboard-publish' }}
+
+jobs:
+  arm_native:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
+    uses: ./.github/workflows/arm-native.yml
+
+  benchmark:
+    needs: arm_native
+    if: ${{ !cancelled() && needs.arm_native.result != 'skipped' }}
+    name: benchmark (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    outputs:
+      x86_artifact: ${{ matrix.arch == 'x86_64' && steps.upload.outputs.artifact-id || '' }}
+      arm_artifact: ${{ matrix.arch == 'aarch64' && steps.upload.outputs.artifact-id || '' }}
+    env:
+      LC_ALL: C
+      RUSTUP_TOOLCHAIN: '1.100.0'
+      EXPECTED_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Install wrk and Rust
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+      - name: Check the ARM64 cross-build
+        if: matrix.arch == 'aarch64'
+        env:
+          NATIVE_ARTIFACT: ${{ needs.arm_native.outputs.artifact_id }}
+        run: test -n "$NATIVE_ARTIFACT"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.arch == 'aarch64'
+        with:
+          artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/arm-native
+      - name: Build and smoke-test all baselines
+        run: |
+          if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
+            export PREBUILT_KTOR_DIR="$RUNNER_TEMP/arm-native"
+          fi
+          ./scripts/build-all.sh
+          ./scripts/smoke-all.sh
+      - name: Measure on the hosted Linux runner
+        id: measure
+        env:
+          RUNS: 5
+          WARMUP: 10
+          DURATION: 5
+          THREADS: 2
+          CONNECTIONS: 16
+        run: |
+          export BENCHMARK_RESULTS_DIR="$RUNNER_TEMP/benchmark-results"
+          ./scripts/benchmark.sh
+      - name: Record CI provenance and retain available logs
+        id: capture
+        if: ${{ !cancelled() && steps.measure.outcome != 'skipped' }}
+        env:
+          BENCHMARK_OUTCOME: ${{ steps.measure.outcome }}
+          RUNNER_LABEL: ${{ matrix.runner }}
+        run: |
+          shopt -s nullglob
+          archive="$RUNNER_TEMP/benchmark-archive"
+          for directory in "$RUNNER_TEMP"/benchmark-results/*; do
+            printf 'benchmark_source=github-hosted-actions\nci_run_id=%s\nci_run_attempt=%s\nbenchmark_outcome=%s\nrunner_image=%s\nrunner_image_version=%s\nrunner_label=%s\nnative_build_arch=x86_64\n' \
+              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$BENCHMARK_OUTCOME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$RUNNER_LABEL" >> "$directory/environment.txt"
+            mkdir -p "$archive"
+            mv "$directory" "$archive/${directory##*/}-$EXPECTED_ARCH"
+            printf 'directory=%s\n' "$archive" >> "$GITHUB_OUTPUT"
+          done
+      - name: Upload raw benchmark results
+        id: upload
+        if: ${{ !cancelled() && steps.capture.outputs.directory != '' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: linux-benchmark-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ steps.capture.outputs.directory }}
+          if-no-files-found: error
+
+  store:
+    needs: benchmark
+    if: ${{ !cancelled() && (needs.benchmark.outputs.x86_artifact != '' || needs.benchmark.outputs.arm_artifact != '') }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          artifact-ids: >-
+            ${{ needs.benchmark.outputs.x86_artifact && needs.benchmark.outputs.arm_artifact
+                && format('{0},{1}', needs.benchmark.outputs.x86_artifact, needs.benchmark.outputs.arm_artifact)
+                || needs.benchmark.outputs.x86_artifact || needs.benchmark.outputs.arm_artifact }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/raw-benchmark
+      - name: Commit the raw results to benchmark-data
+        run: |
+          if git ls-remote --exit-code origin refs/heads/benchmark-data >/dev/null; then
+            git fetch --no-tags --depth=1 origin refs/heads/benchmark-data
+            git switch --detach FETCH_HEAD
+          else
+            [[ "$?" == 2 ]]
+            git switch --orphan benchmark-data
+          fi
+          mkdir -p results
+          for directory in "$RUNNER_TEMP"/raw-benchmark/*; do
+            series="${directory##*/}"
+            [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)$ ]]
+            if [[ -e "results/$series" ]]; then
+              diff -r -- "$directory" "results/$series"
+              continue
+            fi
+            cp -R "$directory" "results/$series"
+            git add -f -- "results/$series"
+          done
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "Record Linux CI benchmark run $GITHUB_RUN_ID"
+            git push origin HEAD:refs/heads/benchmark-data
+          fi
+
+  build:
+    needs: [benchmark, store]
+    if: ${{ !cancelled() && (needs.benchmark.result == 'skipped' || needs.store.result == 'success') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Load archived CI results
+        run: |
+          if git ls-remote --exit-code origin refs/heads/benchmark-data >/dev/null; then
+            git fetch --no-tags --depth=1 origin refs/heads/benchmark-data
+            git worktree add --detach "$RUNNER_TEMP/benchmark-data" FETCH_HEAD
+          else
+            [[ "$?" == 2 ]]
+          fi
+      - name: Validate and build dashboard
+        run: |
+          python3 -m unittest discover -s scripts/tests
+          node --check dashboard/app.js
+          if [[ -d "$RUNNER_TEMP/benchmark-data" ]]; then
+            python3 scripts/build-dashboard.py dist --ci-checkout "$RUNNER_TEMP/benchmark-data"
+          else
+            python3 scripts/build-dashboard.py dist
+          fi
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
+        with:
+          path: dist
+
+  deploy:
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && github.ref_name == 'main' }}
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

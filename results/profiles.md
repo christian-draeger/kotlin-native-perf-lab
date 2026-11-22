@@ -1,0 +1,21 @@
+# Phase-0 diagnostic profiles
+
+All profiles exercised `/users/123` with HTTP/1.1 keep-alive, 16 connections and 2 local wrk threads. Each process warmed up for 10 seconds before a roughly 15-second sample. The software CPU clock sampled Ktor/Native and Rust at 99 Hz with DWARF stacks. JDK Flight Recorder used the JDK 21 `profile` configuration for Ktor/JVM. [Profile script](../scripts/profile.sh)
+
+The diagnostic run used Ubuntu 24.04 x86_64 on a shared GitHub Actions VM with 4 vCPUs on an AMD EPYC 7763, Linux `7.0.0-1017-azure`, Temurin 21.0.13+9 and perf 7.0.14. GitHub checked out synthetic merge commit `27d38135f7433b065d8321c21c06a95c9c9986de`. Its Git tree `b01a1aeadf4fd6b89f84d86a70cdbc69710ef8cf` matches the measured branch revision. The separate throughput study used a translated ARM host. The local perf probe produced addresses in the translator, so the diagnostic sampling moved to the native x86_64 runner. [Actions run](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45076720761) · [Profile environment](phase0-profiles/environment.txt)
+
+| Server | Largest identifiable costs | Routing, serialization, and allocation evidence |
+|---|---|---|
+| Ktor/JVM | 230 of 739 Java execution samples had a coroutine-runtime leaf, including work stealing and task-queue operations. 37 had a CIO, network, or NIO leaf. Separately, 485 of 490 native method samples had a network or NIO leaf, led by socket writes and epoll waits. | Routing and JSON serialization accounted for 12 and 17 Java leaves respectively. The 4,423 allocation samples show recurring header-map and byte-channel allocations and continuation objects. JFR recorded 14 young G1 collections and 66 compilation events during the recording. |
+| Ktor/Native | Kernel scheduling and synchronization led the identified costs. `_raw_spin_unlock_irqrestore` and `finish_task_switch` accounted for 18.80% and 8.50% of CPU-clock samples. 816 of the 877 stacks at these two leaves included a futex frame. | Native allocator and sweep functions were visible at 1.87% and 0.81% for their leading symbols. The selector loop was visible at 0.56%. Routing and JSON serialization did not rank among symbols above the 0.5% display threshold. |
+| Rust/Axum | TCP/IP and Hyper's HTTP/1 dispatch and flushing led the identifiable stack groups. 968 of 2,442 samples matched a TCP/IP or Hyper leaf, or a networking caller near the kernel spin-unlock leaf. | Individually, libc `malloc` and `cfree` were 0.98% each, and Serde JSON's string serializer was 0.74%. No dedicated routing symbol reached the 0.5% display threshold. |
+
+JFR execution counts describe Java leaves grouped by method package. Native method samples include waits and use a separate sampling cadence. Allocation samples describe allocation sites and are interpreted separately from execution counts. For perf, the flat reports retain leaf symbols even where call chains are missing. The raw stack output had no frames for 1,759 of 3,213 Native samples and 694 of 2,442 Rust samples, and more work can be inlined into neighboring symbols. These gaps limit attribution to individual application call sites. The counts describe this diagnostic workload and host. [OpenJDK JFR profile configuration](https://github.com/openjdk/jdk21u/blob/master/src/jdk.jfr/share/conf/jfr/profile.jfc) · [JFR tooling](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jfr.html) · [perf record](https://man7.org/linux/man-pages/man1/perf-record.1.html)
+
+- Ktor/JVM [JFR events](phase0-profiles/ktor-jvm.jfr.json.gz)
+- Ktor/Native [flat profile](phase0-profiles/ktor-native.perf.txt) and [sampled stacks](phase0-profiles/ktor-native.perf-stacks.txt.gz)
+- Rust/Axum [flat profile](phase0-profiles/rust-axum.perf.txt) and [sampled stacks](phase0-profiles/rust-axum.perf-stacks.txt.gz)
+
+## One next optimization
+
+Test batching readiness notifications in a separate Ktor/Native CIO variant so a worker can consume multiple ready connections per wake-up. The futex samples justify investigating wake-ups first. Use fuller Native stacks on dedicated x86_64 to confirm the handoff before changing it, then compare context switches per request, CPU seconds per million responses, and p99 against the stable baselines.

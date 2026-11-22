@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-variant="${1:?Usage: run-server.sh {ktor-jvm|ktor-native|rust-axum}}"
+variant="${1:?Usage: run-server.sh ktor-jvm|ktor-native|rust-axum}"
 case "$variant" in
   ktor-jvm)
     jar="$ROOT/ktor/build/jvmDist/app.jar"
