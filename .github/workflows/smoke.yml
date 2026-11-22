@@ -32,17 +32,3 @@ jobs:
           ./scripts/build-all.sh
       - name: Check HTTP parity
         run: ./scripts/smoke-all.sh
-      - name: Collect phase-0 diagnostic profiles
-        if: github.event_name == 'pull_request' && github.head_ref == 'feat/phase-0-baseline' && github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y wrk linux-tools-generic
-          export PERF_BIN="$(find /usr/lib/linux-tools -name perf -type f | sort -V | tail -1)"
-          PERF_SUDO=1 ./scripts/profile.sh "$RUNNER_TEMP/phase0-profiles"
-      - name: Upload diagnostic samples
-        if: github.event_name == 'pull_request' && github.head_ref == 'feat/phase-0-baseline' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: phase0-profiles
-          path: ${{ runner.temp }}/phase0-profiles
-          if-no-files-found: error

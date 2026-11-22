@@ -20,19 +20,20 @@ How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, and **Axum/Tokio** compare 
 4. Disable external application logging for all contenders. No debug builds or profilers during the reported runs.
 5. Warm up each process before measurement, especially JVM. Re-launch fresh server processes for repetitions when measuring peak RSS.
 6. Keep GC defaults for baseline; record JVM GC and Native GC settings. Tuning must be reported as a separate variant.
-7. Randomize/interleave variant order in higher-quality runs to mitigate drift. Local quick script uses fixed order for simplicity.
+7. Randomize/interleave variant order in higher-quality runs to mitigate drift. The local script rotates variant order each repetition and uses a fixed endpoint order.
 8. Run at multiple concurrency levels (e.g. 1, 16, 64, 256). Saturation throughput and low-concurrency latency answer different questions.
 9. Use at least 5 repetitions; report median, min/max or interval; investigate outliers.
 10. Store exact git SHA, CPU, kernel, JDK/Gradle/Kotlin/Ktor and rustc/cargo versions.
 
-## Limitations of starter benchmark.sh
+## Local harness and limitations
 
-- It uses `wrk` and `/proc`, and therefore requires Linux for process CPU/RSS.
-- Its load generator runs locally by default. Treat results as exploratory, not publication-grade.
-- The p99 from the `wrk` summary describes each run's request-level sample; no pooled cross-run p99 is inferred.
-- Process `/proc` CPU time is cumulative user+system and does not attribute load-generator CPU.
-- `VmHWM` is high-water RSS over the entire process life, including warmup.
-- Failed response bodies should be detected by the independent smoke checks; wrk itself does not validate JSON bodies.
+- The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.
+- The Lua callback reads p50, p95, and p99 from stock wrk's interval-corrected latency distribution after each run. Report the median and min–max of the run-level p99s. A pooled request-level p99 would require the original latency samples.
+- The CPU numerator is the change in cumulative process user and system time from `/proc/<pid>/stat` around the measured load. Its boundary includes starting and draining the load generator, and its accounting excludes the load generator and any CPU activity that Linux charges outside the server process.
+- The denominator for a valid run is the wrk completed response count. wrk flags HTTP statuses 400 and above and socket errors. The separate smoke checks require HTTP 200, verify the payloads and headers, and exercise keep-alive. wrk accepts 3xx and does not inspect payloads under load.
+- `VmHWM` includes process startup and warm-up. The CSV also records resident memory at the end of each measurement.
+- Check the warm-up and measurement logs before interpreting the table. A trial with zero completed responses, socket errors, or wrk HTTP errors is retained and left out of the aggregate. The fixed warm-up provides the same preconditioning workload across variants. Confirm JVM steady state separately.
+- Profile separately from throughput collection. Use JFR for JVM execution and allocation samples and Linux perf for Native and Rust on native CPU hardware. Report the endpoint and where samples were collected.
 
 ## Record the investigation
 

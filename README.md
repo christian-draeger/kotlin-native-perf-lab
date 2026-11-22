@@ -2,7 +2,7 @@
 
 A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **Ktor/CIO on Kotlin/Native**, **Rust/Axum**, and later a custom Kotlin/Native HTTP framework.
 
-**Status: Phase 0 scaffold. No benchmark results have been measured yet.** This is a starting point, not a performance claim.
+**Phase 0 baseline validation.** See [results/](results/) for the exploratory measurements and profiling evidence.
 
 ## Identical API contract
 
@@ -18,16 +18,18 @@ The Ktor servers use the *same* `commonMain` routes and serializers. Both use th
 
 - Linux x86_64 recommended for a reproducible initial baseline; supported Kotlin/Native host targets also cover common macOS architectures.
 - JDK 21 and Gradle 9.7 (the optional Gradle wrapper can be generated with `gradle wrapper --gradle-version 9.7.0`).
-- Rust stable + Cargo.
+- Rust and Cargo 1.100.0 for the recorded baseline (`rustup toolchain install 1.100.0 --profile minimal`).
 - `curl`, `python3`, `wrk`, `git`; Linux `/proc` for automated CPU/RSS measurements.
 
 ## Build
 
 ```bash
+export RUSTUP_TOOLCHAIN=1.100.0
 ./scripts/build-all.sh
+./scripts/smoke-all.sh
 ```
 
-This builds release-profile Rust and release Kotlin/Native, plus a JVM classpath distribution. **No benchmarks run during builds.** For a cold build, Kotlin/Native downloads a compiler toolchain.
+The build creates the Rust release binary using `Cargo.lock`, the Kotlin/Native release executable, and a JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises all three builds sequentially over HTTP/1.1. The GitHub Actions workflow runs these checks on Ubuntu 24.04 x86_64.
 
 ## Run any server
 
@@ -49,27 +51,23 @@ Use another terminal to check the exact API contract:
 RUNS=5 WARMUP=10 DURATION=30 THREADS=4 CONNECTIONS=64 ./scripts/benchmark.sh
 ```
 
-Raw `wrk` logs, CSV records and a median summary (`summary.md`) are stored in `results/<timestamp>/`. The harness starts a **fresh server process for each variant, endpoint and repetition**, performs a warm-up and uses `/proc` CPU time and peak RSS. The local load generator competes for CPU; for publishable results, use a separate load-generator machine and adjust the measurement procedure. See [BENCHMARK_PROTOCOL.md](BENCHMARK_PROTOCOL.md).
+The harness starts a fresh process per variant, endpoint, and repetition. It writes warm-up and measured `wrk` logs, environment and binary checksums, per-run CPU and RSS metrics, and a median [min–max] summary to `results/<timestamp>/`. The local load generator competes with the server for CPU. For controlled comparisons, use a separate load-generator machine and the [benchmark protocol](BENCHMARK_PROTOCOL.md).
+
+Install Linux `perf` to capture separate diagnostic CPU profiles on native Linux.
+
+```bash
+PERF_SUDO=1 ./scripts/profile.sh results/diagnostic-profiles
+```
+
+The command uses JDK Flight Recorder for Ktor/JVM and `perf` for the Native and Rust binaries. `PERF_BIN` can point to the installed `perf` binary when the distribution wrapper cannot find it.
 
 ## Phases
 
-- **Phase 0 (this scaffold):** parity contract, Ktor/JVM, Ktor/Native, Axum, reproducible tooling, and unmeasured baseline.
-- **Phase 1:** run and validate baseline on one specified Linux host; save raw data and exact versions, identify limiting resource.
+- **Phase 0 (this scaffold):** parity contract, Ktor/JVM, Ktor/Native, Axum, reproducible tooling, and exploratory baseline measurements.
+- **Phase 1:** establish a controlled baseline on a dedicated native Linux host and identify limiting resources.
 - **Phase 2:** build `kotlin-reactor` proof of concept with `epoll`, thread-per-core, native Buffer pool, and basic HTTP/1.1.
 - **Phase 3:** typed routing and generated JSON; compare at every change against the three baselines.
 - **Phase 4:** selective allocation analysis and compiler plugin *only if profiles justify it*.
-
-## Publish to GitHub
-
-The GitHub connector in this chat cannot create a repository. This local Git repository is already initialized with a starter commit. To create the **private** repository under your account and push it:
-
-```bash
-cd kotlin-native-perf-lab
-gh auth login  # skip if already authenticated
-gh repo create christian-draeger/kotlin-native-perf-lab --private --source=. --remote=origin --push
-```
-
-`gh` is GitHub's official CLI. You can switch visibility later in GitHub's repository settings.
 
 ## Codex
 
