@@ -1,0 +1,14 @@
+Running 10s test @ http://127.0.0.1:8080/users/123
+  2 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.44ms    2.86ms  60.13ms   90.60%
+    Req/Sec     4.14k     1.69k    8.24k    66.50%
+  Latency Distribution
+     50%    1.55ms
+     75%    2.90ms
+     90%    5.12ms
+     99%   13.97ms
+  82645 requests in 10.03s, 9.38MB read
+Requests/sec:   8236.27
+Transfer/sec:      0.93MB
+perflab requests=82645 duration_us=10034281 p50_us=1546 p95_us=7355 p99_us=13973 connect=0 read=0 write=0 timeout=0 http_errors=0

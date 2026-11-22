@@ -1,0 +1,14 @@
+Running 10s test @ http://127.0.0.1:8080/health
+  2 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     2.10ms    2.65ms  42.46ms   90.84%
+    Req/Sec     4.96k     2.08k   10.46k    65.50%
+  Latency Distribution
+     50%    1.24ms
+     75%    2.44ms
+     90%    4.49ms
+     99%   13.50ms
+  98822 requests in 10.01s, 7.63MB read
+Requests/sec:   9868.40
+Transfer/sec:    780.61KB
+perflab requests=98822 duration_us=10013981 p50_us=1244 p95_us=6772 p99_us=13497 connect=0 read=0 write=0 timeout=0 http_errors=0
