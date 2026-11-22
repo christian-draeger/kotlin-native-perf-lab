@@ -1,0 +1,46 @@
+name: Build Ktor binaries for Linux ARM64
+
+on:
+  workflow_call:
+    outputs:
+      artifact_id:
+        description: Ktor JVM distribution and Linux ARM64 release executable
+        value: ${{ jobs.cross_build.outputs.artifact_id }}
+
+permissions:
+  contents: read
+
+jobs:
+  cross_build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Build and verify the ARM64 release executable
+        env:
+          LC_ALL: C
+        run: |
+          test "$(uname -m)" = x86_64
+          gradle -p ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
+          executable=ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe
+          readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
+          mkdir "$RUNNER_TEMP/arm-native"
+          cp "$executable" "$RUNNER_TEMP/arm-native/"
+          cp -R ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        id: upload
+        with:
+          name: linux-aarch64-kotlin-native-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/arm-native
+          if-no-files-found: error

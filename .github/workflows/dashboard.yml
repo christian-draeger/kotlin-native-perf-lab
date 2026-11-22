@@ -2,7 +2,7 @@ name: Benchmark dashboard
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/phase-0-baseline]
     paths:
       - 'results/**'
       - 'dashboard/**'
@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       run_benchmark:
-        description: Run the Ubuntu x86_64 benchmark before publishing
+        description: Run the Ubuntu x86_64 and ARM64 benchmarks before publishing
         type: boolean
         default: true
 
@@ -28,16 +28,31 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || 'benchmark-dashboard-publish' }}
 
 jobs:
+  arm_native:
+    if: (github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark) || (github.event_name == 'push' && github.ref_name == 'feat/phase-0-baseline')
+    uses: ./.github/workflows/arm-native.yml
+
   benchmark:
-    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
-    runs-on: ubuntu-24.04
+    needs: arm_native
+    if: ${{ !cancelled() && needs.arm_native.result != 'skipped' }}
+    name: benchmark (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     outputs:
-      series: ${{ steps.capture.outputs.series }}
-      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      x86_artifact: ${{ matrix.arch == 'x86_64' && steps.upload.outputs.artifact-id || '' }}
+      arm_artifact: ${{ matrix.arch == 'aarch64' && steps.upload.outputs.artifact-id || '' }}
     env:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
+      EXPECTED_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -51,12 +66,26 @@ jobs:
           gradle-version: '9.7.0'
       - name: Install wrk and Rust
         run: |
-          test "$(uname -m)" = x86_64
+          test "$(uname -m)" = "$EXPECTED_ARCH"
           sudo apt-get update -qq
           sudo apt-get install -y wrk
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+      - name: Check the ARM64 cross-build
+        if: matrix.arch == 'aarch64'
+        env:
+          NATIVE_ARTIFACT: ${{ needs.arm_native.outputs.artifact_id }}
+        run: test -n "$NATIVE_ARTIFACT"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.arch == 'aarch64'
+        with:
+          artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/arm-native
       - name: Build and smoke-test all baselines
         run: |
+          if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
+            export PREBUILT_KTOR_DIR="$RUNNER_TEMP/arm-native"
+          fi
           ./scripts/build-all.sh
           ./scripts/smoke-all.sh
       - name: Measure on the hosted Linux runner
@@ -75,25 +104,29 @@ jobs:
         if: ${{ !cancelled() && steps.measure.outcome != 'skipped' }}
         env:
           BENCHMARK_OUTCOME: ${{ steps.measure.outcome }}
+          RUNNER_LABEL: ${{ matrix.runner }}
         run: |
           shopt -s nullglob
+          archive="$RUNNER_TEMP/benchmark-archive"
           for directory in "$RUNNER_TEMP"/benchmark-results/*; do
-            printf 'benchmark_source=github-hosted-actions\nci_run_id=%s\nci_run_attempt=%s\nbenchmark_outcome=%s\nrunner_image=%s\nrunner_image_version=%s\n' \
-              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$BENCHMARK_OUTCOME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" >> "$directory/environment.txt"
-            printf 'series=%s\ndirectory=%s\n' "${directory##*/}" "$directory" >> "$GITHUB_OUTPUT"
+            printf 'benchmark_source=github-hosted-actions\nci_run_id=%s\nci_run_attempt=%s\nbenchmark_outcome=%s\nrunner_image=%s\nrunner_image_version=%s\nrunner_label=%s\nnative_build_arch=x86_64\n' \
+              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$BENCHMARK_OUTCOME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$RUNNER_LABEL" >> "$directory/environment.txt"
+            mkdir -p "$archive"
+            mv "$directory" "$archive/${directory##*/}-$EXPECTED_ARCH"
+            printf 'directory=%s\n' "$archive" >> "$GITHUB_OUTPUT"
           done
       - name: Upload raw benchmark results
         id: upload
-        if: ${{ !cancelled() && steps.capture.outputs.series != '' }}
+        if: ${{ !cancelled() && steps.capture.outputs.directory != '' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: linux-benchmark-${{ github.run_attempt }}
+          name: linux-benchmark-${{ matrix.arch }}-${{ github.run_attempt }}
           path: ${{ steps.capture.outputs.directory }}
           if-no-files-found: error
 
   store:
     needs: benchmark
-    if: ${{ !cancelled() && needs.benchmark.outputs.artifact_id != '' }}
+    if: ${{ !cancelled() && (needs.benchmark.outputs.x86_artifact != '' || needs.benchmark.outputs.arm_artifact != '') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -101,14 +134,11 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          artifact-ids: ${{ needs.benchmark.outputs.artifact_id }}
+          artifact-ids: ${{ needs.benchmark.outputs.x86_artifact && needs.benchmark.outputs.arm_artifact && format('{0},{1}', needs.benchmark.outputs.x86_artifact, needs.benchmark.outputs.arm_artifact) || needs.benchmark.outputs.x86_artifact || needs.benchmark.outputs.arm_artifact }}
           merge-multiple: true
           path: ${{ runner.temp }}/raw-benchmark
       - name: Commit the raw results to benchmark-data
-        env:
-          SERIES: ${{ needs.benchmark.outputs.series }}
         run: |
-          [[ "$SERIES" =~ ^[0-9]{8}T[0-9]{6}Z$ ]]
           if git ls-remote --exit-code origin refs/heads/benchmark-data >/dev/null; then
             git fetch --no-tags --depth=1 origin refs/heads/benchmark-data
             git switch --detach FETCH_HEAD
@@ -117,15 +147,21 @@ jobs:
             git switch --orphan benchmark-data
           fi
           mkdir -p results
-          if [[ -e "results/$SERIES" ]]; then
-            diff -r -- "$RUNNER_TEMP/raw-benchmark" "results/$SERIES"
-            exit 0
+          for directory in "$RUNNER_TEMP"/raw-benchmark/*; do
+            series="${directory##*/}"
+            [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)$ ]]
+            if [[ -e "results/$series" ]]; then
+              diff -r -- "$directory" "results/$series"
+              continue
+            fi
+            cp -R "$directory" "results/$series"
+            git add -f -- "results/$series"
+          done
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "Record Linux CI benchmark run $GITHUB_RUN_ID"
+            git push origin HEAD:refs/heads/benchmark-data
           fi
-          cp -R "$RUNNER_TEMP/raw-benchmark" "results/$SERIES"
-          git add -f -- "results/$SERIES"
-          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-            commit -m "Record Linux CI benchmark $SERIES"
-          git push origin HEAD:refs/heads/benchmark-data
 
   build:
     needs: [benchmark, store]
@@ -157,7 +193,7 @@ jobs:
           path: dist
 
   deploy:
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && github.ref_name == 'main' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'feat/phase-0-baseline') }}
     needs: build
     runs-on: ubuntu-24.04
     permissions:

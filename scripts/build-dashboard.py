@@ -55,13 +55,15 @@ def read_run(csv_path, note, checkout, revision):
                 environment[key] = value.strip('"')
     ci = environment.get("benchmark_source") == "github-hosted-actions"
     if ci:
+        architecture = environment.get("machine", "unknown")
+        label = "ARM64" if architecture == "aarch64" else architecture
         note = {
-            "label": "GitHub Actions · Linux x86_64",
+            "label": f"GitHub Actions · Linux {label}",
             "kind": "Exploratory CI run",
             "host": environment.get("cpu_model"),
-            "note": "wrk and the servers shared one GitHub-hosted VM. Host conditions can vary between jobs.",
+            "note": "wrk and the servers shared one GitHub-hosted VM. Runner CPUs and host conditions vary across series.",
         }
-    timestamp = datetime.strptime(folder.name, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
+    timestamp = datetime.strptime(folder.name.partition("-")[0], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
     result = {
         "id": folder.name + ("-ci" if ci else ""),
         "date": timestamp.isoformat(),

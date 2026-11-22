@@ -57,7 +57,17 @@ class DashboardTest(unittest.TestCase):
             ci = dashboard.read_run(run / "results.csv", {}, root, "archive-revision")
             self.assertNotEqual(ci["id"], data["id"])
             self.assertEqual(ci["note"]["kind"], "Exploratory CI run")
+            self.assertEqual(ci["note"]["label"], "GitHub Actions · Linux x86_64")
             self.assertEqual(ci["note"]["host"], "AMD EPYC")
             self.assertEqual(ci["ci_run_id"], "1234")
             self.assertEqual(ci["revision"], "archive-revision")
             self.assertTrue(ci["incomplete"])
+
+            arm = run.with_name(run.name + "-aarch64")
+            run.rename(arm)
+            environment = arm / "environment.txt"
+            environment.write_text(environment.read_text().replace("machine=x86_64", "machine=aarch64"))
+            arm_series = dashboard.read_run(arm / "results.csv", {}, root, "archive-revision")
+            self.assertEqual(arm_series["date"], ci["date"])
+            self.assertNotEqual(arm_series["id"], ci["id"])
+            self.assertEqual(arm_series["note"]["label"], "GitHub Actions · Linux ARM64")

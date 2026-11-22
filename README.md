@@ -8,7 +8,7 @@ A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **K
 
 Browse throughput, tail latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. The dashboard defaults to the newest series. Optional notes and links for a specific series go in `dashboard/run-notes.json`.
 
-To collect a hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 benchmark before publishing** enabled. The workflow builds and smoke-tests each server, runs five trials per variant and endpoint, commits the raw logs to the `benchmark-data` branch, then updates Pages. wrk and the servers share an Ubuntu 24.04 VM on GitHub-hosted infrastructure. These exploratory CI series are labeled separately in the dashboard.
+To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. The two Ubuntu 24.04 runners test and measure the same endpoints with five trials per server variant. Each series has its own raw logs on `benchmark-data` and its own architecture label on Pages. Within each runner, wrk and the servers share one VM. CPU models and host conditions differ between runners.
 
 For a local preview, build the static files and serve the output directory.
 
@@ -42,7 +42,7 @@ export RUSTUP_TOOLCHAIN=1.100.0
 ./scripts/smoke-all.sh
 ```
 
-The build creates the Rust release binary using `Cargo.lock`, the Kotlin/Native release executable, and a JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises all three builds sequentially over HTTP/1.1. The GitHub Actions workflow runs these checks on Ubuntu 24.04 x86_64.
+The build creates the Rust release binary using `Cargo.lock`, the Kotlin/Native release executable, and a JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises all three builds sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executable on x86_64 and runs it on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
 
 ## Run any server
 

@@ -17,7 +17,7 @@ kotlin {
     }
 
     val os = System.getProperty("os.name")
-    val arch = System.getProperty("os.arch")
+    val arch = providers.gradleProperty("benchmark.targetArch").getOrElse(System.getProperty("os.arch"))
     val nativeTarget = when {
         os == "Linux" && arch in listOf("x86_64", "amd64") -> linuxX64("native")
         os == "Linux" && arch == "aarch64" -> linuxArm64("native")

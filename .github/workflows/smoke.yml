@@ -1,4 +1,4 @@
-name: Ubuntu x86_64 smoke
+name: Ubuntu smoke
 
 on:
   push:
@@ -10,8 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  arm_native:
+    uses: ./.github/workflows/arm-native.yml
+
   smoke:
-    runs-on: ubuntu-24.04
+    needs: arm_native
+    if: ${{ !cancelled() }}
+    name: smoke (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -24,11 +38,26 @@ jobs:
           gradle-version: '9.7.0'
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.100.0 --profile minimal
+      - name: Check the ARM64 cross-build
+        if: matrix.arch == 'aarch64'
+        env:
+          NATIVE_ARTIFACT: ${{ needs.arm_native.outputs.artifact_id }}
+        run: test -n "$NATIVE_ARTIFACT"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.arch == 'aarch64'
+        with:
+          artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/arm-native
       - name: Build all baselines
         env:
           RUSTUP_TOOLCHAIN: '1.100.0'
+          EXPECTED_ARCH: ${{ matrix.arch }}
         run: |
-          test "$(uname -m)" = x86_64
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
+            export PREBUILT_KTOR_DIR="$RUNNER_TEMP/arm-native"
+          fi
           ./scripts/build-all.sh
       - name: Check HTTP parity
         run: ./scripts/smoke-all.sh
