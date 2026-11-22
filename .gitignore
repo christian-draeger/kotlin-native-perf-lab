@@ -1,0 +1,11 @@
+.gradle/
+**/.gradle/
+**/build/
+**/target/
+.idea/
+.DS_Store
+*.iml
+# Keep result files locally by default; explicitly git-add approved benchmark data.
+results/*/
+__pycache__/
+*.pyc
