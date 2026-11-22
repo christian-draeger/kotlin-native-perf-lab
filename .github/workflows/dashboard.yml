@@ -2,7 +2,7 @@ name: Benchmark dashboard
 
 on:
   push:
-    branches: [main, feat/phase-0-baseline]
+    branches: [main]
     paths:
       - 'results/**'
       - 'dashboard/**'
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   benchmark:
-    if: (github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark) || (github.event_name == 'push' && github.ref_name == 'feat/phase-0-baseline')
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs:
@@ -151,7 +151,7 @@ jobs:
           path: dist
 
   deploy:
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'feat/phase-0-baseline') }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && github.ref_name == 'main' }}
     needs: build
     runs-on: ubuntu-24.04
     permissions:
