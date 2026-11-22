@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generate the static Pages dashboard from versioned trial data."""
+import argparse
 from collections import defaultdict
 import csv
 from datetime import datetime, timezone
@@ -9,7 +10,6 @@ from pathlib import Path
 import shutil
 from statistics import median
 import subprocess
-import sys
 from urllib.parse import quote
 
 
@@ -25,8 +25,8 @@ METRICS = {
 }
 
 
-def git(*args):
-    return subprocess.check_output(["git", "-C", ROOT, *args], text=True)
+def git(checkout, *args):
+    return subprocess.check_output(["git", "-C", checkout, *args], text=True)
 
 
 def stats(rows):
@@ -37,7 +37,7 @@ def stats(rows):
     return output
 
 
-def read_run(csv_path, note):
+def read_run(csv_path, note, checkout, revision):
     folder = csv_path.parent
     with csv_path.open(newline="") as file:
         rows = list(csv.DictReader(file))
@@ -48,18 +48,31 @@ def read_run(csv_path, note):
     environment = {}
     if environment_path.is_file():
         for line in environment_path.read_text().splitlines():
+            if line.startswith("Model name:"):
+                environment["cpu_model"] = line.split(":", 1)[1].strip()
             key, separator, value = line.partition("=")
             if separator:
                 environment[key] = value.strip('"')
+    ci = environment.get("benchmark_source") == "github-hosted-actions"
+    if ci:
+        note = {
+            "label": "GitHub Actions · Linux x86_64",
+            "kind": "Exploratory CI run",
+            "host": environment.get("cpu_model"),
+            "note": "wrk and the servers shared one GitHub-hosted VM. Host conditions can vary between jobs.",
+        }
     timestamp = datetime.strptime(folder.name, "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
     result = {
-        "id": folder.name,
+        "id": folder.name + ("-ci" if ci else ""),
         "date": timestamp.isoformat(),
-        "folder": quote(folder.relative_to(ROOT).as_posix()),
+        "folder": quote(folder.relative_to(checkout).as_posix()),
+        "revision": revision,
         "os": environment.get("PRETTY_NAME"),
         "machine": environment.get("machine"),
         "local": environment.get("load_generator", "").startswith("local "),
         "sha": environment.get("git_sha"),
+        "ci_run_id": environment.get("ci_run_id") if ci else None,
+        "incomplete": ci and environment.get("benchmark_outcome") != "success",
         "valid": sum(row["valid"] == "1" for row in rows),
         "total": len(rows),
         "parameters": {},
@@ -81,16 +94,22 @@ def read_run(csv_path, note):
     return result
 
 
-def main(destination):
+def tracked_runs(checkout, revision, notes):
+    paths = git(checkout, "ls-files", "-z", "--", "results/*/results.csv").split("\0")
+    for path in filter(None, paths):
+        csv_path = checkout / path
+        if csv_path.parent.parent == checkout / "results":
+            yield read_run(csv_path, notes.get(csv_path.parent.name, {}), checkout, revision)
+
+
+def main(destination, ci_checkout):
     notes = json.loads((ASSETS / "run-notes.json").read_text())
     repo = os.environ.get("GITHUB_REPOSITORY", "christian-draeger/kotlin-native-perf-lab")
-    revision = git("rev-parse", "HEAD").strip()
-    paths = git("ls-files", "-z", "--", "results/*/results.csv").split("\0")
-    runs = []
-    for path in filter(None, paths):
-        csv_path = ROOT / path
-        if csv_path.parent.parent == ROOT / "results":
-            runs.append(read_run(csv_path, notes.get(csv_path.parent.name, {})))
+    revision = git(ROOT, "rev-parse", "HEAD").strip()
+    runs = list(tracked_runs(ROOT, revision, notes))
+    if ci_checkout:
+        ci_revision = git(ci_checkout, "rev-parse", "HEAD").strip()
+        runs.extend(tracked_runs(ci_checkout, ci_revision, {}))
     data = {
         "repository": f"https://github.com/{repo}",
         "revision": revision,
@@ -106,6 +125,8 @@ def main(destination):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("Usage: python3 scripts/build-dashboard.py OUTPUT_DIRECTORY")
-    main(Path(sys.argv[1]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("destination", type=Path)
+    parser.add_argument("--ci-checkout", type=Path)
+    args = parser.parse_args()
+    main(args.destination, args.ci_checkout)

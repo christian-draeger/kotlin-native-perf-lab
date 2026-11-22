@@ -3,7 +3,6 @@ import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "build-dashboard.py"
@@ -36,8 +35,7 @@ class DashboardTest(unittest.TestCase):
                     {**common, "variant": "rust-axum", "valid": "0"},
                     {**common, "endpoint": "/json", "rps": 120},
                 ])
-            with patch.object(dashboard, "ROOT", root):
-                data = dashboard.read_run(run / "results.csv", {})
+            data = dashboard.read_run(run / "results.csv", {}, root, "source-revision")
             native, failed, json_group = data["groups"]
             self.assertEqual(data["valid"], 3)
             self.assertEqual(data["total"], 5)
@@ -50,3 +48,16 @@ class DashboardTest(unittest.TestCase):
             self.assertEqual(failed["valid"], 0)
             self.assertIsNone(failed["stats"])
             self.assertEqual(json_group["stats"]["rps"]["median"], 120)
+
+            with (run / "environment.txt").open("a") as output:
+                output.write(
+                    "Model name: AMD EPYC\nbenchmark_source=github-hosted-actions\n"
+                    "ci_run_id=1234\nbenchmark_outcome=failure\n"
+                )
+            ci = dashboard.read_run(run / "results.csv", {}, root, "archive-revision")
+            self.assertNotEqual(ci["id"], data["id"])
+            self.assertEqual(ci["note"]["kind"], "Exploratory CI run")
+            self.assertEqual(ci["note"]["host"], "AMD EPYC")
+            self.assertEqual(ci["ci_run_id"], "1234")
+            self.assertEqual(ci["revision"], "archive-revision")
+            self.assertTrue(ci["incomplete"])

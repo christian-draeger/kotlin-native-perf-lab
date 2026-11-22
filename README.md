@@ -8,6 +8,8 @@ A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **K
 
 Browse throughput, tail latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. The dashboard defaults to the newest series. Optional notes and links for a specific series go in `dashboard/run-notes.json`.
 
+To collect a hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 benchmark before publishing** enabled. The workflow builds and smoke-tests each server, runs five trials per variant and endpoint, commits the raw logs to the `benchmark-data` branch, then updates Pages. wrk and the servers share an Ubuntu 24.04 VM on GitHub-hosted infrastructure. These exploratory CI series are labeled separately in the dashboard.
+
 For a local preview, build the static files and serve the output directory.
 
 ```bash
