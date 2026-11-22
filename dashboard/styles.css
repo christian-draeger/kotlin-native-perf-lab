@@ -61,6 +61,7 @@ h2 { margin: 0; font-size: 1.35rem; letter-spacing: -.025em; line-height: 1.2; }
 .jvm { --series: #3265dd; }
 .native { --series: #087f75; }
 .rust { --series: #7950b5; }
+.reactor { --series: #a85616; }
 .other { --series: #64748b; }
 .chart-row-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: .75rem; }
 .variant-name, .chart-value { display: flex; align-items: baseline; gap: .5rem; flex-wrap: wrap; }

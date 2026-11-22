@@ -55,7 +55,8 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   wrk --version 2>&1 | sed -n '1p' || true
   python3 --version
   sha256sum "$ROOT"/ktor/build/jvmDist/app.jar "$ROOT"/ktor/build/jvmDist/lib/*.jar \
-    "$ROOT"/ktor/build/bin/native/releaseExecutable/*.kexe "$ROOT"/rust-axum/target/release/axum-baseline |
+    "$ROOT"/ktor/build/bin/native/releaseExecutable/*.kexe "$ROOT"/rust-axum/target/release/axum-baseline \
+    "$ROOT"/kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe |
     sed "s|  $ROOT/|  |"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
   echo 'load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers'
@@ -64,7 +65,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
 trap stop_server EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-variants=(ktor-jvm ktor-native rust-axum)
+variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
 wrk_args=(--latency -s "$ROOT/scripts/wrk-stats.lua" -t "$THREADS" -c "$CONNECTIONS" --timeout 2s)
 
 for ((run = 1; run <= RUNS; run++)); do

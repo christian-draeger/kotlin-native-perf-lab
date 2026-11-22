@@ -40,7 +40,7 @@ check_load() {
     return 1
   fi
 }
-for variant in ktor-jvm ktor-native rust-axum; do
+for variant in ktor-jvm ktor-native rust-axum kotlin-reactor; do
   start_server "$variant" "$scratch/server.txt"
   "$ROOT/scripts/smoke.sh" "http://127.0.0.1:$PORT"
   "${load[@]}" -d 10s "$url" > "$scratch/warmup.txt"

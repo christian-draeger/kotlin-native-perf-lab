@@ -2,7 +2,7 @@ name: Benchmark dashboard
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/reactor-reference]
     paths:
       - 'results/**'
       - 'dashboard/**'
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   arm_native:
-    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
+    if: (github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark) || (github.event_name == 'push' && github.ref_name == 'feat/reactor-reference')
     uses: ./.github/workflows/arm-native.yml
 
   benchmark:
@@ -84,7 +84,7 @@ jobs:
       - name: Build and smoke-test all baselines
         run: |
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
-            export PREBUILT_KTOR_DIR="$RUNNER_TEMP/arm-native"
+            export PREBUILT_KOTLIN_DIR="$RUNNER_TEMP/arm-native"
           fi
           ./scripts/build-all.sh
           ./scripts/smoke-all.sh
@@ -196,7 +196,7 @@ jobs:
           path: dist
 
   deploy:
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && github.ref_name == 'main' }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'feat/reactor-reference') }}
     needs: build
     runs-on: ubuntu-24.04
     permissions:

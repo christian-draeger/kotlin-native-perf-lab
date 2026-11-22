@@ -8,13 +8,16 @@ trap 'stop_server; rm -rf "$logs"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-for variant in ktor-jvm ktor-native rust-axum; do
+for variant in ktor-jvm ktor-native rust-axum kotlin-reactor; do
   echo "=== $variant ==="
   log="$logs/$variant.txt"
   start_server "$variant" "$log"
   if ! "$ROOT/scripts/smoke.sh" "http://127.0.0.1:$PORT"; then
     cat "$log" >&2
     exit 1
+  fi
+  if [[ "$variant" == kotlin-reactor ]]; then
+    python3 "$ROOT/scripts/tests/reactor_http_smoke.py" "$PORT"
   fi
   stop_server
 done

@@ -1,8 +1,8 @@
 # Kotlin Native Performance Lab
 
-A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **Ktor/CIO on Kotlin/Native**, **Rust/Axum**, and later a custom Kotlin/Native HTTP framework.
+A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **Ktor/CIO on Kotlin/Native**, **Rust/Axum**, and an independent [Kotlin/Native reactor](kotlin-reactor/README.md).
 
-**Phase 0 baseline validation.** See [results/](results/) for the exploratory measurements and profiling evidence.
+**Phase 0 baselines and a Linux reference reactor.** See [results/](results/) for the exploratory measurements and profiling evidence.
 
 ## Benchmark dashboard
 
@@ -42,7 +42,7 @@ export RUSTUP_TOOLCHAIN=1.100.0
 ./scripts/smoke-all.sh
 ```
 
-The build creates the Rust release binary using `Cargo.lock`, the Kotlin/Native release executable, and a JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises all three builds sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executable on x86_64 and runs it on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
+The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native release executables, and a Ktor JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises the three baselines and the reference reactor sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executables on x86_64 and runs them on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
 
 ## Run any server
 
@@ -50,6 +50,7 @@ The build creates the Rust release binary using `Cargo.lock`, the Kotlin/Native 
 PORT=8080 ./scripts/run-server.sh ktor-jvm
 PORT=8080 ./scripts/run-server.sh ktor-native
 PORT=8080 ./scripts/run-server.sh rust-axum
+PORT=8080 ./scripts/run-server.sh kotlin-reactor
 ```
 
 Use another terminal to check the exact API contract:
@@ -78,7 +79,7 @@ The command uses JDK Flight Recorder for Ktor/JVM and `perf` for the Native and 
 
 The [roadmap](ROADMAP.md) describes the proposed Kotlin/Native framework, how to validate it, and the delivery milestones. Each implementation issue has prerequisites and acceptance criteria in [GitHub Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues). [Phase-0 assignment](CODEX_FIRST_TASK.md)
 
-Run the fast local checks with Python 3 and Node.js.
+Run the fast local checks with JDK 21, Python 3 and Node.js. Add `--static` to run the shell and dashboard checks alone.
 
 ```bash
 ./scripts/check-fast.sh
