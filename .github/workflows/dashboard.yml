@@ -2,7 +2,7 @@ name: Benchmark dashboard
 
 on:
   push:
-    branches: [main, feat/phase-0-baseline]
+    branches: [main]
     paths:
       - 'results/**'
       - 'dashboard/**'
@@ -38,7 +38,7 @@ jobs:
           path: dist
 
   deploy:
-    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'feat/phase-0-baseline')
+    if: github.event_name != 'pull_request' && github.ref_name == 'main'
     needs: build
     runs-on: ubuntu-24.04
     concurrency:
