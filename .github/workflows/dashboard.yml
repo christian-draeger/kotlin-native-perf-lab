@@ -2,7 +2,7 @@ name: Benchmark dashboard
 
 on:
   push:
-    branches: [main, feat/phase-0-baseline]
+    branches: [main]
     paths:
       - 'results/**'
       - 'dashboard/**'
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   arm_native:
-    if: (github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark) || (github.event_name == 'push' && github.ref_name == 'feat/phase-0-baseline')
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
     uses: ./.github/workflows/arm-native.yml
 
   benchmark:
@@ -134,7 +134,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          artifact-ids: ${{ needs.benchmark.outputs.x86_artifact && needs.benchmark.outputs.arm_artifact && format('{0},{1}', needs.benchmark.outputs.x86_artifact, needs.benchmark.outputs.arm_artifact) || needs.benchmark.outputs.x86_artifact || needs.benchmark.outputs.arm_artifact }}
+          artifact-ids: >-
+            ${{ needs.benchmark.outputs.x86_artifact && needs.benchmark.outputs.arm_artifact
+                && format('{0},{1}', needs.benchmark.outputs.x86_artifact, needs.benchmark.outputs.arm_artifact)
+                || needs.benchmark.outputs.x86_artifact || needs.benchmark.outputs.arm_artifact }}
           merge-multiple: true
           path: ${{ runner.temp }}/raw-benchmark
       - name: Commit the raw results to benchmark-data
@@ -193,7 +196,7 @@ jobs:
           path: dist
 
   deploy:
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'feat/phase-0-baseline') }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && github.ref_name == 'main' }}
     needs: build
     runs-on: ubuntu-24.04
     permissions:
