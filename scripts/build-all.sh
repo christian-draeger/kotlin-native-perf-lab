@@ -9,5 +9,5 @@ else
   echo 'Gradle not found. Install Gradle 9.7 or generate the wrapper in ktor/.' >&2
   exit 1
 fi
-cargo build --release --manifest-path "$ROOT/rust-axum/Cargo.toml"
+cargo build --release --locked --manifest-path "$ROOT/rust-axum/Cargo.toml"
 echo 'Built Ktor JVM, Ktor Native and Rust Axum.'
