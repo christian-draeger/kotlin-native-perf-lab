@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Benchmark-Dashboard für Ktor/CIO und Rust/Axum mit Messdaten, Streuung und Versuchsbedingungen.">
+  <title>Kotlin Native Performance Lab · Benchmark-Dashboard</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./data.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="wordmark" href="./">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        Kotlin Native Performance Lab
+      </a>
+      <nav aria-label="Navigation">
+        <a href="#details" id="details-link">Messwerte</a>
+        <a id="repository" href="https://github.com/christian-draeger/kotlin-native-perf-lab">Repository</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="overview">
+    <section class="hero">
+      <div class="shell hero-inner">
+        <div>
+          <h1>Performance im Überblick</h1>
+          <p>Ktor/CIO auf JVM und Native im Vergleich mit Rust/Axum.</p>
+        </div>
+        <div class="run-picker" id="run-picker" hidden>
+          <label for="run-select">Messreihe</label>
+          <select id="run-select"></select>
+        </div>
+      </div>
+    </section>
+
+    <div class="shell content">
+      <noscript><p class="notice">Das Dashboard benötigt JavaScript. Die Ergebnisse stehen auch im Repository.</p></noscript>
+      <p class="notice" id="empty" hidden>Im Repository liegen noch keine Benchmark-Messreihen vor.</p>
+
+      <div id="dashboard" hidden>
+        <div class="run-status">
+          <span id="run-kind" class="tag"></span>
+          <span id="run-context"></span>
+          <span id="trial-count" class="trial-count"></span>
+        </div>
+
+        <div class="grid">
+          <section class="card comparison" aria-labelledby="comparison-title">
+            <div class="card-heading">
+              <h2 id="comparison-title">Vergleich</h2>
+              <label class="route-picker">Endpunkt
+                <select id="endpoint"></select>
+              </label>
+            </div>
+            <div class="metric-picker" id="metrics" role="group" aria-label="Kennzahl">
+              <button type="button" data-metric="rps" aria-pressed="true">Durchsatz</button>
+              <button type="button" data-metric="p99" aria-pressed="false">P99-Latenz</button>
+              <button type="button" data-metric="cpu" aria-pressed="false">CPU-Aufwand</button>
+              <button type="button" data-metric="rss" aria-pressed="false">Spitzen-RSS</button>
+            </div>
+            <div class="chart-caption">
+              <strong id="metric-name"></strong>
+              <span id="metric-direction"></span>
+            </div>
+            <div id="chart" class="chart" aria-live="polite"></div>
+            <div class="chart-legend">
+              <span><i class="median-key"></i>Median</span>
+              <span><i class="range-key"></i>Min–Max der Läufe</span>
+            </div>
+          </section>
+
+          <aside class="card method" aria-labelledby="method-title">
+            <h2 id="method-title">Messbedingungen</h2>
+            <p id="host" class="host"></p>
+            <dl id="parameters"></dl>
+            <p id="caveat" class="caveat" hidden></p>
+            <div class="source-links" id="source-links"></div>
+          </aside>
+        </div>
+
+        <section class="card details" id="details" aria-labelledby="detail-title">
+          <div class="card-heading">
+            <h2 id="detail-title">Messwerte</h2>
+            <code id="table-endpoint"></code>
+          </div>
+          <div class="table-scroll" tabindex="0" role="region" aria-label="Benchmark-Tabelle">
+            <table>
+              <caption>Median je Variante. Die Latenzwerte fassen die Perzentile der einzelnen Läufe zusammen.</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Variante</th>
+                  <th scope="col">Gültig</th>
+                  <th scope="col">Req/s</th>
+                  <th scope="col">P50 <span>ms</span></th>
+                  <th scope="col">P95 <span>ms</span></th>
+                  <th scope="col">P99 <span>ms</span></th>
+                  <th scope="col">CPU <span>s / 1 Mio. Req.</span></th>
+                  <th scope="col">Spitzen-RSS <span>MiB</span></th>
+                </tr>
+              </thead>
+              <tbody id="rows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

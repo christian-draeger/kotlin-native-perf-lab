@@ -4,6 +4,17 @@ A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **K
 
 **Phase 0 baseline validation.** See [results/](results/) for the exploratory measurements and profiling evidence.
 
+## Benchmark dashboard
+
+Browse throughput, tail latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. The dashboard defaults to the newest series.
+
+For a local preview, build the static files and serve the output directory.
+
+```bash
+python3 scripts/build-dashboard.py /tmp/perflab-dashboard
+python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/perflab-dashboard
+```
+
 ## Identical API contract
 
 | Method | Endpoint | Response | Purpose |
