@@ -74,17 +74,17 @@ PERF_SUDO=1 ./scripts/profile.sh results/diagnostic-profiles
 
 The command uses JDK Flight Recorder for Ktor/JVM and `perf` for the Native and Rust binaries. `PERF_BIN` can point to the installed `perf` binary when the distribution wrapper cannot find it.
 
-## Phases
+## Project roadmap
 
-- **Phase 0 (this scaffold):** parity contract, Ktor/JVM, Ktor/Native, Axum, reproducible tooling, and exploratory baseline measurements.
-- **Phase 1:** establish a controlled baseline on a dedicated native Linux host and identify limiting resources.
-- **Phase 2:** build `kotlin-reactor` proof of concept with `epoll`, thread-per-core, native Buffer pool, and basic HTTP/1.1.
-- **Phase 3:** typed routing and generated JSON; compare at every change against the three baselines.
-- **Phase 4:** selective allocation analysis and compiler plugin *only if profiles justify it*.
+The [roadmap](ROADMAP.md) describes the proposed Kotlin/Native framework, how to validate it, and the delivery milestones. Each implementation issue has prerequisites and acceptance criteria in [GitHub Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues). [Phase-0 assignment](CODEX_FIRST_TASK.md)
 
-## Codex
+Run the fast local checks with Python 3 and Node.js.
 
-`AGENTS.md` defines project rules and a bounded first Codex task. In Codex, connect this GitHub repository and use the task prompt in [CODEX_FIRST_TASK.md](CODEX_FIRST_TASK.md). Do not claim results until executing the workload.
+```bash
+./scripts/check-fast.sh
+```
+
+The GitHub smoke workflow runs the fast checks and x86_64 release validation independently of the ARM64 cross-build. Performance measurements run separately.
 
 ## Methodology and honesty
 
