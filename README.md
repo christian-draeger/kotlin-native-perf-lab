@@ -6,7 +6,7 @@ A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **K
 
 ## Benchmark dashboard
 
-Browse throughput, tail latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. The dashboard defaults to the newest series.
+Browse throughput, tail latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. The dashboard defaults to the newest series. Optional notes and links for a specific series go in `dashboard/run-notes.json`.
 
 For a local preview, build the static files and serve the output directory.
 

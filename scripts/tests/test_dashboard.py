@@ -38,7 +38,7 @@ class DashboardTest(unittest.TestCase):
                 ])
             with patch.object(dashboard, "ROOT", root):
                 data = dashboard.read_run(run / "results.csv", {})
-            native, failed, json = data["groups"]
+            native, failed, json_group = data["groups"]
             self.assertEqual(data["valid"], 3)
             self.assertEqual(data["total"], 5)
             self.assertTrue(data["local"])
@@ -49,4 +49,4 @@ class DashboardTest(unittest.TestCase):
             self.assertEqual(native["stats"]["rss"]["median"], 2)
             self.assertEqual(failed["valid"], 0)
             self.assertIsNone(failed["stats"])
-            self.assertEqual(json["stats"]["rps"]["median"], 120)
+            self.assertEqual(json_group["stats"]["rps"]["median"], 120)

@@ -94,7 +94,6 @@ def main(destination):
     data = {
         "repository": f"https://github.com/{repo}",
         "revision": revision,
-        "files": [name for name in ("results/toolchains.md", "results/profiles.md") if (ROOT / name).is_file()],
         "runs": sorted(runs, key=lambda run: run["date"], reverse=True),
     }
     destination.mkdir(parents=True, exist_ok=True)

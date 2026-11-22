@@ -117,12 +117,7 @@ function renderMethod(run) {
   if (run.has_environment) {
     sources.push(fileLink("Umgebung", run.folder + "/environment.txt"));
   }
-  if (data.files.includes("results/toolchains.md")) {
-    sources.push(fileLink("Toolchains", "results/toolchains.md"));
-  }
-  if (data.files.includes("results/profiles.md")) {
-    sources.push(fileLink("Profile", "results/profiles.md"));
-  }
+  sources.push(...(run.note.links ?? []).map((link) => fileLink(link.label, link.path)));
   if (/^[0-9a-f]{40}$/.test(run.sha ?? "")) {
     const commit = make("a", run.sha.slice(0, 7));
     commit.href = data.repository + "/commit/" + run.sha;
