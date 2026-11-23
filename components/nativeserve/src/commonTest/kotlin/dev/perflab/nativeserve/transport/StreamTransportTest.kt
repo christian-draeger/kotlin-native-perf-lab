@@ -31,15 +31,15 @@ class StreamTransportTest {
         assertEquals(Submission.ACCEPTED, transport.read(connection, readId, bytes, 1, 3))
         assertEquals(emptyList(), poll())
         transport.deliverRead(readId, byteArrayOf(21, 22))
-        assertEquals(listOf(Completion.Read(readId, 2)), poll())
+        assertEquals(listOf(Completion.Read(connection, readId, 2)), poll())
         assertContentEquals(byteArrayOf(10, 21, 22, 13), bytes)
 
         assertEquals(Submission.ACCEPTED, transport.write(connection, writeId, bytes, 1, 3))
         assertContentEquals(byteArrayOf(21, 22), transport.deliverWrite(writeId, 2))
-        assertEquals(listOf(Completion.Written(writeId, 2)), poll())
+        assertEquals(listOf(Completion.Written(connection, writeId, 2)), poll())
         assertEquals(Submission.ACCEPTED, transport.read(connection, nextId, bytes, 0, 1))
         transport.deliverRead(nextId, byteArrayOf())
-        assertEquals(listOf(Completion.Read(nextId, 0)), poll())
+        assertEquals(listOf(Completion.Read(connection, nextId, 0)), poll())
     }
 
     @Test
@@ -51,7 +51,7 @@ class StreamTransportTest {
         assertEquals(Submission.ACCEPTED, transport.write(connection, writeId, bytes, 2, 2))
         transport.cancel(readId)
         assertEquals(Submission.AT_CAPACITY, transport.accept(nextId))
-        assertEquals(listOf(Completion.Failed(readId, TransportFailure.CANCELLED)), poll())
+        assertEquals(listOf(Completion.Failed(connection, readId, TransportFailure.CANCELLED)), poll())
         assertEquals(Submission.ACCEPTED, transport.accept(nextId))
         assertEquals(emptyList(), poll())
     }
@@ -63,7 +63,7 @@ class StreamTransportTest {
         assertEquals(Submission.ACCEPTED, transport.read(connection, readId, bytes, 0, 2))
         transport.deliverRead(readId, byteArrayOf(7))
         transport.cancel(readId)
-        assertEquals(listOf(Completion.Read(readId, 1)), poll())
+        assertEquals(listOf(Completion.Read(connection, readId, 1)), poll())
 
         assertEquals(Submission.ACCEPTED, transport.read(connection, nextId, bytes, 1, 1))
         transport.deliverRead(readId, byteArrayOf(8))
@@ -71,7 +71,7 @@ class StreamTransportTest {
         transport.closeConnection(connection)
         transport.closeConnection(connection)
         assertEquals(Submission.CLOSED, transport.write(connection, writeId, bytes, 0, 2))
-        assertEquals(listOf(Completion.Failed(nextId, TransportFailure.CANCELLED)), poll())
+        assertEquals(listOf(Completion.Failed(connection, nextId, TransportFailure.CANCELLED)), poll())
         transport.deliverRead(nextId, byteArrayOf(9))
         assertEquals(emptyList(), poll())
         assertContentEquals(byteArrayOf(7, 0), bytes)
@@ -84,7 +84,7 @@ class StreamTransportTest {
         assertEquals(Submission.ACCEPTED, transport.accept(nextId))
         transport.closeListener()
         assertEquals(Submission.CLOSED, transport.accept(OperationId(5)))
-        assertEquals(listOf(Completion.Failed(nextId, TransportFailure.CANCELLED)), poll())
+        assertEquals(listOf(Completion.Failed(null, nextId, TransportFailure.CANCELLED)), poll())
 
         assertEquals(Submission.ACCEPTED, transport.read(connection, readId, bytes, 0, 1))
         transport.close()
@@ -110,9 +110,9 @@ class StreamTransportTest {
 
 private sealed interface Completion {
     data class Accepted(val operation: OperationId, val connection: ConnectionId) : Completion
-    data class Read(val operation: OperationId, val count: Int) : Completion
-    data class Written(val operation: OperationId, val count: Int) : Completion
-    data class Failed(val operation: OperationId, val failure: TransportFailure) : Completion
+    data class Read(val connection: ConnectionId, val operation: OperationId, val count: Int) : Completion
+    data class Written(val connection: ConnectionId, val operation: OperationId, val count: Int) : Completion
+    data class Failed(val connection: ConnectionId?, val operation: OperationId, val failure: TransportFailure) : Completion
 }
 
 private class RecordingCompletions : TransportCompletions {
@@ -122,16 +122,16 @@ private class RecordingCompletions : TransportCompletions {
         events += Completion.Accepted(operation, connection)
     }
 
-    override fun read(operation: OperationId, byteCount: Int) {
-        events += Completion.Read(operation, byteCount)
+    override fun read(connection: ConnectionId, operation: OperationId, byteCount: Int) {
+        events += Completion.Read(connection, operation, byteCount)
     }
 
-    override fun wrote(operation: OperationId, byteCount: Int) {
-        events += Completion.Written(operation, byteCount)
+    override fun wrote(connection: ConnectionId, operation: OperationId, byteCount: Int) {
+        events += Completion.Written(connection, operation, byteCount)
     }
 
-    override fun failed(operation: OperationId, failure: TransportFailure) {
-        events += Completion.Failed(operation, failure)
+    override fun failed(connection: ConnectionId?, operation: OperationId, failure: TransportFailure) {
+        events += Completion.Failed(connection, operation, failure)
     }
 }
 
@@ -189,20 +189,20 @@ private class FakeStreamTransport(private val capacity: Int) : StreamTransport {
         val transfer = checkNotNull(slot.transfer)
         check(slot.kind == Kind.READ && data.size <= transfer.length)
         data.copyInto(transfer.bytes, transfer.offset)
-        slot.completion = Completion.Read(operation, data.size)
+        slot.completion = Completion.Read(transfer.connection, operation, data.size)
     }
 
     fun deliverWrite(operation: OperationId, count: Int): ByteArray {
         val slot = pending.getValue(operation)
         val transfer = checkNotNull(slot.transfer)
         check(slot.kind == Kind.WRITE && slot.completion == null && count in 1..transfer.length)
-        slot.completion = Completion.Written(operation, count)
+        slot.completion = Completion.Written(transfer.connection, operation, count)
         return transfer.bytes.copyOfRange(transfer.offset, transfer.offset + count)
     }
 
     override fun cancel(operation: OperationId) {
         val slot = pending[operation] ?: return
-        if (slot.completion == null) slot.completion = Completion.Failed(operation, TransportFailure.CANCELLED)
+        if (slot.completion == null) slot.completion = Completion.Failed(slot.transfer?.connection, operation, TransportFailure.CANCELLED)
     }
 
     override fun closeListener() {
@@ -224,9 +224,9 @@ private class FakeStreamTransport(private val capacity: Int) : StreamTransport {
                     connections += completion.connection
                     completions.accepted(id, completion.connection)
                 }
-                is Completion.Read -> completions.read(id, completion.count)
-                is Completion.Written -> completions.wrote(id, completion.count)
-                is Completion.Failed -> completions.failed(id, completion.failure)
+                is Completion.Read -> completions.read(completion.connection, id, completion.count)
+                is Completion.Written -> completions.wrote(completion.connection, id, completion.count)
+                is Completion.Failed -> completions.failed(completion.connection, id, completion.failure)
             }
         }
     }

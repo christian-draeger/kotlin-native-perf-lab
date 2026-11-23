@@ -74,11 +74,11 @@ The example handles Ctrl+C and SIGTERM by closing the listener and draining queu
 
 | Resource | Owner and release |
 | --- | --- |
-| Listening socket | `serve` closes it if setup fails. The reactor closes it when shutdown begins or the loop exits. |
-| epoll descriptor and event storage | The reactor closes the descriptor in `finally`. Event storage lives in the loop's `memScoped`. |
-| Accepted descriptor | The reactor owns one client state per registration token. Registration failure, peer close, failed I/O or expiry closes the descriptor. The loop closes any remaining clients in `finally`. |
+| Listening socket | The Linux backend closes it if setup fails or the HTTP loop stops accepting connections. |
+| epoll descriptor and event storage | The backend owns the descriptor. Event storage lives in the scope of `serve`. |
+| Accepted descriptor | The backend tracks each descriptor by its connection ID and closes any remaining sockets when `serve` exits. The HTTP loop owns the HTTP state for each connection. |
 | Request storage | One fixed Kotlin byte array per client. It keeps unread pipelined bytes and is pinned only during `recv`. |
-| Output storage | Each client retains at most one encoded response and its current write offset. The array is pinned only during `send`. Write interest is enabled while output remains. |
+| Output storage | Each client retains at most one encoded response and its current write offset. The array is pinned only during `send`. epoll watches for writable events when a response cannot finish immediately. |
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 

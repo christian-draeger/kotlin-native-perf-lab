@@ -124,6 +124,7 @@ def main(binary):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
+    subprocess.run([binary, "--epoll", str(port)], check=True, timeout=10)
     with subprocess.Popen([binary, str(port)]) as server:
         try:
             def ready():

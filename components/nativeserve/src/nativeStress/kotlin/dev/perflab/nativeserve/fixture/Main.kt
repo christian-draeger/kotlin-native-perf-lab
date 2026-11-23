@@ -10,6 +10,10 @@ private const val BODY_BYTES = 8 * 1024 * 1024
 
 @OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class)
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--epoll") {
+        probeEpoll(args[1].toInt())
+        return
+    }
     val limits = ServerLimits(
         connections = 8,
         responseBodyBytes = BODY_BYTES,

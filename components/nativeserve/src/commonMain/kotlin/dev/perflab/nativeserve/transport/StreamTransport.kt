@@ -14,9 +14,9 @@ internal enum class TransportFailure { CANCELLED, CONNECTION_LOST, IO_FAILURE }
 
 internal interface TransportCompletions {
     fun accepted(operation: OperationId, connection: ConnectionId)
-    fun read(operation: OperationId, byteCount: Int)
-    fun wrote(operation: OperationId, byteCount: Int)
-    fun failed(operation: OperationId, failure: TransportFailure)
+    fun read(connection: ConnectionId, operation: OperationId, byteCount: Int)
+    fun wrote(connection: ConnectionId, operation: OperationId, byteCount: Int)
+    fun failed(connection: ConnectionId?, operation: OperationId, failure: TransportFailure)
 }
 
 /**
