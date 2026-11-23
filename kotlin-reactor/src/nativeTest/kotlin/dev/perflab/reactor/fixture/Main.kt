@@ -8,7 +8,7 @@ import kotlin.native.runtime.NativeRuntimeApi
 
 private const val BODY_BYTES = 8 * 1024 * 1024
 
-@OptIn(NativeRuntimeApi::class)
+@OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class)
 fun main(args: Array<String>) {
     val limits = ServerLimits(
         connections = 8,
