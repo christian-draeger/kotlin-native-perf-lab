@@ -1,0 +1,4 @@
+headers = winsock_probe.h
+headerFilter = winsock_probe.h
+package = dev.perflab.nativeserve.probe
+linkerOpts = -lws2_32

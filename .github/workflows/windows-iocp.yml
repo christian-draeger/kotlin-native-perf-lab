@@ -1,0 +1,37 @@
+name: NativeServe Windows IOCP probe
+
+on:
+  pull_request:
+    paths:
+      - 'components/nativeserve/experiments/windows-iocp/**'
+      - 'components/nativeserve/gradlew.bat'
+      - 'components/nativeserve/gradle/wrapper/**'
+      - '.github/workflows/windows-iocp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Compile and run the Kotlin/Native probe
+        shell: pwsh
+        run: |
+          $project = 'components/nativeserve/experiments/windows-iocp'
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
+          & ./components/nativeserve/gradlew.bat -p $project linkReleaseExecutableMingwX64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $binary = Join-Path $project 'build/bin/mingwX64/releaseExecutable/iocp-probe.exe'
+          Get-FileHash -Algorithm SHA256 $binary
+          & $binary
