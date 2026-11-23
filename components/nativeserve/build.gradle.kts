@@ -22,8 +22,11 @@ kotlin {
         baseName = "nativeserve"
         entryPoint = "dev.perflab.nativeserve.example.main"
     }
+    val stressCompilation = linux.compilations.create("stress") {
+        associateWith(linux.compilations.getByName("main"))
+    }
     linux.binaries.executable("stress", listOf(RELEASE)) {
-        compilation = linux.compilations.getByName("test")
+        compilation = stressCompilation
         baseName = "reactor-stress-fixture"
         entryPoint = "dev.perflab.nativeserve.fixture.main"
     }

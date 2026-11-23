@@ -17,9 +17,14 @@ fun main(args: Array<String>) {
         requestHeadMillis = 500,
     )
     val largeBody = "x".repeat(BODY_BYTES)
+    var largeRequests = 0
     serve(port = args.single().toInt(), limits = limits) {
         get("/health") { text("ok") }
-        get("/large") { text(largeBody) }
+        get("/large") {
+            largeRequests++
+            text(largeBody)
+        }
+        get("/large-count") { text(largeRequests.toString()) }
         get("/too-large") { text(largeBody + "x") }
         get("/heap") {
             GC.collect()

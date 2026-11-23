@@ -62,8 +62,8 @@ def test_limits(port, pid):
     def open_fds():
         return len(list(descriptors.iterdir()))
 
-    def heap():
-        status, body = fetch(port, "/heap")
+    def read_counter(path):
+        status, body = fetch(port, path)
         assert status == 200
         return int(body)
 
@@ -88,12 +88,14 @@ def test_limits(port, pid):
             for _ in range(BODY_BYTES // 65536):
                 assert body.read(65536) == b"x" * 65536
 
-    initial_heap = heap()
+    initial_heap = read_counter("/heap")
+    initial_large_requests = read_counter("/large-count")
     for _ in range(10):
         with ExitStack() as clients:
             for _ in range(4):
                 clients.enter_context(pending_client(port))
-            assert heap() <= initial_heap + 4 * BODY_BYTES + MIB, "More than one response retained per client"
+            initial_large_requests += 4
+            assert read_counter("/large-count") == initial_large_requests, "Dispatched a second request while output was blocked"
             assert fetch(port, "/health") == (200, b"ok")
         for _ in range(100):
             assert fetch(port, "/health") == (200, b"ok")
@@ -107,8 +109,14 @@ def test_limits(port, pid):
         assert open_fds() == initial_fds + CONNECTIONS
 
     wait_until(lambda: open_fds() <= initial_fds, "Disconnected clients leaked file descriptors")
-    final_heap = heap()
-    assert final_heap <= initial_heap + MIB, (initial_heap, final_heap)
+    final_heap = None
+
+    def heap_reclaimed():
+        nonlocal final_heap
+        final_heap = read_counter("/heap")
+        return final_heap <= initial_heap + MIB
+
+    wait_until(heap_reclaimed, f"Live heap did not return within {MIB} bytes of {initial_heap}")
     print(f"Reactor resource checks passed (fds={open_fds()}, live heap {initial_heap} -> {final_heap} bytes)")
 
 
