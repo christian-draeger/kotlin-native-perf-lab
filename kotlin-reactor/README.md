@@ -42,7 +42,9 @@ fun main() {
 
 Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
 
-The first implementation accepts origin-form HTTP/1.0 and HTTP/1.1 requests and exposes GET routes. It accepts empty request bodies. The example binds to loopback using a numeric IPv4 address. `ServerLimits` controls the connection cap, head and response size, idle time, and per-head deadline. Terminating the reference process releases its Linux descriptors.
+The first implementation accepts origin-form HTTP/1.0 and HTTP/1.1 requests and exposes GET routes. It accepts empty request bodies. The example binds to loopback using a numeric IPv4 address. `ServerLimits` controls the connection cap, head and response size, idle time, per-head deadline, and shutdown drain time.
+
+The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
 
 ## Ownership and lifetime
 

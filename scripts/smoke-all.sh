@@ -18,6 +18,10 @@ for variant in ktor-jvm ktor-native rust-axum kotlin-reactor; do
   fi
   if [[ "$variant" == kotlin-reactor ]]; then
     python3 "$ROOT/scripts/tests/reactor_http_smoke.py" "$PORT"
+    python3 "$ROOT/scripts/tests/reactor_shutdown_smoke.py" "$PORT" "$server_pid"
+    wait "$server_pid"
+    server_pid=''
+    start_server "$variant" "$logs/reactor-rebind.txt"
   fi
   stop_server
 done

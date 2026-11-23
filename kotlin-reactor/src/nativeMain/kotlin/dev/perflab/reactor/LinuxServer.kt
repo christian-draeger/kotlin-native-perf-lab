@@ -61,10 +61,11 @@ class ServerLimits(
     val responseBodyBytes: Int = 64 * 1024,
     val idleMillis: Long = 30_000,
     val requestHeadMillis: Long = 5_000,
+    val drainMillis: Long = 2_000,
 ) {
     init {
         require(connections > 0 && headerBytes >= 64 && responseBodyBytes > 0)
-        require(idleMillis > 0 && requestHeadMillis > 0)
+        require(idleMillis > 0 && requestHeadMillis > 0 && drainMillis > 0)
     }
 }
 
@@ -72,6 +73,7 @@ fun serve(
     port: Int = 8080,
     host: String = "127.0.0.1",
     limits: ServerLimits = ServerLimits(),
+    stopRequested: () -> Boolean = { false },
     configure: Routes.() -> Unit,
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
@@ -96,10 +98,11 @@ fun serve(
         checked(setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, reuse.ptr, sizeOf<IntVar>().convert()), "setsockopt")
         checked(bind(listener, address.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()), "bind $host:$port")
         checked(listen(listener, 256), "listen")
-        runReactor(listener, routes, limits)
-    } finally {
+    } catch (cause: Throwable) {
         close(listener)
+        throw cause
     }
+    runReactor(listener, routes, limits, stopRequested)
 }
 
 private fun checked(result: Int, operation: String): Int {
@@ -107,26 +110,52 @@ private fun checked(result: Int, operation: String): Int {
     return result
 }
 
-private fun runReactor(listener: Int, routes: Routes, limits: ServerLimits): Unit = memScoped {
-    val poller = checked(epoll_create1(EPOLL_CLOEXEC), "epoll_create1")
+private fun runReactor(
+    listener: Int,
+    routes: Routes,
+    limits: ServerLimits,
+    stopRequested: () -> Boolean,
+): Unit = memScoped {
+    var accepting = true
+    var poller = -1
     val clients = mutableMapOf<ULong, Client>()
     val clock = TimeSource.Monotonic.markNow()
     var nextId = 1UL
     var nextSweep = 0L
-    val events = allocArray<epoll_event>(64)
-    val change = alloc<epoll_event>()
-    memset(change.ptr, 0, sizeOf<epoll_event>().convert())
-
-    fun watch(operation: Int, fd: Int, token: ULong, events: UInt): Int {
-        change.data.u64 = token
-        change.events = events
-        return epoll_ctl(poller, operation, fd, change.ptr)
-    }
+    var drainDeadline: Long? = null
 
     try {
+        poller = checked(epoll_create1(EPOLL_CLOEXEC), "epoll_create1")
+        val events = allocArray<epoll_event>(64)
+        val change = alloc<epoll_event>()
+        memset(change.ptr, 0, sizeOf<epoll_event>().convert())
+
+        fun watch(operation: Int, fd: Int, token: ULong, events: UInt): Int {
+            change.data.u64 = token
+            change.events = events
+            return epoll_ctl(poller, operation, fd, change.ptr)
+        }
+
         checked(watch(EPOLL_CTL_ADD, listener, 0UL, EPOLLIN), "register listener")
         while (true) {
-            val ready = epoll_wait(poller, events, 64, 250)
+            val beforeWait = clock.elapsedNow().inWholeMilliseconds
+            if (accepting && stopRequested()) {
+                close(listener)
+                accepting = false
+                drainDeadline = beforeWait + limits.drainMillis
+                val iterator = clients.values.iterator()
+                while (iterator.hasNext()) {
+                    val client = iterator.next()
+                    if (!client.beginDrain()) {
+                        close(client.fd)
+                        iterator.remove()
+                    }
+                }
+            }
+            val deadline = drainDeadline
+            if (deadline != null && (clients.isEmpty() || beforeWait >= deadline)) break
+            val timeout = if (deadline == null) 250 else minOf(250L, deadline - beforeWait).toInt()
+            val ready = epoll_wait(poller, events, 64, timeout)
             if (ready < 0 && errno == EINTR) continue
             checked(ready, "epoll_wait")
             val now = clock.elapsedNow().inWholeMilliseconds
@@ -134,6 +163,7 @@ private fun runReactor(listener: Int, routes: Routes, limits: ServerLimits): Uni
                 val event = events[index]
                 val token = event.data.u64
                 if (token == 0UL) {
+                    if (!accepting) continue
                     for (attempt in 0 until 64) {
                         val fd = accept(listener, null, null)
                         if (fd < 0 && (errno == EINTR || errno == ECONNABORTED)) continue
@@ -178,7 +208,8 @@ private fun runReactor(listener: Int, routes: Routes, limits: ServerLimits): Uni
         }
     } finally {
         clients.values.forEach { close(it.fd) }
-        close(poller)
+        if (poller >= 0) close(poller)
+        if (accepting) close(listener)
     }
 }
 
@@ -200,6 +231,11 @@ private class Client(
     fun expired(now: Long): Boolean =
         now - lastActivity >= limits.idleMillis ||
             headStarted?.let { now - it >= limits.requestHeadMillis } == true
+
+    fun beginDrain(): Boolean {
+        closeAfterWrite = true
+        return pending != null
+    }
 
     fun progress(routes: Routes, now: Long): Boolean {
         if (!flush(now) || !consumeHeads(routes, now)) return false
