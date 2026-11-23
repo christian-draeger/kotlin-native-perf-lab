@@ -1,1 +1,1 @@
-rootProject.name = "kotlin-reactor"
+rootProject.name = "nativeserve"

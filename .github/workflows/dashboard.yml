@@ -26,7 +26,7 @@ on:
         options: ['3', '5']
         default: '5'
       benchmark_label:
-        description: Optional feature or change label shown in the reactor history
+        description: Optional feature or change label shown in the NativeServe history
         type: string
 
 permissions:

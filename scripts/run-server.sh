@@ -18,9 +18,9 @@ case "$variant" in
     [[ -x "$bin" ]] || { echo 'Missing Axum release binary. Run scripts/build-all.sh' >&2; exit 1; }
     exec "$bin"
     ;;
-  kotlin-reactor)
-    bin="$ROOT/kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe"
-    [[ -x "$bin" ]] || { echo 'Missing Kotlin Reactor release binary. Run scripts/build-all.sh' >&2; exit 1; }
+  nativeserve|kotlin-reactor)
+    bin="$ROOT/kotlin-reactor/build/bin/native/releaseExecutable/nativeserve.kexe"
+    [[ -x "$bin" ]] || { echo 'Missing NativeServe release binary. Run scripts/build-all.sh' >&2; exit 1; }
     exec "$bin"
     ;;
   go-http)

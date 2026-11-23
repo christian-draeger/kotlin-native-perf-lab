@@ -1,14 +1,14 @@
 # Kotlin Native Performance Lab
 
-A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **Ktor/CIO on Kotlin/Native**, **Rust/Axum**, and an independent [Kotlin/Native reactor](kotlin-reactor/README.md).
+A reproducible performance lab comparing established HTTP stacks with [NativeServe](kotlin-reactor/README.md), an HTTP framework for Kotlin/Native.
 
-**Phase 0 baselines and a Linux reference reactor.** See [results/](results/) for the exploratory measurements and profiling evidence.
+**Phase 0 baselines and the NativeServe reference server.** See [results/](results/) for the exploratory measurements and profiling evidence.
 
 ## Benchmark dashboard
 
-Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The Reactor history charts medians and trial ranges over time at the same recorded architecture, CPU model and load settings. Each point links back to the measured commit and raw logs. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
+Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The NativeServe history charts medians and trial ranges over time at the same recorded architecture, CPU model and load settings. Each point links back to the measured commit and raw logs. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
-To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose three or five trials per server and endpoint. The optional feature label appears in Reactor history. Each series has its own raw logs on `benchmark-data` and its own architecture label on Pages. Within each runner, wrk and the servers share one VM. CPU models and host conditions differ between runners.
+To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose three or five trials per server and endpoint. The optional feature label appears in NativeServe history. Each series has its own raw logs on `benchmark-data` and its own architecture label on Pages. Within each runner, wrk and the servers share one VM. CPU models and host conditions differ between runners.
 
 For a local preview, build the static files and serve the output directory.
 
@@ -62,7 +62,7 @@ export RUSTUP_TOOLCHAIN=1.100.0
 ./scripts/smoke-all.sh
 ```
 
-The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native release executables, and a Ktor JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises the three baselines and the reference reactor sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executables on x86_64 and runs them on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
+The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native release executables, and a Ktor JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises the three baselines and NativeServe sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executables on x86_64 and runs them on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
 
 ## Run any server
 
@@ -70,7 +70,7 @@ The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native
 PORT=8080 ./scripts/run-server.sh ktor-jvm
 PORT=8080 ./scripts/run-server.sh ktor-native
 PORT=8080 ./scripts/run-server.sh rust-axum
-PORT=8080 ./scripts/run-server.sh kotlin-reactor
+PORT=8080 ./scripts/run-server.sh nativeserve
 ```
 
 Use another terminal to check the exact API contract:

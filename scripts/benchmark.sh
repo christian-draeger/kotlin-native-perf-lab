@@ -84,7 +84,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     fi
     sha256sum ktor/build/jvmDist/app.jar ktor/build/jvmDist/lib/*.jar \
       ktor/build/bin/native/releaseExecutable/*.kexe rust-axum/target/release/axum-baseline \
-      kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe
+      kotlin-reactor/build/bin/native/releaseExecutable/nativeserve.kexe
   fi
   if [[ "${BENCHMARK_SUITE:-core}" != core ]]; then
     go version competitors/go-http/build/go-http

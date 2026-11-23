@@ -14,8 +14,8 @@ kotlin {
         else -> error("Unsupported Linux architecture $arch")
     }
     linux.binaries.executable {
-        baseName = "kotlin-reactor"
-        entryPoint = "dev.perflab.reactor.example.main"
+        baseName = "nativeserve"
+        entryPoint = "dev.perflab.nativeserve.example.main"
     }
     sourceSets {
         commonMain.dependencies {

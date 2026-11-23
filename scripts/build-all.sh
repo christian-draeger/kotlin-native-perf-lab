@@ -6,7 +6,7 @@ if [[ -n "${PREBUILT_KOTLIN_DIR:-}" ]]; then
   reactor_directory="$ROOT/kotlin-reactor/build/bin/native/releaseExecutable"
   mkdir -p "$native_directory" "$reactor_directory"
   install -m 755 "$PREBUILT_KOTLIN_DIR/ktor-baselines.kexe" "$native_directory/ktor-baselines.kexe"
-  install -m 755 "$PREBUILT_KOTLIN_DIR/kotlin-reactor.kexe" "$reactor_directory/kotlin-reactor.kexe"
+  install -m 755 "$PREBUILT_KOTLIN_DIR/nativeserve.kexe" "$reactor_directory/nativeserve.kexe"
   cp -R "$PREBUILT_KOTLIN_DIR/jvmDist" "$ROOT/ktor/build/"
 else
   if [[ -x "$ROOT/ktor/gradlew" ]]; then
@@ -20,4 +20,4 @@ else
   "$gradle" -p "$ROOT/kotlin-reactor" linkReleaseExecutableNative
 fi
 cargo build --release --locked --manifest-path "$ROOT/rust-axum/Cargo.toml"
-echo 'Built Ktor JVM, Ktor Native, Rust Axum and Kotlin Reactor.'
+echo 'Built Ktor JVM, Ktor Native, Rust Axum and NativeServe.'

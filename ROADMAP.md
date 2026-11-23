@@ -1,6 +1,6 @@
 # Kotlin Native Performance Lab roadmap
 
-Build a Kotlin/Native HTTP framework with a short, idiomatic setup path and a reproducible comparison against Rust/Axum. The three existing servers remain the reference implementations. GitHub issues hold the acceptance criteria and prerequisites for each change. [Milestones](https://github.com/christian-draeger/kotlin-native-perf-lab/milestones) · [Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues)
+Build NativeServe, an HTTP framework for Kotlin/Native with a short, idiomatic setup path and a reproducible comparison against Rust/Axum. GitHub issues hold the acceptance criteria and prerequisites for each change. [Milestones](https://github.com/christian-draeger/kotlin-native-perf-lab/milestones) · [Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues)
 
 ## Developer experience
 
@@ -20,7 +20,7 @@ fun main() {
 
 The first public preview should provide a runnable starter, one documented build/run command, a Gradle dependency example, and a curl check. Document binding, request and response limits, timeouts, how failures surface, and how to stop the process. Keep operational defaults useful for local development and expose configuration through Kotlin types and ordinary environment or command-line options where the sample needs them.
 
-## Reactor design
+## I/O reactor design
 
 - Keep the new library and executable in `kotlin-reactor/`. The benchmark application calls the same public routing and response APIs as a consumer.
 - Start with one level-triggered epoll loop. Use nonblocking sockets, retain bytes across partial input and output, and register write interest while there are bytes left to send. The first reactor uses one owner per connection.
@@ -34,7 +34,7 @@ The first public preview should provide a runnable starter, one documented build
 | Milestone | Deliverable | Exit evidence |
 | --- | --- | --- |
 | [0 · Baseline and validation](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/1) | Merge the accepted phase-0 matrix and separate quick checks from native and benchmark runs. | Baseline smoke, Pages build, preserved raw data, and measured time to actionable feedback. |
-| [1 · Kotlin/Native reactor](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/2) | Implement the bounded parser and epoll loop, expose the parity routes, and integrate a fourth benchmark variant. | Unit and HTTP checks on both architectures, one archived four-variant CI series per architecture. |
+| [1 · NativeServe reference server](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/2) | Implement the bounded parser and epoll loop, expose the parity routes, and integrate a fourth benchmark variant. | Unit and HTTP checks on both architectures, one archived four-variant CI series per architecture. |
 | [2 · Framework developer experience](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/3) | Refine routing and typed JSON, verify the starter, and make shutdown and startup failures predictable. | A fresh-checkout example using the public API succeeds with the documented commands. |
 | [3 · Controlled measurement and profiles](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/4) | Run a native Linux reference host with a separate load generator, validate steady state and collect symbolized profiles. | Matched release workloads, raw trials on each tested architecture, measured dispersion and at least one ranked bottleneck. |
 | [4 · Measured optimization](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/5) | Evaluate scheduling, buffers, generated route matching and serialization one at a time when the profiles warrant them. | Before and after trials for all four variants and a recorded decision for each change, including regressions. |

@@ -1,4 +1,4 @@
-package dev.perflab.reactor
+package dev.perflab.nativeserve
 
 class Routes {
     private val exact = mutableMapOf<String, (Request) -> Response>()
