@@ -58,6 +58,7 @@ The initial Linux reference implementation uses the following ownership and prot
 | [7 · JVM transport and Ktor comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/8) | Reuse the shared protocol and routing logic with a JVM transport and a packaged Ktor JVM engine. | A clean-checkout consumer and a measured comparison of the same Ktor JVM application on CIO, Netty and NativeServe. |
 | [8 · Spring WebFlux integration and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/9) | Implement the reactive HTTP adapter and Boot starter, compare engines, then assess Servlet compatibility. | Backpressure and lifecycle tests, a one-dependency consumer, a controlled Reactor Netty versus NativeServe comparison and a documented Spring MVC feasibility decision. |
 | [9 · Measured I/O backend experiments](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/12) | Prototype io_uring on Linux and verify Windows tooling before an IOCP prototype. | Shared contract and platform socket tests plus independent, same-platform measurement reports and an evidence-backed decision for each backend. |
+| [10 · HTTP/2 support](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/13) | Reuse a maintained HTTP/2 implementation where it meets the session contract, then integrate bounded streams and TLS negotiation. | Existing handler API, protocol and resource tests on both Linux architectures, secure ALPN deployment and a distinct HTTP/2 comparison. |
 
 The critical path starts with [baseline integration](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/2), [quick CI feedback](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/3), [resource ownership](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/4), then [parsing](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/5), [transport](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/6), [parity](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/7) and [four-way measurement](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/8). The controlled host work can proceed alongside API, docs and packaging preparation.
 
@@ -86,6 +87,12 @@ Each engine comparison uses the same application module, routes, plugins or filt
 Give each integration suite its own recorded identity, including framework, engine, runtime, architecture and exact launch configuration, and publish its raw evidence and history on Pages. Use dedicated hosts, validated warm-up and at least five valid repetitions per cell for controlled conclusions. Record regressions and choose a measured tolerance for each integration.
 
 After the WebFlux comparison, [assess Spring MVC and Servlet compatibility](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/46). The assessment covers Servlet contracts, maintenance cost, operational behavior and the evidence for investing in a full implementation. A decision to proceed creates a dedicated delivery milestone with a matched Tomcat or Jetty comparison.
+
+## HTTP/2
+
+Evaluate [reusable protocol components and the session adapter](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/78) alongside the bounded streaming work in #37. Keep routing, application handlers, and typed serialization reusable across protocols and runtimes. Use the adapter for [bounded HTTP/2 sessions](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/79) with multiplexing and flow control, then verify [TLS and ALPN deployment](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/80) on Linux x86_64 and ARM64.
+
+Report protocol, TLS mode, connections, and concurrent streams in the [matched HTTP/2 comparisons](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81). HTTP/2 gets a separate workload series. [HTTP/2 specification](https://www.rfc-editor.org/rfc/rfc9113.html)
 
 ## Validation and performance decisions
 

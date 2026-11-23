@@ -13,5 +13,6 @@ Mission: make a Kotlin/Native HTTP server competitive with Rust/Axum **without f
 9. Be candid: if CI cannot compile or benchmarks cannot run, report that explicitly and create an issue rather than claiming success.
 10. Never benchmark a GitHub Actions shared runner as if it were a controlled, published comparison.
 11. Keep application handlers, routing, serialization and HTTP state independent of OS I/O details. Platform backends implement a small transport contract covering operation progress, completion, cancellation and buffer ownership. Validate the same behavior across backends and measure abstraction overhead when changing this boundary.
+12. Evaluate Kotlin and maintained kotlinx APIs first when they fit the contract. Keep the Kotlin implementation when it meets the measured performance and resource goals. Measure a focused alternative before replacing it with native interop, and keep OS-specific code behind the adapter.
 
 Immediate assignment: see `CODEX_FIRST_TASK.md`.
