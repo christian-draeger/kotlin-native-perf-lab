@@ -1,0 +1,52 @@
+name: Linux diagnostic profiles
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/profile.sh'
+      - '.github/workflows/profile.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profiles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LC_ALL: C
+      RUSTUP_TOOLCHAIN: '1.100.0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Install diagnostic tools
+        run: |
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk linux-tools-generic
+      - name: Build the core release variants
+        run: ./scripts/build-all.sh
+      - name: Sample CPU stacks and JVM events
+        id: sample
+        run: |
+          export PERF_BIN="$(find -L /usr/lib/linux-tools -name perf -type f | sort -V | tail -1)"
+          if [[ ! -x "$PERF_BIN" ]]; then
+            echo 'The installed Linux tools did not provide an executable perf.' >&2
+            exit 1
+          fi
+          PERF_SUDO=1 ./scripts/profile.sh "$RUNNER_TEMP/profiles"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() && steps.sample.outcome != 'skipped' }}
+        with:
+          name: exploratory-linux-x86_64-profiles
+          path: ${{ runner.temp }}/profiles
+          if-no-files-found: error
