@@ -4,9 +4,11 @@ import argparse
 from collections import defaultdict
 import csv
 from datetime import datetime, timezone
+from functools import lru_cache
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 from statistics import median
 import subprocess
@@ -23,6 +25,7 @@ METRICS = {
     "cpu": ("cpu_seconds_per_million_requests", 1),
     "rss": ("peak_rss_kib", 1024),
 }
+PARAMETERS = ("connections", "threads", "warmup_s", "target_duration_s")
 
 
 def git(checkout, *args):
@@ -35,6 +38,22 @@ def stats(rows):
         values = [float(row[column]) / divisor for row in rows]
         output[metric] = {"median": median(values), "min": min(values), "max": max(values)}
     return output
+
+
+@lru_cache(maxsize=None)
+def commit_label(sha):
+    if not sha or not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    result = subprocess.run(
+        ["git", "-C", ROOT, "show", "-s", "--format=%s%n%b", sha],
+        capture_output=True, text=True, check=False,
+    )
+    lines = result.stdout.strip().splitlines() if result.returncode == 0 else []
+    if not lines:
+        return None
+    if lines[0].startswith("Merge pull request #"):
+        return next((line for line in lines[1:] if line.strip()), lines[0])
+    return lines[0]
 
 
 def read_run(csv_path, note, checkout, revision):
@@ -73,6 +92,14 @@ def read_run(csv_path, note, checkout, revision):
         "machine": environment.get("machine"),
         "local": environment.get("load_generator", "").startswith("local "),
         "sha": environment.get("git_sha"),
+        "feature": (
+            environment.get("benchmark_label") or commit_label(environment.get("git_sha"))
+            or environment.get("git_subject")
+        ),
+        "host": environment.get("cpu_model") or note.get("host"),
+        "runner": environment.get("runner_label"),
+        "load_generator": environment.get("load_generator"),
+        "dirty": environment.get("git_worktree") == "dirty",
         "ci_run_id": environment.get("ci_run_id") if ci else None,
         "incomplete": ci and environment.get("benchmark_outcome") != "success",
         "valid": sum(row["valid"] == "1" for row in rows),
@@ -82,7 +109,7 @@ def read_run(csv_path, note, checkout, revision):
         "groups": [],
         "note": note,
     }
-    for parameter in ("connections", "threads", "warmup_s", "target_duration_s"):
+    for parameter in PARAMETERS:
         result["parameters"][parameter] = sorted({int(row[parameter]) for row in rows})
     for (endpoint, variant), group in sorted(groups.items()):
         valid = [row for row in group if row["valid"] == "1"]
@@ -94,6 +121,40 @@ def read_run(csv_path, note, checkout, revision):
             "stats": stats(valid) if valid else None,
         })
     return result
+
+
+def reactor_history(runs):
+    """Group fully valid reactor runs with the same host class and workload."""
+    profiles = {}
+    for run in sorted(runs, key=lambda entry: entry["date"]):
+        if run["incomplete"] or run["dirty"] or not all(
+            run[key] for key in ("machine", "host", "os", "load_generator")
+        ):
+            continue
+        parameters = run["parameters"]
+        if any(len(parameters[key]) != 1 for key in PARAMETERS):
+            continue
+        endpoints = [
+            group["endpoint"] for group in run["groups"]
+            if group["variant"] == "kotlin-reactor" and group["valid"] == group["total"] and group["stats"]
+        ]
+        if not endpoints:
+            continue
+        key = (
+            run["machine"], run["host"], run["os"], run["runner"], run["load_generator"],
+            run["note"].get("kind"), *(parameters[name][0] for name in PARAMETERS),
+        )
+        if key not in profiles:
+            profiles[key] = {
+                "machine": run["machine"],
+                "host": run["host"],
+                "os": run["os"],
+                "label": run["note"].get("label"),
+                "parameters": {name: parameters[name][0] for name in PARAMETERS},
+                "runs": [],
+            }
+        profiles[key]["runs"].append({"id": run["id"], "endpoints": endpoints})
+    return sorted(profiles.values(), key=lambda profile: profile["runs"][-1]["id"], reverse=True)
 
 
 def tracked_runs(checkout, revision, notes):
@@ -116,6 +177,7 @@ def main(destination, ci_checkout):
         "repository": f"https://github.com/{repo}",
         "revision": revision,
         "runs": sorted(runs, key=lambda run: run["date"], reverse=True),
+        "history": reactor_history(runs),
     }
     destination.mkdir(parents=True, exist_ok=True)
     for asset in ("index.html", "styles.css", "app.js"):
