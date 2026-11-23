@@ -90,13 +90,25 @@ private fun parseHead(head: String, consumed: Int): ParsedHead {
             }
             head.matches(fieldStart, colon, "connection", ignoreCase = true) -> {
                 var tokenStart = valueStart
+                var ascii = true
                 for (index in valueStart..valueEnd) {
                     if (index == valueEnd || head[index] == ',') {
                         val start = head.skipOws(tokenStart, index)
                         val end = head.trimmedEnd(start, index)
-                        if (head.matches(start, end, "close")) close = true
-                        if (head.matches(start, end, "keep-alive")) keepAlive = true
+                        if (ascii) {
+                            if (head.matches(start, end, "close", ignoreCase = true)) close = true
+                            if (head.matches(start, end, "keep-alive", ignoreCase = true)) keepAlive = true
+                        } else {
+                            // Preserve full lowercase mapping for non-ASCII values.
+                            when (head.substring(start, end).lowercase()) {
+                                "close" -> close = true
+                                "keep-alive" -> keepAlive = true
+                            }
+                        }
                         tokenStart = index + 1
+                        ascii = true
+                    } else if (head[index].code > 127) {
+                        ascii = false
                     }
                 }
             }

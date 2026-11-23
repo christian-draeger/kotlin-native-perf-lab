@@ -45,7 +45,7 @@ class HttpTest {
     fun parsesHeaderRangesAndPreservesTheRequestTarget() {
         val buffer = RequestBuffer(512)
         buffer.add("GET /users/123?view=short?raw HTTP/1.0\r\nhOsT:\tlocalhost \t\r\n" +
-            "cOnTeNt-LeNgTh:\t000 \r\nConnection: , keep-alive, \tother \t\r\nX-Description: Grüße\r\n\r\n")
+            "cOnTeNt-LeNgTh:\t000 \r\nConnection: , KEEP-ALIVE, \tother \t\r\nX-Description: Grüße\r\n\r\n")
         val request = assertIs<ParsedHead.Complete>(buffer.parse())
         assertEquals("GET", request.request.method)
         assertEquals("/users/123", request.request.path)
@@ -62,8 +62,17 @@ class HttpTest {
         assertFalse(emptyQuery.keepAlive)
 
         val closes = RequestBuffer(128)
-        closes.add("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, close, keep-alive\r\n\r\n")
+        closes.add("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, CLOSE, keep-alive\r\n\r\n")
         assertFalse(assertIs<ParsedHead.Complete>(closes.parse()).keepAlive)
+    }
+
+    @Test
+    fun preservesUnicodeLowercaseMappingForConnectionValues() {
+        for ((value, keepAlive) in listOf("Keep-alive" to true, "keep-alİve" to false)) {
+            val buffer = RequestBuffer(128)
+            buffer.add("GET / HTTP/1.0\r\nConnection: $value\r\n\r\n")
+            assertEquals(keepAlive, assertIs<ParsedHead.Complete>(buffer.parse()).keepAlive)
+        }
     }
 
     @Test
