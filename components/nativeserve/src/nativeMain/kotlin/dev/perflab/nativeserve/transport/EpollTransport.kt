@@ -17,7 +17,6 @@ import kotlinx.cinterop.sizeOf
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.linux.EPOLLERR
-import platform.linux.EPOLLEXCLUSIVE
 import platform.linux.EPOLLHUP
 import platform.linux.EPOLLIN
 import platform.linux.EPOLLOUT
@@ -61,6 +60,8 @@ import platform.posix.socket
 
 private const val BATCH_SIZE = 64
 private const val LISTENER_TOKEN = 0UL
+// EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
+private const val EPOLL_EXCLUSIVE = 0x1000_0000U
 
 internal fun MemScope.openEpollTransport(
     host: String,
@@ -77,7 +78,7 @@ internal fun MemScope.openSharedEpollTransports(
     val listener = openListener(host, port)
     try {
         for (limit in connectionLimits) {
-            val transport = openEpollTransport(limit, EPOLLIN or EPOLLEXCLUSIVE) {
+            val transport = openEpollTransport(limit, EPOLLIN or EPOLL_EXCLUSIVE) {
                 checked(fcntl(listener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
             }
             transports.add(transport)
