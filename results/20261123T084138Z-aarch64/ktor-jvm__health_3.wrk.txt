@@ -1,0 +1,14 @@
+Running 5s test @ http://127.0.0.1:35593/health
+  2 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.07ms    1.17ms  20.40ms   92.63%
+    Req/Sec     8.51k     1.28k   10.12k    79.00%
+  Latency Distribution
+     50%  738.00us
+     75%    1.18ms
+     90%    1.89ms
+     99%    6.79ms
+  84788 requests in 5.01s, 6.55MB read
+Requests/sec:  16925.97
+Transfer/sec:      1.31MB
+perflab requests=84788 duration_us=5009344 p50_us=738 p95_us=2856 p99_us=6792 connect=0 read=0 write=0 timeout=0 http_errors=0
