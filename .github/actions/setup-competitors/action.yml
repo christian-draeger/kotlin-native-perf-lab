@@ -1,5 +1,5 @@
 name: Set up benchmark competitors
-description: Install the pinned toolchains for Go, Node.js, Bun, FastAPI and ASP.NET Core
+description: Install the pinned toolchains for Go, Node.js, Bun, Python and ASP.NET Core
 runs:
   using: composite
   steps:

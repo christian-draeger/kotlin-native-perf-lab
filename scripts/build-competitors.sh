@@ -15,10 +15,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../competitors" && pwd)"
   cd "$ROOT/elysia-bun"
   bun install --frozen-lockfile --ignore-scripts
 )
-(
-  cd "$ROOT/fastapi"
-  uv sync --locked --no-dev
-)
+for variant in fastapi flask django; do
+  uv --project "$ROOT/$variant" sync --locked --no-dev
+done
 mvn -B -ntp -f "$ROOT/spring-boot/pom.xml" package
 mvn -B -ntp -f "$ROOT/spring-webflux/pom.xml" package
 mvn -B -ntp -f "$ROOT/kotlin-jvm/pom.xml" package

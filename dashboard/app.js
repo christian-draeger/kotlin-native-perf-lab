@@ -19,6 +19,8 @@ const variants = {
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },
   fastapi: { label: "FastAPI", detail: "CPython · Uvicorn", color: "python" },
+  flask: { label: "Flask", detail: "CPython · Waitress / WSGI", color: "python" },
+  django: { label: "Django", detail: "CPython · Uvicorn / ASGI", color: "python" },
   "spring-boot": { label: "Spring Boot MVC", detail: "Java · Tomcat", color: "kotlin" },
   "spring-webflux": { label: "Spring Boot WebFlux", detail: "Java · Reactor Netty", color: "kotlin" },
   "aspnet-core": { label: "ASP.NET Core", detail: ".NET · Kestrel", color: "dotnet" },
