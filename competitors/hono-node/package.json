@@ -1,0 +1,10 @@
+{
+  "name": "perflab-hono-node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "2.1.11",
+    "hono": "4.13.20"
+  }
+}

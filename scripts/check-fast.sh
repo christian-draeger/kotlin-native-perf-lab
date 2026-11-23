@@ -16,5 +16,5 @@ test -s "$output/index.html"
 test -s "$output/data.js"
 
 if [[ "${1:-}" != --static ]]; then
-  "$ROOT/kotlin-reactor/gradlew" -p "$ROOT/kotlin-reactor" jvmTest
+  "$ROOT/components/nativeserve/gradlew" -p "$ROOT/components/nativeserve" jvmTest
 fi

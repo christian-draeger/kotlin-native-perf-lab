@@ -51,7 +51,7 @@ def main(port):
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(check_client, range(24)))
-    print("Reactor stream smoke passed")
+    print("NativeServe stream smoke passed")
 
 
 if __name__ == "__main__":

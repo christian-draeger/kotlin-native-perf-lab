@@ -1,3 +1,0 @@
-headers = reactor_signals.h
-headerFilter = reactor_signals.h
-package = dev.perflab.reactor.signals
