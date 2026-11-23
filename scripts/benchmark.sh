@@ -10,12 +10,17 @@ for command in curl python3 git taskset; do
 done
 RUNS="${RUNS:-5}"
 WARMUP="${WARMUP:-10}"
+WARMUP_WINDOWS="${WARMUP_WINDOWS:-1}"
 DURATION="${DURATION:-30}"
 THREADS="${THREADS:-4}"
 CONNECTIONS="${CONNECTIONS:-64}"
-for value in "$RUNS" "$WARMUP" "$DURATION" "$THREADS" "$CONNECTIONS"; do
+for value in "$RUNS" "$WARMUP" "$WARMUP_WINDOWS" "$DURATION" "$THREADS" "$CONNECTIONS"; do
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || { echo 'Run parameters must be positive integers.' >&2; exit 2; }
 done
+(( WARMUP_WINDOWS == 1 || WARMUP_WINDOWS >= 3 )) || { echo 'WARMUP_WINDOWS must be 1 or at least 3.' >&2; exit 2; }
+if (( WARMUP_WINDOWS > 1 )); then
+  command -v jstat >/dev/null || { echo 'Install JDK 21 jstat for JVM warm-up checks.' >&2; exit 1; }
+fi
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
 endpoints=(/health /json /users/123)
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
@@ -111,11 +116,50 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   fi
   printf 'variants=%s\n' "${variants[*]}"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
+  echo "max_warmup_windows=$WARMUP_WINDOWS"
   echo 'port_strategy=distinct TCP port per trial'
   load_environment
 ) > "$OUT/environment.txt"
 
 wrk_args=(--latency -t "$THREADS" -c "$CONNECTIONS" --timeout 2s)
+
+warm_server() {
+  local prefix="$1" variant="$2" url="$3" window log verdict
+  local -a logs=() compiler_logs=() compiler_args=()
+  warmup_status=unchecked
+  warmup_seconds="$WARMUP"
+  if (( WARMUP_WINDOWS == 1 )); then
+    run_load "${wrk_args[@]}" -d "${WARMUP}s" "$url" > "$prefix.warmup.wrk.txt" 2>&1
+    return
+  fi
+
+  warmup_status=unstable
+  if [[ "$variant" == ktor-jvm || "$variant" == spring-boot ]]; then
+    local snapshot="$prefix.warmup.0.jstat.txt"
+    LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
+    compiler_logs+=("$snapshot")
+  fi
+  for ((window = 1; window <= WARMUP_WINDOWS; window++)); do
+    log="$prefix.warmup.$window.wrk.txt"
+    run_load "${wrk_args[@]}" -d "${WARMUP}s" "$url" > "$log" 2>&1
+    logs+=("$log")
+    warmup_seconds=$((window * WARMUP))
+    if (( ${#compiler_logs[@]} > 0 )); then
+      snapshot="$prefix.warmup.$window.jstat.txt"
+      LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
+      compiler_logs+=("$snapshot")
+    fi
+    if (( window < 3 )); then continue; fi
+    if (( ${#compiler_logs[@]} > 0 )); then compiler_args=(--compiler "${compiler_logs[@]: -4}"); fi
+    verdict="$(python3 "$ROOT/scripts/warmup.py" "${logs[@]: -3}" "${compiler_args[@]}")"
+    printf 'window=%s %s\n' "$window" "$verdict" >> "$prefix.warmup.stability.txt"
+    if [[ "${verdict%% *}" == stable ]]; then
+      warmup_status=stable
+      break
+    fi
+  done
+  cp "$log" "$prefix.warmup.wrk.txt"
+}
 
 for ((run = 1; run <= RUNS; run++)); do
   for endpoint in "${endpoints[@]}"; do
@@ -128,14 +172,15 @@ for ((run = 1; run <= RUNS; run++)); do
       printf '%s %s %s %s\n' "$run" "$endpoint" "$variant" "$PORT" >> "$OUT/ports.txt"
       start_server "$variant" "$prefix.server.txt"
       "$ROOT/scripts/smoke.sh" "$base" > "$prefix.smoke.txt"
-      run_load "${wrk_args[@]}" -d "${WARMUP}s" "$base$endpoint" > "$prefix.warmup.wrk.txt" 2>&1
+      warm_server "$prefix" "$variant" "$base$endpoint"
       read -r cpu_start _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
       run_load "${wrk_args[@]}" -d "${DURATION}s" "$base$endpoint" > "$prefix.wrk.txt" 2>&1
       read -r cpu_end peak_rss_kib rss_kib < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
       python3 "$ROOT/scripts/parse_wrk.py" \
         --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" --csv "$OUT/results.csv" \
         --variant "$variant" --endpoint "$endpoint" --run "$run" --connections "$CONNECTIONS" \
-        --threads "$THREADS" --duration "$DURATION" --warmup "$WARMUP" --cpu-start "$cpu_start" \
+        --threads "$THREADS" --duration "$DURATION" --warmup "$warmup_seconds" \
+        --warmup-stability "$warmup_status" --cpu-start "$cpu_start" \
         --cpu-end "$cpu_end" --peak-rss-kib "$peak_rss_kib" --rss-kib "$rss_kib" --git-sha "$GIT_SHA"
       stop_server
     done

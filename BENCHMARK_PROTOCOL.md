@@ -48,8 +48,18 @@ The harness opens an SSH control connection, compares machine IDs, estimates clo
 - The CPU numerator is the change in cumulative process user and system time from `/proc/<pid>/stat` around the measured load. Its boundary includes starting and draining the load generator, and its accounting excludes the load generator and any CPU activity that Linux charges outside the server process.
 - The denominator for a valid run is the wrk completed response count. wrk flags HTTP statuses 400 and above and socket errors. The separate smoke checks require HTTP 200, verify the payloads and headers, and exercise keep-alive. wrk accepts 3xx and does not inspect payloads under load.
 - `VmHWM` includes process startup and warm-up. The CSV also records resident memory at the end of each measurement.
-- Check the warm-up and measurement logs before interpreting the table. A trial with zero completed responses, socket errors, or wrk HTTP errors is retained and left out of the aggregate. The fixed warm-up provides the same preconditioning workload across variants. Confirm JVM steady state separately.
+- Check the warm-up and measurement logs before interpreting the table. A trial with zero completed responses, socket errors, or wrk HTTP errors is retained and left out of the aggregate. The fixed warm-up provides the same preconditioning workload across variants. Confirm steady state with the pilot below before using controlled results.
 - Profile separately from throughput collection. Use JFR for JVM execution and allocation samples and Linux perf for Native and Rust on native CPU hardware. Report the endpoint and where samples were collected.
+
+## Pilot warm-up and concurrency
+
+Set `WARMUP_WINDOWS` to at least three to test steady state. Each wrk window uses the planned workload for `WARMUP` seconds. Three consecutive error-free windows must have at most 10% spread from minimum to maximum requests per second. For Ktor/JVM and Spring Boot, the increase in HotSpot compilation time must also be at most 1% of JVM elapsed time in each of those windows. The first qualifying window ends the warm-up. The cap is `WARMUP × WARMUP_WINDOWS` seconds of target load. The harness keeps every raw window, compiler snapshot and stability decision. It records measured trials that reach the cap as unstable and excludes them from the summary statistics. [HotSpot compiler counters](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jstat.html)
+
+Start calibration with `WARMUP=10 WARMUP_WINDOWS=6`. In the exploratory SSH pilot, five three-second windows were too short for Ktor/JVM and one NativeServe trial at 16 connections. A longer Ktor/JVM `/users/123` pilot recorded gains of 1.06 and 0.23 seconds of compilation time in early ten-second windows, followed by 0.07, 0.07 and 0.04 seconds while throughput spread was 3.27%. Compilation tasks continued during that low-activity period. The 60-second cap and compiler-time threshold are starting values for the dedicated-host pilot.
+
+On the target hardware, use the pilot to choose a fixed preconditioning budget that covers every variant at each concurrency. Keep the thresholds and window length fixed during the pilot and report when a hardware or workload combination needs a longer cap. Publish measurements using the chosen fixed warm-up so every variant has the same preconditioning. The hosted CI series use a short fixed warm-up and remain exploratory.
+
+For latency, use one thread and one connection. For throughput, run separate suites at 16, 64 and 256 connections with a fixed thread count that divides each count. Apply the same warm-up rule and repetition count to every variant at each concurrency.
 
 ## Record the investigation
 
