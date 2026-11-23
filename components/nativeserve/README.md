@@ -38,6 +38,14 @@ Run parser and routing tests directly on macOS with `./components/nativeserve/gr
 
 ## Write a handler
 
+The [hello example](examples/hello) is a separate Gradle build that consumes `dev.perflab:nativeserve` from this checkout. On Linux x86_64 with JDK 21, run the example from the repository root.
+
+```sh
+./components/nativeserve/gradlew -p components/nativeserve/examples/hello runReleaseExecutableNative
+```
+
+Open `http://127.0.0.1:8080/` to see the greeting. The example uses the same Kotlin version and Gradle wrapper as NativeServe. Linux CI builds and tests the example release executable on x86_64 and ARM64.
+
 ```kotlin
 import dev.perflab.nativeserve.*
 import kotlinx.serialization.Serializable
