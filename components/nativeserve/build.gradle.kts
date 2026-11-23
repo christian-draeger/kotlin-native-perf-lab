@@ -13,6 +13,9 @@ kotlin {
         "aarch64", "arm64" -> linuxArm64("native")
         else -> error("Unsupported Linux architecture $arch")
     }
+    linux.compilations.getByName("main").cinterops.create("reactorSignals") {
+        includeDirs(project.file("src/nativeInterop/cinterop"))
+    }
     linux.binaries.executable {
         baseName = "nativeserve"
         entryPoint = "dev.perflab.nativeserve.example.main"
