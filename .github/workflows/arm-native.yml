@@ -32,14 +32,14 @@ jobs:
           LC_ALL: C
         run: |
           test "$(uname -m)" = x86_64
-          gradle -p ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
-          gradle -p kotlin-reactor -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+          gradle -p competitors/ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
+          gradle -p components/nativeserve -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           mkdir "$RUNNER_TEMP/arm-native"
-          for executable in ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe kotlin-reactor/build/bin/native/releaseExecutable/nativeserve.kexe; do
+          for executable in competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe; do
             readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
             cp "$executable" "$RUNNER_TEMP/arm-native/"
           done
-          cp -R ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
+          cp -R competitors/ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload
         with:
