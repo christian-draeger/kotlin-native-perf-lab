@@ -54,9 +54,6 @@ function fileLink(run, label, path, directory = false) {
 function sortComparison(groups, metric) {
   const direction = metric === "rps" ? -1 : 1;
   return [...groups].sort((left, right) => {
-    const leftIsReactor = left.variant === "kotlin-reactor";
-    const rightIsReactor = right.variant === "kotlin-reactor";
-    if (leftIsReactor !== rightIsReactor) return leftIsReactor ? -1 : 1;
     if (!left.stats) return right.stats ? 1 : 0;
     if (!right.stats) return -1;
     return direction * (left.stats[metric].median - right.stats[metric].median);
