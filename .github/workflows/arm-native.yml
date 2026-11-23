@@ -1,10 +1,10 @@
-name: Build Ktor binaries for Linux ARM64
+name: Build Kotlin binaries for Linux ARM64
 
 on:
   workflow_call:
     outputs:
       artifact_id:
-        description: Ktor JVM distribution and Linux ARM64 release executable
+        description: Kotlin JVM distribution and Linux ARM64 release executables
         value: ${{ jobs.cross_build.outputs.artifact_id }}
 
 permissions:
@@ -27,16 +27,18 @@ jobs:
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
         with:
           gradle-version: '9.7.0'
-      - name: Build and verify the ARM64 release executable
+      - name: Build and verify the ARM64 release executables
         env:
           LC_ALL: C
         run: |
           test "$(uname -m)" = x86_64
           gradle -p ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
-          executable=ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe
-          readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
+          gradle -p kotlin-reactor -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           mkdir "$RUNNER_TEMP/arm-native"
-          cp "$executable" "$RUNNER_TEMP/arm-native/"
+          for executable in ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe; do
+            readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
+            cp "$executable" "$RUNNER_TEMP/arm-native/"
+          done
           cp -R ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload

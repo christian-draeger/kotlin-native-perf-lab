@@ -14,6 +14,7 @@ const variants = {
   "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "jvm" },
   "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "native" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
+  "kotlin-reactor": { label: "Kotlin Reactor", detail: "Kotlin/Native · epoll", color: "reactor" },
 };
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium", timeStyle: "short",

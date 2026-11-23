@@ -14,3 +14,7 @@ trap 'rm -rf "$output"' EXIT
 python3 scripts/build-dashboard.py "$output"
 test -s "$output/index.html"
 test -s "$output/data.js"
+
+if [[ "${1:-}" != --static ]]; then
+  "$ROOT/kotlin-reactor/gradlew" -p "$ROOT/kotlin-reactor" jvmTest
+fi

@@ -84,7 +84,7 @@ jobs:
       - name: Build and smoke-test all baselines
         run: |
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
-            export PREBUILT_KTOR_DIR="$RUNNER_TEMP/arm-native"
+            export PREBUILT_KOTLIN_DIR="$RUNNER_TEMP/arm-native"
           fi
           ./scripts/build-all.sh
           ./scripts/smoke-all.sh

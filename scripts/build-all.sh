@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -n "${PREBUILT_KTOR_DIR:-}" ]]; then
+if [[ -n "${PREBUILT_KOTLIN_DIR:-}" ]]; then
   native_directory="$ROOT/ktor/build/bin/native/releaseExecutable"
-  mkdir -p "$native_directory"
-  install -m 755 "$PREBUILT_KTOR_DIR/ktor-baselines.kexe" "$native_directory/ktor-baselines.kexe"
-  cp -R "$PREBUILT_KTOR_DIR/jvmDist" "$ROOT/ktor/build/"
-elif [[ -x "$ROOT/ktor/gradlew" ]]; then
-  "$ROOT/ktor/gradlew" -p "$ROOT/ktor" jvmDist linkReleaseExecutableNative
-elif command -v gradle >/dev/null 2>&1; then
-  gradle -p "$ROOT/ktor" jvmDist linkReleaseExecutableNative
+  reactor_directory="$ROOT/kotlin-reactor/build/bin/native/releaseExecutable"
+  mkdir -p "$native_directory" "$reactor_directory"
+  install -m 755 "$PREBUILT_KOTLIN_DIR/ktor-baselines.kexe" "$native_directory/ktor-baselines.kexe"
+  install -m 755 "$PREBUILT_KOTLIN_DIR/kotlin-reactor.kexe" "$reactor_directory/kotlin-reactor.kexe"
+  cp -R "$PREBUILT_KOTLIN_DIR/jvmDist" "$ROOT/ktor/build/"
 else
-  echo 'Gradle not found. Install Gradle 9.7 or generate the wrapper in ktor/.' >&2
-  exit 1
+  if [[ -x "$ROOT/ktor/gradlew" ]]; then
+    gradle="$ROOT/ktor/gradlew"
+  elif command -v gradle >/dev/null 2>&1; then
+    gradle=gradle
+  else
+    gradle="$ROOT/kotlin-reactor/gradlew"
+  fi
+  "$gradle" -p "$ROOT/ktor" jvmDist linkReleaseExecutableNative
+  "$gradle" -p "$ROOT/kotlin-reactor" linkReleaseExecutableNative
 fi
 cargo build --release --locked --manifest-path "$ROOT/rust-axum/Cargo.toml"
-echo 'Built Ktor JVM, Ktor Native and Rust Axum.'
+echo 'Built Ktor JVM, Ktor Native, Rust Axum and Kotlin Reactor.'

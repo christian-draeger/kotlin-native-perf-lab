@@ -50,7 +50,7 @@ jobs:
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
-            export PREBUILT_KTOR_DIR="$RUNNER_TEMP/arm-native"
+            export PREBUILT_KOTLIN_DIR="$RUNNER_TEMP/arm-native"
           fi
           ./scripts/build-all.sh
       - name: Check HTTP parity
