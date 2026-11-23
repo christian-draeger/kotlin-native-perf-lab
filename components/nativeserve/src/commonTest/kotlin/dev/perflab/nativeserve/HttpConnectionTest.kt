@@ -121,6 +121,28 @@ class HttpConnectionTest {
     }
 
     @Test
+    fun theHttp10StreamKeepsItsDeclaredLengthAndClosesAfterWriting() {
+        val routes = Routes().apply {
+            get("/health") {
+                streamResponse(1, "text/plain", ResponseSource { buffer, _ ->
+                    buffer[0] = 's'.code.toByte()
+                    1
+                })
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits())
+        connection.receive("GET /health HTTP/1.0\r\n\r\n", now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        assertEquals(
+            "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 1\r\nConnection: close\r\n\r\n",
+            assertNotNull(connection.output).decodeToString(),
+        )
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+        assertEquals("s", assertNotNull(connection.output).decodeToString())
+        assertFalse(connection.wrote(1, now = 3))
+    }
+
+    @Test
     fun aShortOrFailedSourceEndsTheConnectionAndClosesExactlyOnce() {
         val invalidReads: List<(ByteArray, Int) -> Int> = listOf(
             { _, _ -> -1 }, { _, _ -> 0 }, { _, limit -> limit + 1 }, { _, _ -> error("Source failed") },

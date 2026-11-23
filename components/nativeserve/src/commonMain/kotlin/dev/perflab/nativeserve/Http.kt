@@ -27,7 +27,7 @@ class Response internal constructor(
 }
 
 /** A response body pulled synchronously on the connection's I/O loop. */
-interface ResponseSource : AutoCloseable {
+fun interface ResponseSource : AutoCloseable {
     /**
      * Write 1 to [limit] bytes from index zero and return the count. A nonpositive
      * count before the declared length is sent ends the connection. Return promptly
@@ -43,7 +43,7 @@ internal class ResponseStream(val length: Int, val source: ResponseSource)
 /**
  * Stream a body with a known byte length. Pass a fresh [source] per response.
  * Returning this response from a handler transfers ownership to NativeServe, which
- * closes the source after delivery or cancellation, including size-limit rejection.
+ * closes the source after the final write or cancellation, including size-limit rejection.
  */
 fun streamResponse(length: Int, contentType: String, source: ResponseSource, status: Int = 200): Response {
     require(length >= 0) { "Response length must be nonnegative" }
