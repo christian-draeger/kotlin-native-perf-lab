@@ -14,7 +14,7 @@ const variants = {
   "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "jvm" },
   "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "native" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
-  "kotlin-reactor": { label: "Kotlin Reactor", detail: "Kotlin/Native · epoll", color: "reactor" },
+  "kotlin-reactor": { label: "NativeServe", detail: "Kotlin/Native · HTTP server", color: "reactor" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },

@@ -35,7 +35,7 @@ jobs:
           gradle -p ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
           gradle -p kotlin-reactor -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           mkdir "$RUNNER_TEMP/arm-native"
-          for executable in ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe; do
+          for executable in ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe kotlin-reactor/build/bin/native/releaseExecutable/nativeserve.kexe; do
             readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
             cp "$executable" "$RUNNER_TEMP/arm-native/"
           done

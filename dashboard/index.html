@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Linux HTTP benchmarks and the Kotlin Reactor performance history.">
+  <meta name="description" content="Linux HTTP benchmarks and the NativeServe performance history.">
   <title>Kotlin Native Performance Lab · Benchmark dashboard</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./data.js" defer></script>
@@ -17,7 +17,7 @@
         Kotlin Native Performance Lab
       </a>
       <nav aria-label="Navigation">
-        <a href="#reactor-history" id="history-link">Reactor history</a>
+        <a href="#reactor-history" id="history-link">NativeServe history</a>
         <a href="#details" id="details-link">Measurements</a>
         <a id="repository" href="https://github.com/christian-draeger/kotlin-native-perf-lab">Repository</a>
       </nav>
@@ -29,7 +29,7 @@
       <div class="shell hero-inner">
         <div>
           <h1>Benchmark overview</h1>
-          <p>Kotlin Reactor performance alongside Rust, Go, JVM, JavaScript and Python servers.</p>
+          <p>NativeServe performance alongside Rust, Go, JVM, JavaScript and Python servers.</p>
         </div>
         <div class="run-picker" id="run-picker" hidden>
           <label for="run-select">Measurement series</label>
@@ -86,7 +86,7 @@
         <section class="card reactor-history" id="reactor-history" aria-labelledby="history-title">
           <div class="card-heading">
             <div>
-              <h2 id="history-title">Kotlin Reactor over time</h2>
+              <h2 id="history-title">NativeServe over time</h2>
               <p class="history-context" id="history-workload"></p>
             </div>
             <div class="history-controls" id="history-controls" hidden>
@@ -95,7 +95,7 @@
               <label>Metric <select id="history-metric"></select></label>
             </div>
           </div>
-          <p class="history-context" id="history-empty" hidden>No comparable Reactor runs for this workload yet.</p>
+          <p class="history-context" id="history-empty" hidden>No comparable NativeServe runs for this workload yet.</p>
           <div id="history-data" hidden>
             <div class="history-latest">
               <div>
@@ -113,7 +113,7 @@
               <span><i class="range-key"></i>Trial min–max</span>
             </div>
             <p class="history-context" id="history-caveat"></p>
-            <div class="table-scroll" tabindex="0" role="region" aria-label="Reactor runs">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="NativeServe runs">
               <table>
                 <thead>
                   <tr>

@@ -1,9 +1,9 @@
-package dev.perflab.reactor.example
+package dev.perflab.nativeserve.example
 
-import dev.perflab.reactor.badRequest
-import dev.perflab.reactor.json
-import dev.perflab.reactor.serve
-import dev.perflab.reactor.text
+import dev.perflab.nativeserve.badRequest
+import dev.perflab.nativeserve.json
+import dev.perflab.nativeserve.serve
+import dev.perflab.nativeserve.text
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.toKString
 import kotlinx.serialization.Serializable

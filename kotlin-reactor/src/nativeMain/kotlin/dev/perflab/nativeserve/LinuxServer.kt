@@ -1,6 +1,6 @@
 @file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 
-package dev.perflab.reactor
+package dev.perflab.nativeserve
 
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.addressOf

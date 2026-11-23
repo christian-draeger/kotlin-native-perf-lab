@@ -1,4 +1,4 @@
-package dev.perflab.reactor
+package dev.perflab.nativeserve
 
 import kotlinx.serialization.json.Json
 

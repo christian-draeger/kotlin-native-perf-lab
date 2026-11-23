@@ -1,4 +1,4 @@
-package dev.perflab.reactor
+package dev.perflab.nativeserve
 
 internal sealed interface ParsedHead {
     data object Incomplete : ParsedHead
