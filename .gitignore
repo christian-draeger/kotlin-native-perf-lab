@@ -9,3 +9,5 @@
 results/*/
 __pycache__/
 *.pyc
+competitors/**/node_modules/
+competitors/fastapi/.venv/

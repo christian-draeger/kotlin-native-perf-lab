@@ -4,6 +4,8 @@
 
 How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, and **Axum/Tokio** compare on equivalent HTTP handlers? Later compare an independent Kotlin Native reactor as a fourth stack.
 
+The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, and Spring Boot MVC/Tomcat. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
+
 ## Measurements
 
 - Throughput (HTTP requests/second).

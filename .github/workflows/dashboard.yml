@@ -20,6 +20,14 @@ on:
         description: Run the Ubuntu x86_64 and ARM64 benchmarks before publishing
         type: boolean
         default: true
+      repetitions:
+        description: Trials per server and endpoint
+        type: choice
+        options: ['3', '5']
+        default: '5'
+      benchmark_label:
+        description: Optional feature or change label shown in the reactor history
+        type: string
 
 permissions:
   contents: read
@@ -45,7 +53,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: 55
     outputs:
       x86_artifact: ${{ matrix.arch == 'x86_64' && steps.upload.outputs.artifact-id || '' }}
       arm_artifact: ${{ matrix.arch == 'aarch64' && steps.upload.outputs.artifact-id || '' }}
@@ -53,6 +61,7 @@ jobs:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
       EXPECTED_ARCH: ${{ matrix.arch }}
+      BENCHMARK_SUITE: expanded
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -64,6 +73,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
         with:
           gradle-version: '9.7.0'
+      - uses: ./.github/actions/setup-competitors
       - name: Install wrk and Rust
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
@@ -87,15 +97,17 @@ jobs:
             export PREBUILT_KOTLIN_DIR="$RUNNER_TEMP/arm-native"
           fi
           ./scripts/build-all.sh
+          bash scripts/build-competitors.sh
           ./scripts/smoke-all.sh
       - name: Measure on the hosted Linux runner
         id: measure
         env:
-          RUNS: 5
+          RUNS: ${{ inputs.repetitions }}
           WARMUP: 10
           DURATION: 5
           THREADS: 2
           CONNECTIONS: 16
+          BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
         run: |
           export BENCHMARK_RESULTS_DIR="$RUNNER_TEMP/benchmark-results"
           ./scripts/benchmark.sh
@@ -172,6 +184,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
       - name: Load archived CI results
         run: |
           if git ls-remote --exit-code origin refs/heads/benchmark-data >/dev/null; then

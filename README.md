@@ -6,9 +6,9 @@ A reproducible, incremental performance experiment: **Ktor/CIO on the JVM**, **K
 
 ## Benchmark dashboard
 
-Browse throughput, tail latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. The dashboard defaults to the newest series. Optional notes and links for a specific series go in `dashboard/run-notes.json`.
+Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The Reactor history charts medians and trial ranges over time at the same recorded architecture, CPU model and load settings. Each point links back to the measured commit and raw logs. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
-To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. The two Ubuntu 24.04 runners test and measure the same endpoints with five trials per server variant. Each series has its own raw logs on `benchmark-data` and its own architecture label on Pages. Within each runner, wrk and the servers share one VM. CPU models and host conditions differ between runners.
+To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose three or five trials per server and endpoint. The optional feature label appears in Reactor history. Each series has its own raw logs on `benchmark-data` and its own architecture label on Pages. Within each runner, wrk and the servers share one VM. CPU models and host conditions differ between runners.
 
 For a local preview, build the static files and serve the output directory.
 
@@ -26,6 +26,26 @@ python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/perflab-dashboard
 | GET | `/users/123` | Same JSON with `id=123` | Routing, parsing, dynamic serialization |
 
 The Ktor servers use the *same* `commonMain` routes and serializers. Both use the **CIO** engine, to isolate JVM-vs-Native effects. The Axum implementation uses the same response model and serde-based JSON.
+
+## Additional Linux comparisons
+
+| Stack | What it represents |
+| --- | --- |
+| Go with `net/http` | A lightweight compiled HTTP service using only the standard library. |
+| Hono on Node.js | A small web-standard API on Node's HTTP server through the official adapter. |
+| Elysia on Bun | A typed API on Bun's integrated HTTP server. Runtime and framework both differ from Hono on Node. |
+| FastAPI on CPython | A typed Python API with Pydantic and one Uvicorn worker using uvloop and httptools. |
+| Spring Boot on Java | A Spring MVC API with embedded Tomcat and Jackson, running in the same JDK family as Ktor/JVM. |
+
+On Linux with the [CI toolchain versions](.github/actions/setup-competitors/action.yml), Maven and JDK 21:
+
+```bash
+bash scripts/build-competitors.sh
+BENCHMARK_SUITE=expanded ./scripts/smoke-all.sh
+BENCHMARK_SUITE=expanded RUNS=5 WARMUP=10 DURATION=5 THREADS=2 CONNECTIONS=16 ./scripts/benchmark.sh
+```
+
+Build the original four first with `./scripts/build-all.sh` for the expanded suite. For an independent smoke test of the five additions, use `BENCHMARK_SUITE=competitors`. The default local suite remains the original four.
 
 ## Prerequisites
 
