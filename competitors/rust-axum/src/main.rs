@@ -34,13 +34,14 @@ async fn main() {
         .ok()
         .and_then(|value| value.parse::<u16>().ok())
         .unwrap_or(8080);
+    let host = std::env::var("BIND_HOST").unwrap_or_else(|_| "127.0.0.1".to_owned());
 
     let app = Router::new()
         .route("/health", get(health))
         .route("/json", get(json))
         .route("/users/{id}", get(user_by_id));
 
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+    let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await
         .expect("Failed to bind HTTP listener");
     axum::serve(listener, app).await.expect("Server failed");

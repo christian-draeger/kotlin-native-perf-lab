@@ -17,7 +17,7 @@ The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/B
 ## Fairness
 
 1. Same physical host; pin cores and frequency/governor where possible; note SMT and NUMA.
-2. Prefer a separate load-generator host. Otherwise acknowledge competition for CPU.
+2. Use a separate load-generator host for controlled results. Label same-host runs as exploratory.
 3. Same endpoint, JSON schema and payload, same HTTP protocol, keep-alive and connection count.
 4. Disable external application logging for all contenders. No debug builds or profilers during the reported runs.
 5. Warm up each process before measurement, especially JVM. Re-launch fresh server processes for repetitions when measuring peak RSS.
@@ -26,6 +26,20 @@ The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/B
 8. Run at multiple concurrency levels (e.g. 1, 16, 64, 256). Saturation throughput and low-concurrency latency answer different questions.
 9. Use at least 5 repetitions; report median, min/max or interval; investigate outliers.
 10. Store exact git SHA, CPU, kernel, JDK/Gradle/Kotlin/Ktor and rustc/cargo versions.
+
+## Run with a separate load machine
+
+Use two Linux machines on a private network and synchronize their clocks. Install `wrk` on the load machine and configure an OpenSSH host alias with a verified host key and noninteractive authentication. The load host must reach the server's chosen interface and TCP range. Use a distinct physical load machine for controlled results.
+
+Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. The core suite uses 12 ports per repetition, the expanded suite 27, and the additional competitors alone 15.
+
+```bash
+./scripts/build-all.sh
+BIND_HOST=192.0.2.10 PORT=20080 LOAD_SSH=perflab-load \
+  RUNS=5 WARMUP=10 DURATION=30 THREADS=4 CONNECTIONS=64 ./scripts/benchmark.sh
+```
+
+The harness opens an SSH control connection, compares machine IDs, estimates clock offset and stages the same Lua reporting script on the load host. All HTTP traffic travels directly from the load host to the server. Server-side `/proc` samples bracket the measured SSH command, so the CPU window includes SSH command setup and teardown. The measured latency and throughput come from wrk's own elapsed interval. Results include the clock offset bounds, both CPU and affinity records, versions, hashes, trial ports and response error counts. Review host isolation and load-generator headroom before including a run in a controlled comparison.
 
 ## Local harness and limitations
 

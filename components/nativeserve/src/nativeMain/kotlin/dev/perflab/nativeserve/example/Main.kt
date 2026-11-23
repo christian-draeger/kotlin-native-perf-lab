@@ -20,9 +20,10 @@ private data class User(val id: Int, val name: String, val active: Boolean)
 @OptIn(ExperimentalForeignApi::class)
 fun main() {
     val port = getenv("PORT")?.toKString()?.toIntOrNull() ?: 8080
+    val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
     check(reactor_signals(REACTOR_INSTALL_SIGNALS) == 0) { "Install signal handlers failed (errno $errno)" }
     try {
-        serve(port = port, stopRequested = { reactor_signals(REACTOR_READ_STOP) != 0 }) {
+        serve(port = port, host = host, stopRequested = { reactor_signals(REACTOR_READ_STOP) != 0 }) {
             get("/health") { text("ok") }
             get("/json") { json(User(42, "benchmark-user", true)) }
             get("/users/{id}") { request ->

@@ -1,8 +1,9 @@
-# Shared lifecycle for validation and measurement scripts. Callers export PORT.
+# Shared lifecycle for validation and measurement scripts. Callers export PORT
+# and can set BIND_HOST to their chosen server interface.
 server_pid=''
 
 start_server() {
-  local variant="$1" log="$2" base="http://127.0.0.1:$PORT" attempt
+  local variant="$1" log="$2" base="http://${BIND_HOST:-127.0.0.1}:$PORT" attempt
   if curl -s --max-time 1 -o /dev/null "$base/health"; then
     echo "Port $PORT already serves HTTP" >&2
     return 1

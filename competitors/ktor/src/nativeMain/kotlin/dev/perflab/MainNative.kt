@@ -9,7 +9,8 @@ import platform.posix.getenv
 @OptIn(ExperimentalForeignApi::class)
 fun main() {
     val port = getenv("PORT")?.toKString()?.toIntOrNull() ?: 8080
-    embeddedServer(CIO, host = "127.0.0.1", port = port) {
+    val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
+    embeddedServer(CIO, host = host, port = port) {
         configureApi()
     }.start(wait = true)
 }

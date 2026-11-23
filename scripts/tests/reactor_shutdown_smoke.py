@@ -12,7 +12,8 @@ from reactor_http_smoke import connect, response
 def main(port, pid):
     runner = Path(__file__).resolve().parents[1] / "run-server.sh"
     conflict = subprocess.run([runner, "kotlin-reactor"], capture_output=True, text=True, timeout=5)
-    assert conflict.returncode != 0 and f"bind 127.0.0.1:{port} failed" in conflict.stderr, conflict.stderr
+    host = os.environ.get("BIND_HOST", "127.0.0.1")
+    assert conflict.returncode != 0 and f"bind {host}:{port} failed" in conflict.stderr, conflict.stderr
     with connect(port) as conn, conn.makefile("rb") as stream:
         conn.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n")
         status, headers, body = response(stream)

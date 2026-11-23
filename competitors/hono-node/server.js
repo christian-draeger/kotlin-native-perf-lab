@@ -15,4 +15,4 @@ app.get("/users/:id", (c) => {
   return c.json(user(id));
 });
 
-serve({ fetch: app.fetch, hostname: "127.0.0.1", port: Number(process.env.PORT ?? 8080) });
+serve({ fetch: app.fetch, hostname: process.env.BIND_HOST ?? "127.0.0.1", port: Number(process.env.PORT ?? 8080) });

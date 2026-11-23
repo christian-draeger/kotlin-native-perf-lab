@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -45,5 +46,9 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Fatal(http.ListenAndServe("127.0.0.1:"+port, mux))
+	host := os.Getenv("BIND_HOST")
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	log.Fatal(http.ListenAndServe(net.JoinHostPort(host, port), mux))
 }

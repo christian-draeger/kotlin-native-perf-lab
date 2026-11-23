@@ -49,3 +49,4 @@ jobs:
           test "$(uname -m)" = "$EXPECTED_ARCH"
           bash scripts/build-competitors.sh
           ./scripts/smoke-all.sh
+          BIND_HOST=127.0.0.2 ./scripts/smoke-all.sh
