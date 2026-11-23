@@ -18,7 +18,7 @@ A reproducible performance lab comparing established HTTP stacks with [NativeSer
 
 Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The NativeServe history charts medians and trial ranges over time at the same recorded architecture, CPU model and load settings. Each point links back to the measured commit and raw logs. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
-To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 15-stack `expanded` suite or the quicker four-stack `core` suite, and three or five trials per server and endpoint. The optional feature label appears in NativeServe history. One VM runs each architecture and endpoint pair. Every server in that endpoint comparison runs sequentially on the same VM, with a fresh server process per trial. The dashboard groups the endpoints by workflow and architecture while showing the selected endpoint's actual CPU model and raw logs. The load generator shares that VM with each server. CPU models and host conditions can differ between endpoints and workflow runs.
+To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 16-stack `expanded` suite or the quicker four-stack `core` suite, and three or five trials per server and endpoint. The optional feature label appears in NativeServe history. One VM runs each architecture and endpoint pair. Every server in that endpoint comparison runs sequentially on the same VM, with a fresh server process per trial. The dashboard groups the endpoints by workflow and architecture while showing the selected endpoint's actual CPU model and raw logs. The load generator shares that VM with each server. CPU models and host conditions can differ between endpoints and workflow runs.
 
 For a local preview, build the static files and serve the output directory.
 
@@ -45,7 +45,8 @@ The Ktor servers use the *same* `commonMain` routes and serializers. Both use th
 | Hono on Node.js | A small web-standard API on Node's HTTP server through the official adapter. |
 | Elysia on Bun | A typed API on Bun's integrated HTTP server. Runtime and framework both differ from Hono on Node. |
 | FastAPI on CPython | A typed Python API with Pydantic and one Uvicorn worker using uvloop and httptools. |
-| Spring Boot on Java | A Spring MVC API with embedded Tomcat and Jackson, running in the same JDK family as Ktor/JVM. |
+| Spring Boot MVC | A Java API on embedded Tomcat with Jackson. |
+| Spring Boot WebFlux | A Java API using functional WebFlux routes, Reactor Netty and Jackson. The archive includes the native Linux epoll transports for x86_64 and ARM64. |
 | ASP.NET Core | A .NET 10 Minimal API on Kestrel with System.Text.Json. |
 | Quarkus | Kotlin on HotSpot using Quarkus REST and Jackson, packaged as a fast JAR. |
 | Vert.x | A Kotlin Vert.x Web router on Netty with Jackson. |
@@ -53,7 +54,7 @@ The Ktor servers use the *same* `commonMain` routes and serializers. Both use th
 | http4k | Kotlin HTTP handlers on Jetty with http4k's Jackson integration. |
 | Javalin | Kotlin routes on Jetty with Jackson. |
 
-The dashboard uses purple for the Kotlin server ecosystem, including the existing Java Spring Boot reference, and retains the orange NativeServe highlight. The ranking follows the selected metric.
+The dashboard uses purple for the Kotlin server ecosystem, including both Java Spring Boot references, and orange for NativeServe. The ranking follows the selected metric.
 
 On Linux with the [CI toolchain versions](.github/actions/setup-competitors/action.yml), Maven, JDK 21 and the [pinned .NET SDK](competitors/aspnet-core/global.json):
 

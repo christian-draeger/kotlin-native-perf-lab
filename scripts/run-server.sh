@@ -37,8 +37,8 @@ case "$variant" in
     exec "$app/.venv/bin/python" -m uvicorn server:app --app-dir "$app" --host "${BIND_HOST:-127.0.0.1}" \
       --port "${PORT:-8080}" --workers 1 --loop uvloop --http httptools --no-access-log
     ;;
-  spring-boot)
-    exec java ${JAVA_OPTS:-} -jar "$ROOT/competitors/spring-boot/target/spring-boot.jar" \
+  spring-boot|spring-webflux)
+    exec java ${JAVA_OPTS:-} -jar "$ROOT/competitors/$variant/target/$variant.jar" \
       --server.address="${BIND_HOST:-127.0.0.1}" --server.port="${PORT:-8080}" --spring.main.banner-mode=off
     ;;
   aspnet-core)
