@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         with:
           distribution: temurin
@@ -86,3 +88,32 @@ jobs:
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health")" = ok
           test "$(curl -fsS "$base/")" = 'Hello from NativeServe'
           kill -0 "$pid"
+      - name: Verify and run the NativeServe release archive
+        env:
+          EXPECTED_ARCH: ${{ inputs.arch }}
+        run: |
+          binary=components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+          version="snapshot-${GITHUB_SHA:0:12}"
+          archive="nativeserve-$version-linux-$EXPECTED_ARCH.tar.gz"
+          package="$RUNNER_TEMP/nativeserve-release"
+          second_build="$RUNNER_TEMP/nativeserve-repack"
+          ./scripts/package-nativeserve.sh "$binary" "$version" "$package"
+          ./scripts/package-nativeserve.sh "$binary" "$version" "$second_build"
+          cmp "$package/$archive" "$second_build/$archive"
+          unpacked="$RUNNER_TEMP/nativeserve-unpacked"
+          mkdir "$unpacked"
+          (cd "$package" && sha256sum --strict -c "$archive.sha256")
+          tar -xzf "$package/$archive" -C "$unpacked"
+          cmp "$binary" "$unpacked/nativeserve"
+          PORT=18081 "$unpacked/nativeserve" &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          base=http://127.0.0.1:18081
+          curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health"
+          ./scripts/smoke.sh "$base"
+          kill -0 "$pid"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: nativeserve-linux-${{ inputs.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nativeserve-release
+          if-no-files-found: error
