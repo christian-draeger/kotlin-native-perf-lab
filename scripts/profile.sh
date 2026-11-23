@@ -77,14 +77,14 @@ for variant in ktor-jvm ktor-native rust-axum kotlin-reactor; do
     sleep 1
     "${perf[@]}" record -o "$prefix.perf.data" -F 99 -e cpu-clock \
       --call-graph dwarf,8192 -p "$server_pid" -- sleep 15
-    if [[ "${PERF_SUDO:-0}" == 1 ]]; then
-      sudo -n chown "$(id -u):$(id -g)" "$prefix.perf.data"
-    fi
     wait "$load_pid"
     load_pid=''
     "${perf[@]}" report -i "$prefix.perf.data" --stdio --no-children \
       --sort dso,symbol --percent-limit 0.5 -g none > "$prefix.perf.txt"
     "${perf[@]}" script -i "$prefix.perf.data" | gzip -n > "$prefix.perf-stacks.txt.gz"
+    if [[ "${PERF_SUDO:-0}" == 1 ]]; then
+      sudo -n chown "$(id -u):$(id -g)" "$prefix.perf.data"
+    fi
   fi
   check_load "$prefix.load.txt"
   stop_server
