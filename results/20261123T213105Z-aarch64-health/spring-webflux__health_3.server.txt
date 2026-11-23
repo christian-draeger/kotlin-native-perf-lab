@@ -1,0 +1,6 @@
+2026-11-23T21:43:22.704Z  INFO 9695 --- [           main] dev.perflab.baseline.Application         : Starting Application v0.0.0 using Java 21.0.13.1 with PID 9695 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-webflux/target/spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-23T21:43:22.707Z  INFO 9695 --- [           main] dev.perflab.baseline.Application         : No active profile set, falling back to 1 default profile: "default"
+2026-11-23T21:43:23.784Z  INFO 9695 --- [           main] o.s.boot.reactor.netty.NettyWebServer    : Netty started on port 44119 (http)
+2026-11-23T21:43:23.800Z  INFO 9695 --- [           main] dev.perflab.baseline.Application         : Started Application in 1.48 seconds (process running for 1.864)
+2026-11-23T21:43:39.219Z  INFO 9695 --- [ionShutdownHook] o.s.boot.reactor.netty.GracefulShutdown  : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-23T21:43:39.221Z  INFO 9695 --- [ netty-shutdown] o.s.boot.reactor.netty.GracefulShutdown  : Graceful shutdown complete

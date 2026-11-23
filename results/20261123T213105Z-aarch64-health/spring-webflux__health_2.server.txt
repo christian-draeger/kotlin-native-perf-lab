@@ -1,0 +1,6 @@
+2026-11-23T21:39:17.600Z  INFO 8828 --- [           main] dev.perflab.baseline.Application         : Starting Application v0.0.0 using Java 21.0.13.1 with PID 8828 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-webflux/target/spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-23T21:39:17.604Z  INFO 8828 --- [           main] dev.perflab.baseline.Application         : No active profile set, falling back to 1 default profile: "default"
+2026-11-23T21:39:18.657Z  INFO 8828 --- [           main] o.s.boot.reactor.netty.NettyWebServer    : Netty started on port 39779 (http)
+2026-11-23T21:39:18.673Z  INFO 8828 --- [           main] dev.perflab.baseline.Application         : Started Application in 1.451 seconds (process running for 1.827)
+2026-11-23T21:39:34.136Z  INFO 8828 --- [ionShutdownHook] o.s.boot.reactor.netty.GracefulShutdown  : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-23T21:39:34.138Z  INFO 8828 --- [ netty-shutdown] o.s.boot.reactor.netty.GracefulShutdown  : Graceful shutdown complete
