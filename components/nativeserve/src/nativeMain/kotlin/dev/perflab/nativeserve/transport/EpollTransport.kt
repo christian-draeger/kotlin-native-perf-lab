@@ -17,6 +17,7 @@ import kotlinx.cinterop.sizeOf
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.linux.EPOLLERR
+import platform.linux.EPOLLEXCLUSIVE
 import platform.linux.EPOLLHUP
 import platform.linux.EPOLLIN
 import platform.linux.EPOLLOUT
@@ -33,6 +34,7 @@ import platform.posix.EAGAIN
 import platform.posix.ECONNABORTED
 import platform.posix.EINTR
 import platform.posix.FD_CLOEXEC
+import platform.posix.F_DUPFD_CLOEXEC
 import platform.posix.F_SETFD
 import platform.posix.F_SETFL
 import platform.posix.MSG_NOSIGNAL
@@ -60,18 +62,51 @@ import platform.posix.socket
 private const val BATCH_SIZE = 64
 private const val LISTENER_TOKEN = 0UL
 
-internal fun MemScope.openEpollTransport(host: String, port: Int, connectionLimit: Int): StreamTransport {
+internal fun MemScope.openEpollTransport(
+    host: String,
+    port: Int,
+    connectionLimit: Int,
+): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN) { openListener(host, port) }
+
+internal fun MemScope.openSharedEpollTransports(
+    host: String,
+    port: Int,
+    connectionLimits: List<Int>,
+): List<StreamTransport> {
+    val transports = ArrayList<StreamTransport>(connectionLimits.size)
+    val listener = openListener(host, port)
+    try {
+        for (limit in connectionLimits) {
+            val transport = openEpollTransport(limit, EPOLLIN or EPOLLEXCLUSIVE) {
+                checked(fcntl(listener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
+            }
+            transports.add(transport)
+        }
+        return transports
+    } catch (cause: Throwable) {
+        transports.forEach(StreamTransport::close)
+        throw cause
+    } finally {
+        close(listener)
+    }
+}
+
+private fun MemScope.openEpollTransport(
+    connectionLimit: Int,
+    listenerEvents: UInt,
+    open: () -> Int,
+): StreamTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
     val change = alloc<epoll_event>()
     memset(change.ptr, 0, sizeOf<epoll_event>().convert())
-    val listener = openListener(host, port)
+    val listener = open()
     val poller = epoll_create1(EPOLL_CLOEXEC)
     if (poller < 0) {
         val cause = errno
         close(listener)
         error("epoll_create1 failed (errno $cause)")
     }
-    return EpollTransport(listener, poller, events, change.ptr, connectionLimit)
+    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents)
 }
 
 private fun MemScope.openListener(host: String, port: Int): Int {
@@ -113,6 +148,7 @@ private class EpollTransport(
     private val events: CPointer<epoll_event>,
     private val change: CPointer<epoll_event>,
     private val connectionLimit: Int,
+    private val listenerEvents: UInt,
 ) : StreamTransport {
     private val peers = mutableMapOf<ConnectionId, Peer>()
     private val work = ArrayDeque<Peer>()
@@ -171,6 +207,10 @@ private class EpollTransport(
 
     override fun closeListener() {
         if (listener >= 0) {
+            if (listenerWatched && listenerEvents != EPOLLIN) {
+                // Other workers hold references to the same listening socket.
+                watch(EPOLL_CTL_DEL, listener, LISTENER_TOKEN, 0U)
+            }
             close(listener)
             listener = -1
             listenerWatched = false
@@ -331,7 +371,7 @@ private class EpollTransport(
         val needListener = acceptOperation != null && !acceptCancelled
         if (needListener == listenerWatched) return
         val action = if (needListener) EPOLL_CTL_ADD else EPOLL_CTL_DEL
-        checked(watch(action, listener, LISTENER_TOKEN, EPOLLIN), "register listener")
+        checked(watch(action, listener, LISTENER_TOKEN, listenerEvents), "register listener")
         listenerWatched = needListener
     }
 
