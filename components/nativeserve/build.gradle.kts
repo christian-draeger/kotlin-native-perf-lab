@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE
+
 plugins {
     kotlin("multiplatform") version "2.4.21"
     kotlin("plugin.serialization") version "2.4.21"
@@ -19,6 +21,14 @@ kotlin {
     linux.binaries.executable {
         baseName = "nativeserve"
         entryPoint = "dev.perflab.nativeserve.example.main"
+    }
+    val stressCompilation = linux.compilations.create("stress") {
+        associateWith(linux.compilations.getByName("main"))
+    }
+    linux.binaries.executable("stress", listOf(RELEASE)) {
+        compilation = stressCompilation
+        baseName = "reactor-stress-fixture"
+        entryPoint = "dev.perflab.nativeserve.fixture.main"
     }
     sourceSets {
         commonMain.dependencies {

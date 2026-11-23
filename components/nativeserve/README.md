@@ -74,6 +74,15 @@ The example handles Ctrl+C and SIGTERM by closing the listener and draining queu
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
+Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. Set ingress request size and timeout limits that match the backend's `ServerLimits`. Route handlers run on the I/O loop so a handler should return promptly.
+
+The Linux resource suite uses a separate release fixture with short deadlines and large bodies to check slow and disconnected clients, descriptor caps and retained heap. To run it locally from the repository root on Linux x86_64:
+
+```sh
+./components/nativeserve/gradlew -p components/nativeserve linkStressReleaseExecutableNative
+python3 scripts/tests/reactor_stress.py components/nativeserve/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
+```
+
 [Project roadmap](../../ROADMAP.md)
 
 The source module lives in `components/nativeserve/`. Benchmark records use the stable `kotlin-reactor` identifier, which the dashboard displays as NativeServe across existing and new series. The release executable is `nativeserve.kexe`, and the public Kotlin package is `dev.perflab.nativeserve`.
