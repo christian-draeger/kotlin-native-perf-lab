@@ -76,8 +76,9 @@ def read_run(csv_path, note, checkout, revision):
     if ci:
         architecture = environment.get("machine", "unknown")
         label = "ARM64" if architecture == "aarch64" else architecture
+        suite = " · Core suite" if environment.get("benchmark_suite") == "core" else ""
         note = {
-            "label": f"GitHub Actions · Linux {label}",
+            "label": f"GitHub Actions · Linux {label}{suite}",
             "kind": "Exploratory CI run",
             "host": environment.get("cpu_model"),
             "note": "wrk and the servers shared one GitHub-hosted VM. Runner CPUs and host conditions vary across series.",
@@ -101,6 +102,8 @@ def read_run(csv_path, note, checkout, revision):
         "load_generator": environment.get("load_generator"),
         "dirty": environment.get("git_worktree") == "dirty",
         "ci_run_id": environment.get("ci_run_id") if ci else None,
+        "ci_run_attempt": environment.get("ci_run_attempt") if ci else None,
+        "scope": environment.get("benchmark_endpoint") or None,
         "incomplete": ci and environment.get("benchmark_outcome") != "success",
         "valid": sum(row["valid"] == "1" for row in rows),
         "total": len(rows),

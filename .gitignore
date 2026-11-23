@@ -11,3 +11,5 @@ __pycache__/
 *.pyc
 competitors/**/node_modules/
 competitors/fastapi/.venv/
+competitors/aspnet-core/obj/
+competitors/aspnet-core/bin/

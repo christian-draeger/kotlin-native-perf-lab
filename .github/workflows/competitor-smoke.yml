@@ -23,7 +23,7 @@ jobs:
   smoke:
     name: Competitors (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 12
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

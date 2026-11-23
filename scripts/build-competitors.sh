@@ -20,3 +20,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../competitors" && pwd)"
   uv sync --locked --no-dev
 )
 mvn -B -ntp -f "$ROOT/spring-boot/pom.xml" package
+mvn -B -ntp -f "$ROOT/kotlin-jvm/pom.xml" package
+(
+  cd "$ROOT/aspnet-core"
+  dotnet publish -c Release -o target/publish
+)

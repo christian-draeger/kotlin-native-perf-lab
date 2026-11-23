@@ -41,5 +41,16 @@ case "$variant" in
     exec java ${JAVA_OPTS:-} -jar "$ROOT/competitors/spring-boot/target/spring-boot.jar" \
       --server.address="${BIND_HOST:-127.0.0.1}" --server.port="${PORT:-8080}" --spring.main.banner-mode=off
     ;;
+  aspnet-core)
+    exec dotnet "$ROOT/competitors/aspnet-core/target/publish/AspNetCore.dll"
+    ;;
+  quarkus)
+    exec java ${JAVA_OPTS:-} -Dquarkus.http.host="${BIND_HOST:-127.0.0.1}" -Dquarkus.http.port="${PORT:-8080}" \
+      -jar "$ROOT/competitors/kotlin-jvm/quarkus/target/quarkus-app/quarkus-run.jar"
+    ;;
+  vertx|micronaut|http4k|javalin)
+    app="$ROOT/competitors/kotlin-jvm/$variant/target"
+    exec java ${JAVA_OPTS:-} -cp "$app/app.jar:$app/lib/*" dev.perflab.ApplicationKt
+    ;;
   *) echo "Unknown variant: $variant" >&2; exit 2 ;;
 esac

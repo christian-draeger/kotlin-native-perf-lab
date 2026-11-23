@@ -103,3 +103,14 @@ class DashboardTest(unittest.TestCase):
             self.assertEqual(arm_series["date"], ci["date"])
             self.assertNotEqual(arm_series["id"], ci["id"])
             self.assertEqual(arm_series["note"]["label"], "GitHub Actions · Linux ARM64")
+
+            health = arm.with_name(arm.name + "-health")
+            arm.rename(health)
+            with (health / "environment.txt").open("a") as output:
+                output.write("benchmark_endpoint=/health\nbenchmark_suite=core\nci_run_attempt=2\n")
+            health_series = dashboard.read_run(health / "results.csv", {}, root, "archive-revision")
+            self.assertEqual(health_series["scope"], "/health")
+            self.assertEqual(health_series["ci_run_attempt"], "2")
+            self.assertEqual(health_series["date"], arm_series["date"])
+            self.assertNotEqual(health_series["id"], arm_series["id"])
+            self.assertEqual(health_series["note"]["label"], "GitHub Actions · Linux ARM64 · Core suite")
