@@ -20,6 +20,14 @@ internal class HttpServer(
     private var batchTime = -1L
 
     fun run(stopRequested: () -> Boolean) {
+        try {
+            runLoop(stopRequested)
+        } finally {
+            clients.values.forEach { it.closeResponse() }
+        }
+    }
+
+    private fun runLoop(stopRequested: () -> Boolean) {
         var nextSweep = 0L
         acceptNext()
         while (true) {
@@ -83,7 +91,7 @@ internal class HttpServer(
         val operation = OperationId(nextOperation++)
         val result = if (client.prepareResponse(routes, time)) {
             val output = checkNotNull(client.output)
-            transport.write(id, operation, output, client.outputOffset, output.size - client.outputOffset)
+            transport.write(id, operation, output, client.outputOffset, client.outputLength - client.outputOffset)
         } else {
             val input = client.input
             transport.read(id, operation, input.bytes, input.size, input.bytes.size - input.size)
@@ -101,13 +109,14 @@ internal class HttpServer(
             val (id, connection) = iterator.next()
             if (shouldClose(connection)) {
                 iterator.remove()
+                connection.closeResponse()
                 transport.closeConnection(id)
             }
         }
     }
 
     private fun disconnect(id: ConnectionId) {
-        clients.remove(id)
+        clients.remove(id)?.closeResponse()
         transport.closeConnection(id)
     }
 

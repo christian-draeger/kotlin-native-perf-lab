@@ -68,6 +68,21 @@ fun main() {
 
 Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
 
+For a body with a known byte length, return `streamResponse` from a route. NativeServe sends the response head and pulls up to 16 KiB at a time as the connection writes progress.
+
+```kotlin
+get("/download") {
+    streamResponse(48 * 1024, "application/octet-stream", object : ResponseSource {
+        override fun read(buffer: ByteArray, limit: Int): Int {
+            buffer.fill('x'.code.toByte(), toIndex = limit)
+            return limit
+        }
+    })
+}
+```
+
+Create a new source for each response. Return promptly from `read` and `close`, which run on the owning I/O loop. Write up to `limit` bytes starting at index zero and release any references to the buffer before returning. Override `close` to release source resources. NativeServe takes ownership when the handler returns the response and closes it after delivery or cancellation. `ServerLimits.responseBodyBytes` also applies to streamed bodies. If the source ends early or fails after the head is sent, the server closes the connection so the client can detect the incomplete body.
+
 The first implementation accepts origin-form HTTP/1.0 and HTTP/1.1 requests and exposes GET routes. It accepts empty request bodies. The example binds to loopback using a numeric IPv4 address. `ServerLimits` controls the connection cap, head and response size, idle time, per-head deadline, and shutdown drain time.
 
 The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
@@ -80,7 +95,7 @@ The example handles Ctrl+C and SIGTERM by closing the listener and draining queu
 | epoll descriptor and event storage | The backend owns the descriptor. Event storage lives in the scope of `serve`. |
 | Accepted descriptor | The backend tracks each descriptor by its connection ID and closes any remaining sockets when `serve` exits. The HTTP loop owns the HTTP state for each connection. |
 | Request storage | One fixed Kotlin byte array per client. It keeps unread pipelined bytes and is pinned only during `recv`. |
-| Output storage | Each client retains at most one encoded response and its current write offset. The array is pinned only during `send`. epoll watches for writable events when a response cannot finish immediately. |
+| Output storage | Each client retains at most one encoded response or a response head with a reusable chunk buffer of up to 16 KiB. The stream buffer is reused after the preceding write completes. The array is pinned only during `send`. epoll watches for writable events when a response cannot finish immediately. |
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
