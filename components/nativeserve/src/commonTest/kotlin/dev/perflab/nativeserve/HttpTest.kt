@@ -42,6 +42,45 @@ class HttpTest {
     }
 
     @Test
+    fun parsesHeaderRangesAndPreservesTheRequestTarget() {
+        val buffer = RequestBuffer(512)
+        buffer.add("GET /users/123?view=short?raw HTTP/1.0\r\nhOsT:\tlocalhost \t\r\n" +
+            "cOnTeNt-LeNgTh:\t000 \r\nConnection: , keep-alive, \tother \t\r\nX-Description: Grüße\r\n\r\n")
+        val request = assertIs<ParsedHead.Complete>(buffer.parse())
+        assertEquals("GET", request.request.method)
+        assertEquals("/users/123", request.request.path)
+        assertEquals("view=short?raw", request.request.query)
+        assertEquals("HTTP/1.0", request.version)
+        assertEquals(buffer.size, request.consumed)
+        assertTrue(request.keepAlive)
+
+        val headerless = RequestBuffer(64)
+        headerless.add("GET /? HTTP/1.0\r\n\r\n")
+        val emptyQuery = assertIs<ParsedHead.Complete>(headerless.parse())
+        assertEquals("/", emptyQuery.request.path)
+        assertEquals("", emptyQuery.request.query)
+        assertFalse(emptyQuery.keepAlive)
+
+        val closes = RequestBuffer(128)
+        closes.add("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, close, keep-alive\r\n\r\n")
+        assertFalse(assertIs<ParsedHead.Complete>(closes.parse()).keepAlive)
+    }
+
+    @Test
+    fun keepsRequestLineAndHeaderBoundariesSeparate() {
+        val cases = listOf(
+            "GET / HTTP/1.1 \r\nHost: localhost" to 400,
+            "GET / \r\nHost: localhost" to 505,
+            "GET / HTTP/1.1\r\nHost\r\nX-Other: value" to 400,
+            "GET / HTTP/1.1\r\nHost: local\u00a0host" to 400,
+            "GET / HTTP/1.1\r\nHost: localhost\r\nX-Other: x\u007fy" to 400,
+            "GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\ncontent-length: 0" to 400,
+            "GET / HTTP/1.1\r\nHost: localhost\r\nExpect: 100-continue" to 417,
+        )
+        for ((head, expected) in cases) assertEquals(expected, rejection("$head\r\n\r\n"), head)
+    }
+
+    @Test
     fun prefersLiteralRoutesAndSupportsTypedPathParameters() {
         val routes = Routes().apply {
             get("/users/{id}") { request ->
