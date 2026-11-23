@@ -17,6 +17,7 @@ internal class HttpServer(
     private val clock = TimeSource.Monotonic.markNow()
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
+    private var batchTime = -1L
 
     fun run(stopRequested: () -> Boolean) {
         var nextSweep = 0L
@@ -31,8 +32,9 @@ internal class HttpServer(
             val deadline = drainDeadline
             if (deadline != null && (clients.isEmpty() || beforePoll >= deadline)) break
             val timeout = if (deadline == null) 250 else minOf(250L, deadline - beforePoll).toInt()
+            batchTime = -1L
             transport.poll(timeout, this)
-            val afterPoll = now()
+            val afterPoll = completionTime()
             if (afterPoll >= nextSweep) {
                 closeMatching { it.expired(afterPoll) }
                 nextSweep = afterPoll + 250
@@ -45,7 +47,7 @@ internal class HttpServer(
             transport.closeConnection(connection)
             return
         }
-        val time = now()
+        val time = completionTime()
         val client = HttpConnection(time, limits)
         clients[connection] = client
         advance(connection, client, time)
@@ -58,14 +60,14 @@ internal class HttpServer(
             disconnect(connection)
             return
         }
-        val time = now()
+        val time = completionTime()
         client.received(byteCount, time)
         advance(connection, client, time)
     }
 
     override fun wrote(connection: ConnectionId, operation: OperationId, byteCount: Int) {
         val client = clients[connection] ?: return
-        val time = now()
+        val time = completionTime()
         if (client.wrote(byteCount, time)) advance(connection, client, time) else disconnect(connection)
     }
 
@@ -110,4 +112,10 @@ internal class HttpServer(
     }
 
     private fun now(): Long = clock.elapsedNow().inWholeMilliseconds
+
+    private fun completionTime(): Long {
+        // Sample after the wait, once for the readiness batch.
+        if (batchTime < 0) batchTime = now()
+        return batchTime
+    }
 }
