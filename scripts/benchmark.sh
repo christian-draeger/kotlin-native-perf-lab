@@ -118,6 +118,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     mvn -B --version
     (cd competitors/aspnet-core && dotnet --info)
     sha256sum competitors/go-http/build/go-http competitors/spring-boot/target/spring-boot.jar \
+      competitors/spring-webflux/target/spring-webflux.jar \
       competitors/hono-node/{package-lock.json,server.js} competitors/elysia-bun/{bun.lock,server.js} \
       competitors/fastapi/{uv.lock,server.py} competitors/aspnet-core/target/publish/AspNetCore.dll
     find competitors/kotlin-jvm/*/target -name '*.jar' -print0 | sort -z | xargs -0 sha256sum
@@ -145,7 +146,7 @@ warm_server() {
 
   warmup_status=unstable
   case "$variant" in
-    ktor-jvm|spring-boot|quarkus|vertx|micronaut|http4k|javalin)
+    ktor-jvm|spring-boot|spring-webflux|quarkus|vertx|micronaut|http4k|javalin)
       local snapshot="$prefix.warmup.0.jstat.txt"
       LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
       compiler_logs+=("$snapshot")
