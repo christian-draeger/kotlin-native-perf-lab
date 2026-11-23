@@ -22,7 +22,7 @@ The first public preview should provide a runnable starter, one documented build
 
 ## Core and transport architecture
 
-Application handlers and the HTTP core depend on a small internal transport contract. Platform backends implement that contract and own OS resources. The current shared parser and routing code provide the starting point. The planned [transport contract](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/48) and [epoll extraction](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/49) establish this boundary before further runtime extensions.
+Application handlers and the HTTP core depend on a small [internal transport contract](components/nativeserve/TRANSPORT.md). Platform backends implement that contract and own OS resources. The shared parser and routing code provide the starting point for the [epoll extraction](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/49).
 
 - Keep business handlers, routes, serialization and HTTP framing/state portable. Expose typed HTTP values, portable failures and supported capabilities through the application-facing API.
 - Model accept, read, write, deadlines, cancellation and close with explicit operation identity, partial progress, EOF and terminal outcomes. Adapt readiness notifications and operation completions inside their platform implementations.
