@@ -83,6 +83,20 @@ internal fun probeEpoll(port: Int): Unit = memScoped {
         transport.poll(0, completions)
         check(completions.reads.size == 1)
         check(transport.read(losingConnection, OperationId(7), ByteArray(1), 0, 1) == Submission.CLOSED)
+
+        val lastRead = OperationId(8)
+        check(transport.read(winningConnection, lastRead, ByteArray(1), 0, 1) == Submission.ACCEPTED)
+        completions.onRead = { connection ->
+            check(transport.write(connection, OperationId(9), byteArrayOf(10), 0, 1) == Submission.ACCEPTED)
+            transport.close()
+        }
+        byteArrayOf(10).usePinned { pinned ->
+            val fd = sockets[if (firstWon) 0 else 1]
+            check(send(fd, pinned.addressOf(0), 1.convert(), 0) == 1L)
+        }
+        transport.await(completions) { completions.reads.size == 2 }
+        check(completions.reads.last() == Triple(lastRead, winningConnection, 1))
+        check(completions.failures.size == 2)
         println("epoll accepted, cancelled and ignored retired stream work")
     } finally {
         transport.close()

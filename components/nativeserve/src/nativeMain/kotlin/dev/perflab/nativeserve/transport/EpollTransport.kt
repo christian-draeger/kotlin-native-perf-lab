@@ -359,7 +359,12 @@ private class EpollTransport(
     override fun close() {
         if (poller < 0) return
         closeListener()
-        peers.values.forEach { stop(it, TransportFailure.CANCELLED) }
+        for (peer in peers.values) {
+            if (peer.fd >= 0) close(peer.fd)
+            peer.fd = -1
+            peer.read.buffer = null
+            peer.write.buffer = null
+        }
         peers.clear()
         work.clear()
         acceptOperation = null
