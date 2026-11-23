@@ -2,8 +2,9 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/server-process.sh"
+source "$ROOT/scripts/benchmark-load.sh"
 [[ "$(uname -s)" == Linux ]] || { echo 'This /proc benchmark runs on Linux.' >&2; exit 1; }
-for command in wrk curl python3 git; do
+for command in curl python3 git taskset; do
   command -v "$command" >/dev/null || { echo "Missing $command" >&2; exit 1; }
 done
 RUNS="${RUNS:-5}"
@@ -17,20 +18,27 @@ done
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
 variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
 endpoints=(/health /json /users/123)
+export BIND_HOST="${BIND_HOST:-127.0.0.1}"
+export NO_PROXY="${NO_PROXY:-${no_proxy:-}},$BIND_HOST"
+export no_proxy="$NO_PROXY"
 # Allocate distinct ports before any trial. After load, accepted connections can
 # remain in TIME_WAIT and prevent a different runtime from binding the same port.
-ports="$(python3 - "$(( RUNS * ${#variants[@]} * ${#endpoints[@]} ))" "${PORT:-0}" <<'PY'
+ports="$(python3 - "$(( RUNS * ${#variants[@]} * ${#endpoints[@]} ))" "${PORT:-0}" "$BIND_HOST" "${LOAD_SSH:-}" <<'PY'
 import contextlib
+import ipaddress
 import socket
 import sys
 
-count, start = map(int, sys.argv[1:])
+count, start = map(int, sys.argv[1:3])
+host = ipaddress.IPv4Address(sys.argv[3])
+if host.is_unspecified or host.is_multicast or (sys.argv[4] and host.is_loopback):
+    sys.exit("BIND_HOST must be this server's IPv4 interface address (non-loopback for LOAD_SSH).")
 if not 0 <= start <= 65535 or start and start + count - 1 > 65535:
     sys.exit("PORT must leave enough room for one port per trial.")
 with contextlib.ExitStack() as sockets:
     for index in range(count):
         probe = sockets.enter_context(socket.socket())
-        probe.bind(("127.0.0.1", start + index if start else 0))
+        probe.bind((str(host), start + index if start else 0))
         print(probe.getsockname()[1])
 PY
 )"
@@ -42,6 +50,10 @@ OUT="$results_root/$STAMP"
 mkdir -p "$results_root"
 mkdir "$OUT"
 echo "Recording runs in $OUT"
+trap 'stop_server; cleanup_load' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+prepare_load
 GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
 {
   echo "timestamp_utc=$STAMP"
@@ -57,6 +69,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   printf 'machine=%s\n' "$(uname -m)"
   cat /etc/os-release
   lscpu
+  taskset -pc "$$"
   awk '/^MemTotal:/ {print}' /proc/meminfo
   for field in cpu.max cpuset.cpus.effective memory.max; do
     if [[ -r "/sys/fs/cgroup/$field" ]]; then
@@ -71,7 +84,6 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   else
     gradle --version
   fi
-  wrk --version 2>&1 | sed -n '1p' || true
   python3 --version
   sha256sum "$ROOT"/ktor/build/jvmDist/app.jar "$ROOT"/ktor/build/jvmDist/lib/*.jar \
     "$ROOT"/ktor/build/bin/native/releaseExecutable/*.kexe "$ROOT"/rust-axum/target/release/axum-baseline \
@@ -79,13 +91,10 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     sed "s|  $ROOT/|  |"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
   echo 'port_strategy=distinct TCP port per trial'
-  echo 'load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers'
+  load_environment
 } > "$OUT/environment.txt"
 
-trap stop_server EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-wrk_args=(--latency -s "$ROOT/scripts/wrk-stats.lua" -t "$THREADS" -c "$CONNECTIONS" --timeout 2s)
+wrk_args=(--latency -t "$THREADS" -c "$CONNECTIONS" --timeout 2s)
 
 for ((run = 1; run <= RUNS; run++)); do
   for endpoint in "${endpoints[@]}"; do
@@ -94,13 +103,13 @@ for ((run = 1; run <= RUNS; run++)); do
       prefix="$OUT/${variant}_${endpoint//\//_}_$run"
       export PORT="${trial_ports[trial_index]}"
       trial_index=$((trial_index + 1))
-      base="http://127.0.0.1:$PORT"
+      base="http://$BIND_HOST:$PORT"
       printf '%s %s %s %s\n' "$run" "$endpoint" "$variant" "$PORT" >> "$OUT/ports.txt"
       start_server "$variant" "$prefix.server.txt"
       "$ROOT/scripts/smoke.sh" "$base" > "$prefix.smoke.txt"
-      wrk "${wrk_args[@]}" -d "${WARMUP}s" "$base$endpoint" > "$prefix.warmup.wrk.txt" 2>&1
+      run_load "${wrk_args[@]}" -d "${WARMUP}s" "$base$endpoint" > "$prefix.warmup.wrk.txt" 2>&1
       read -r cpu_start _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
-      wrk "${wrk_args[@]}" -d "${DURATION}s" "$base$endpoint" > "$prefix.wrk.txt" 2>&1
+      run_load "${wrk_args[@]}" -d "${DURATION}s" "$base$endpoint" > "$prefix.wrk.txt" 2>&1
       read -r cpu_end peak_rss_kib rss_kib < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
       python3 "$ROOT/scripts/parse_wrk.py" \
         --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" --csv "$OUT/results.csv" \

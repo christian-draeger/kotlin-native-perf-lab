@@ -65,7 +65,7 @@ Use another terminal to check the exact API contract:
 RUNS=5 WARMUP=10 DURATION=30 THREADS=4 CONNECTIONS=64 ./scripts/benchmark.sh
 ```
 
-The harness starts a fresh process on a distinct TCP port per trial. It writes warm-up and measured `wrk` logs, the trial ports, environment and binary checksums, per-run CPU and RSS metrics, and a median [min–max] summary to `results/<timestamp>/`. The local load generator competes with the server for CPU. For controlled comparisons, use a separate load-generator machine and the [benchmark protocol](BENCHMARK_PROTOCOL.md).
+The harness starts a fresh process on a distinct TCP port per trial. It writes warm-up and measured `wrk` logs, the trial ports, environment and binary checksums, per-run CPU and RSS metrics, and a median [min–max] summary to `results/<timestamp>/`. The default local load generator competes with the server for CPU. Set `LOAD_SSH` and `BIND_HOST` to run the load on a separate Linux machine. [Two-host benchmark protocol](BENCHMARK_PROTOCOL.md#run-with-a-separate-load-machine)
 
 Install Linux `perf` to capture separate diagnostic CPU profiles on native Linux.
 

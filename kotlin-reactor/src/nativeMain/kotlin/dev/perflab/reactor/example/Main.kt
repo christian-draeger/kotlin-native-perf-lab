@@ -15,7 +15,8 @@ private data class User(val id: Int, val name: String, val active: Boolean)
 @OptIn(ExperimentalForeignApi::class)
 fun main() {
     val port = getenv("PORT")?.toKString()?.toIntOrNull() ?: 8080
-    serve(port = port) {
+    val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
+    serve(port = port, host = host) {
         get("/health") { text("ok") }
         get("/json") { json(User(42, "benchmark-user", true)) }
         get("/users/{id}") { request ->
