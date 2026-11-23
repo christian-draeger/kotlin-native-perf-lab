@@ -1,0 +1,13 @@
+2026-11-23T18:45:45.846Z  INFO 7226 --- [           main] dev.perflab.baseline.Application         : Starting Application v0.0.0 using Java 21.0.13.1 with PID 7226 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-boot/target/spring-boot.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-23T18:45:45.849Z  INFO 7226 --- [           main] dev.perflab.baseline.Application         : No active profile set, falling back to 1 default profile: "default"
+2026-11-23T18:45:46.649Z  INFO 7226 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 41585 (http)
+2026-11-23T18:45:46.664Z  INFO 7226 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-23T18:45:46.665Z  INFO 7226 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-11-23T18:45:46.695Z  INFO 7226 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 791 ms
+2026-11-23T18:45:47.038Z  INFO 7226 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 41585 (http) with context path '/'
+2026-11-23T18:45:47.056Z  INFO 7226 --- [           main] dev.perflab.baseline.Application         : Started Application in 1.64 seconds (process running for 2.058)
+2026-11-23T18:45:47.141Z  INFO 7226 --- [.1-41585-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-11-23T18:45:47.141Z  INFO 7226 --- [.1-41585-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-11-23T18:45:47.142Z  INFO 7226 --- [.1-41585-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-11-23T18:46:02.507Z  INFO 7226 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-23T18:46:02.511Z  INFO 7226 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
