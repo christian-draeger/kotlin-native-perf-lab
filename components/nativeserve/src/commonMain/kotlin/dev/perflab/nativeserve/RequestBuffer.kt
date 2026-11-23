@@ -43,61 +43,123 @@ internal class RequestBuffer(capacity: Int) {
 }
 
 private fun parseHead(head: String, consumed: Int): ParsedHead {
-    val lines = head.split("\r\n")
-    val requestLine = lines.first().split(' ', limit = 4)
-    if (requestLine.size != 3) return ParsedHead.Rejected(400)
-    val (method, target, version) = requestLine
-    if (!method.isToken() || !target.startsWith('/') || target.any { it !in '!'..'~' || it == '#' }) {
-        return ParsedHead.Rejected(400)
+    val requestLineEnd = head.lineEnd(0)
+    val methodEnd = head.indexOf(' ')
+    if (methodEnd !in 1 until requestLineEnd || !head.isToken(0, methodEnd)) return ParsedHead.Rejected(400)
+    val targetStart = methodEnd + 1
+    val targetEnd = head.indexOf(' ', targetStart)
+    if (targetEnd !in (targetStart + 1) until requestLineEnd || head[targetStart] != '/') return ParsedHead.Rejected(400)
+    val versionStart = targetEnd + 1
+    if (head.indexOf(' ', versionStart) in versionStart until requestLineEnd) return ParsedHead.Rejected(400)
+
+    var queryStart = targetEnd
+    for (index in targetStart until targetEnd) {
+        val char = head[index]
+        if (char !in '!'..'~' || char == '#') return ParsedHead.Rejected(400)
+        if (char == '?' && queryStart == targetEnd) queryStart = index
     }
-    if (version != "HTTP/1.1" && version != "HTTP/1.0") return ParsedHead.Rejected(505)
+    val version = when {
+        head.matches(versionStart, requestLineEnd, "HTTP/1.1") -> "HTTP/1.1"
+        head.matches(versionStart, requestLineEnd, "HTTP/1.0") -> "HTTP/1.0"
+        else -> return ParsedHead.Rejected(505)
+    }
 
     var hasHost = false
     var hasLength = false
     var close = false
     var keepAlive = false
-    for (line in lines.drop(1)) {
-        val colon = line.indexOf(':')
-        if (colon < 1) return ParsedHead.Rejected(400)
-        val name = line.substring(0, colon)
-        val value = line.substring(colon + 1).trim(' ', '\t')
-        if (!name.isToken() || value.any { it < ' ' && it != '\t' || it == '\u007f' }) {
-            return ParsedHead.Rejected(400)
+    var fieldStart = requestLineEnd + 2
+    while (fieldStart < head.length) {
+        val fieldEnd = head.lineEnd(fieldStart)
+        val colon = head.indexOf(':', fieldStart)
+        if (colon !in (fieldStart + 1) until fieldEnd || !head.isToken(fieldStart, colon)) return ParsedHead.Rejected(400)
+        val valueStart = head.skipOws(colon + 1, fieldEnd)
+        val valueEnd = head.trimmedEnd(valueStart, fieldEnd)
+        for (index in valueStart until valueEnd) {
+            val char = head[index]
+            if (char < ' ' && char != '\t' || char == '\u007f') return ParsedHead.Rejected(400)
         }
-        when (name.lowercase()) {
-            "host" -> {
-                if (hasHost || value.isEmpty() || value.any { it.isWhitespace() || it in ",/@?#" }) {
-                    return ParsedHead.Rejected(400)
+        when {
+            head.matches(fieldStart, colon, "host", ignoreCase = true) -> {
+                if (hasHost || valueStart == valueEnd) return ParsedHead.Rejected(400)
+                for (index in valueStart until valueEnd) {
+                    val char = head[index]
+                    if (char.isWhitespace() || char in ",/@?#") return ParsedHead.Rejected(400)
                 }
                 hasHost = true
             }
-            "connection" -> for (token in value.split(',')) {
-                when (token.trim(' ', '\t').lowercase()) {
-                    "close" -> close = true
-                    "keep-alive" -> keepAlive = true
+            head.matches(fieldStart, colon, "connection", ignoreCase = true) -> {
+                var tokenStart = valueStart
+                var ascii = true
+                for (index in valueStart..valueEnd) {
+                    if (index == valueEnd || head[index] == ',') {
+                        val start = head.skipOws(tokenStart, index)
+                        val end = head.trimmedEnd(start, index)
+                        if (ascii) {
+                            if (head.matches(start, end, "close", ignoreCase = true)) close = true
+                            if (head.matches(start, end, "keep-alive", ignoreCase = true)) keepAlive = true
+                        } else {
+                            // Preserve full lowercase mapping for non-ASCII values.
+                            when (head.substring(start, end).lowercase()) {
+                                "close" -> close = true
+                                "keep-alive" -> keepAlive = true
+                            }
+                        }
+                        tokenStart = index + 1
+                        ascii = true
+                    } else if (head[index].code > 127) {
+                        ascii = false
+                    }
                 }
             }
-            "content-length" -> {
-                if (hasLength || value.isEmpty() || value.any { it !in '0'..'9' }) return ParsedHead.Rejected(400)
-                if (value.any { it != '0' }) return ParsedHead.Rejected(413)
+            head.matches(fieldStart, colon, "content-length", ignoreCase = true) -> {
+                if (hasLength || valueStart == valueEnd) return ParsedHead.Rejected(400)
+                var hasBody = false
+                for (index in valueStart until valueEnd) {
+                    val char = head[index]
+                    if (char !in '0'..'9') return ParsedHead.Rejected(400)
+                    if (char != '0') hasBody = true
+                }
+                if (hasBody) return ParsedHead.Rejected(413)
                 hasLength = true
             }
-            "transfer-encoding" -> return ParsedHead.Rejected(400)
-            "expect" -> return ParsedHead.Rejected(417)
+            head.matches(fieldStart, colon, "transfer-encoding", ignoreCase = true) -> return ParsedHead.Rejected(400)
+            head.matches(fieldStart, colon, "expect", ignoreCase = true) -> return ParsedHead.Rejected(417)
         }
+        fieldStart = fieldEnd + 2
     }
     if (version == "HTTP/1.1" && !hasHost) return ParsedHead.Rejected(400)
-    val queryOffset = target.indexOf('?')
-    val path = if (queryOffset == -1) target else target.substring(0, queryOffset)
-    val query = if (queryOffset == -1) null else target.substring(queryOffset + 1)
+    val path = head.substring(targetStart, queryStart)
+    val query = if (queryStart == targetEnd) null else head.substring(queryStart + 1, targetEnd)
     return ParsedHead.Complete(
-        Request(method, path, query),
+        Request(head.substring(0, methodEnd), path, query),
         version,
         !close && (version == "HTTP/1.1" || keepAlive),
         consumed,
     )
 }
 
-private fun String.isToken(): Boolean = isNotEmpty() && all {
-    it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it in "!#$%&'*+-.^`_|~"
+private fun String.lineEnd(start: Int): Int = indexOf("\r\n", start).let { if (it < 0) length else it }
+
+private fun String.matches(start: Int, end: Int, literal: String, ignoreCase: Boolean = false): Boolean =
+    end - start == literal.length && regionMatches(start, literal, 0, literal.length, ignoreCase)
+
+private fun String.skipOws(start: Int, end: Int): Int {
+    var index = start
+    while (index < end && (this[index] == ' ' || this[index] == '\t')) index++
+    return index
+}
+
+private fun String.trimmedEnd(start: Int, end: Int): Int {
+    var index = end
+    while (index > start && (this[index - 1] == ' ' || this[index - 1] == '\t')) index--
+    return index
+}
+
+private fun String.isToken(start: Int, end: Int): Boolean {
+    for (index in start until end) {
+        val char = this[index]
+        if (char !in 'A'..'Z' && char !in 'a'..'z' && char !in '0'..'9' && char !in "!#$%&'*+-.^`_|~") return false
+    }
+    return start < end
 }
