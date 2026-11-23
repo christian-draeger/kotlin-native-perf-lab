@@ -2,7 +2,7 @@
 
 The routing API configures handlers in the HTTP core. The core owns request framing, response encoding, per-connection HTTP state and server policy. It drives the internal `StreamTransport` interface. Platform backends implement that interface and own the listener, sockets, readiness registrations, kernel submission queues and native addressing. HTTP code receives connection IDs, operation IDs, byte counts and portable outcomes. Backends can log the underlying platform error with operation context.
 
-The existing Linux server remains the reference until the epoll extraction in [#49](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/49). This contract lives in shared Kotlin so the HTTP core and tests can run without native headers.
+The HTTP loop and contract live in shared Kotlin so the HTTP core and tests can run without native headers. Linux uses a level-triggered epoll implementation.
 
 ## Operations and progress
 
@@ -14,6 +14,8 @@ The existing Linux server remains the reference until the epoll extraction in [#
 | Any submitted operation | Can fail with cancellation, connection loss or an I/O failure. An I/O failure on a connection ends use of that stream. |
 
 Calls run on one event-loop thread. A submission returns `ACCEPTED`, `AT_CAPACITY` or `CLOSED`. A rejected submission leaves the caller free to reuse its buffer. Every accepted operation has a unique ID for the life of the instance and delivers one terminal outcome via `poll`, including when it completed during submission. The ID is retired after the callback. Connection IDs also stay unique for the life of the instance, including across OS descriptor reuse. Each connection supports at most one pending read and one pending write. The HTTP core can apply stricter backpressure, as it does when it stops reading while a response is queued. Submission for an occupied slot returns `AT_CAPACITY`.
+
+Transfer callbacks report both operation and connection IDs so the HTTP loop can look up the connection directly. A listener failure has no connection ID.
 
 `poll` waits for at most the supplied nonnegative millisecond timeout when no outcomes are ready. A backend may yield early after a bounded batch. Callbacks run serially and can submit or cancel work. The loop retains control of deadlines by bounding the poll timeout against its next monotonic deadline, checking expiry on return and requesting cancellation as needed. Recursive polling is outside the contract.
 
@@ -29,7 +31,9 @@ For an accepted read, the transport exclusively borrows the requested byte range
 
 ## Backend selection and verification
 
-When the interface is wired into startup, automatic selection uses the supported platform default. Linux starts with epoll. A later backend can become the default once its platform and capability checks pass. Keep normal `serve { … }` startup automatic. Provide an explicit experiment override that fails on an unsupported backend and expose the actual backend and enabled capabilities in startup diagnostics and benchmark metadata. The current contract requires TCP stream I/O and leaves optional platform acceleration internal until a portable caller needs a capability.
+Linux selects epoll automatically. Use `NATIVESERVE_BACKEND=epoll` to request it explicitly. Startup reports the selected backend and IPv4 TCP capability in the server log, which the benchmark archives with each trial.
+
+epoll owns the listener, poll descriptor and each accepted socket. A registration carries the unique connection ID. After closing a socket, that ID can only deliver cancellations for pending requests. A new socket receives a new ID even when Linux reuses the file descriptor. Each connection owns two reusable transfer slots, and the backend bounds queued work by its connection limit. A write can finish while processing a read event. Interest changes are applied after those callbacks, so a complete response followed by another read can keep its existing read registration. Buffers are pinned only during the synchronous system call.
 
 The shared fake exercises immediate and delayed completion, partial transfers, EOF, capacity, cancellation races, stale events and final shutdown without timing dependencies. Backend integration adds real TCP smoke tests and exploratory before/after measurements of the epoll boundary, including allocation, throughput, latency and CPU use.
 
