@@ -55,20 +55,6 @@ import platform.posix.sockaddr_in
 import platform.posix.socket
 import kotlin.time.TimeSource
 
-class ServerLimits(
-    val connections: Int = 1024,
-    val headerBytes: Int = 16 * 1024,
-    val responseBodyBytes: Int = 64 * 1024,
-    val idleMillis: Long = 30_000,
-    val requestHeadMillis: Long = 5_000,
-    val drainMillis: Long = 2_000,
-) {
-    init {
-        require(connections > 0 && headerBytes >= 64 && responseBodyBytes > 0)
-        require(idleMillis > 0 && requestHeadMillis > 0 && drainMillis > 0)
-    }
-}
-
 fun serve(
     port: Int = 8080,
     host: String = "127.0.0.1",
@@ -216,84 +202,46 @@ private fun runReactor(
 private class Client(
     val fd: Int,
     connectedAt: Long,
-    private val limits: ServerLimits,
+    limits: ServerLimits,
 ) {
-    private val input = RequestBuffer(limits.headerBytes)
-    private var pending: ByteArray? = null
-    private var sent = 0
-    private var closeAfterWrite = false
-    private var lastActivity = connectedAt
-    private var headStarted: Long? = null
+    private val http = HttpConnection(connectedAt, limits)
 
     val interest: UInt
-        get() = if (pending == null) EPOLLIN else EPOLLOUT
+        get() = if (http.output == null) EPOLLIN else EPOLLOUT
 
-    fun expired(now: Long): Boolean =
-        now - lastActivity >= limits.idleMillis ||
-            headStarted?.let { now - it >= limits.requestHeadMillis } == true
+    fun expired(now: Long): Boolean = http.expired(now)
 
-    fun beginDrain(): Boolean {
-        closeAfterWrite = true
-        return pending != null
-    }
+    fun beginDrain(): Boolean = http.beginDrain()
 
     fun progress(routes: Routes, now: Long): Boolean {
         if (!flush(now) || !consumeHeads(routes, now)) return false
-        if (pending != null) return true
+        if (http.output != null) return true
 
+        val input = http.input
         val count = input.bytes.usePinned { pinned ->
             recv(fd, pinned.addressOf(input.size), (input.bytes.size - input.size).convert(), 0)
         }
         if (count < 0) return errno == EAGAIN || errno == EINTR
         if (count == 0L) return false
 
-        lastActivity = now
-        if (input.size == 0) headStarted = now
-        input.append(count.toInt())
+        http.received(count.toInt(), now)
         return consumeHeads(routes, now)
     }
 
     private fun consumeHeads(routes: Routes, now: Long): Boolean {
-        while (pending == null) {
-            when (val head = input.parse()) {
-                ParsedHead.Incomplete -> return true
-                is ParsedHead.Rejected -> {
-                    headStarted = null
-                    queue(emptyResponse(head.status), "HTTP/1.1", keepAlive = false)
-                }
-                is ParsedHead.Complete -> {
-                    input.consume(head.consumed)
-                    headStarted = if (input.size == 0) null else now
-                    val response = routes.respond(head.request)
-                    if (response.body.size > limits.responseBodyBytes) {
-                        queue(emptyResponse(500), head.version, keepAlive = false)
-                    } else {
-                        queue(response, head.version, head.keepAlive)
-                    }
-                }
-            }
+        while (http.output == null && http.prepareResponse(routes, now)) {
             if (!flush(now)) return false
         }
         return true
     }
 
-    private fun queue(response: Response, version: String, keepAlive: Boolean) {
-        pending = response.encode(version, keepAlive)
-        sent = 0
-        closeAfterWrite = !keepAlive
-    }
-
     private fun flush(now: Long): Boolean {
-        val bytes = pending ?: return true
+        val bytes = http.output ?: return true
         val count = bytes.usePinned { pinned ->
-            send(fd, pinned.addressOf(sent), (bytes.size - sent).convert(), MSG_NOSIGNAL)
+            send(fd, pinned.addressOf(http.outputOffset), (bytes.size - http.outputOffset).convert(), MSG_NOSIGNAL)
         }
         if (count < 0) return errno == EAGAIN || errno == EINTR
         if (count == 0L) return false
-        lastActivity = now
-        sent += count.toInt()
-        if (sent < bytes.size) return true
-        pending = null
-        return !closeAfterWrite
+        return http.wrote(count.toInt(), now)
     }
 }
