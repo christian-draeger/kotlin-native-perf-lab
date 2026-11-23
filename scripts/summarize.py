@@ -13,7 +13,8 @@ def describe(rows, key, scale=1, decimals=1):
 
 
 def main():
-    with Path(sys.argv[1]).open(newline="") as source:
+    csv_path = Path(sys.argv[1])
+    with csv_path.open(newline="") as source:
         groups = defaultdict(list)
         for row in csv.DictReader(source):
             groups[row["variant"], row["endpoint"]].append(row)
@@ -24,7 +25,12 @@ def main():
     print("Each cell shows the median [min–max] across valid runs. Latency columns summarize")
     print("the corresponding per-run percentiles. The p99 median is a summary of run-to-run")
     print("behavior and does not estimate a pooled request-level p99.\n")
-    print("The HTTP/1.1 load generator shares the server host. See the environment record for limits.\n")
+    environment = csv_path.with_name("environment.txt")
+    if environment.is_file():
+        for line in environment.read_text().splitlines():
+            if line.startswith("load_generator="):
+                print(f"Load generator: {line.removeprefix('load_generator=')}. See the environment record.\n")
+                break
     print("| Variant | Endpoint | Valid / total | Req/s | p50 (µs) | p95 (µs) | p99 (µs) | CPU s / 1M req | Peak RSS (MiB) |")
     print("|---|---|---:|---:|---:|---:|---:|---:|---:|")
     metrics = (
@@ -36,7 +42,7 @@ def main():
         cells = [describe(valid, *metric) if valid else "—" for metric in metrics]
         print(f"| {variant} | `{endpoint}` | {len(valid)} / {len(group)} | " + " | ".join(cells) + " |")
     print("\nThe raw logs and CSV include every recorded trial. Trials with zero responses,")
-    print("socket errors or wrk HTTP errors in warm-up or measurement are excluded from the medians.")
+    print("socket errors, wrk HTTP errors, or unmet warm-up stability are excluded from the medians.")
 
 
 if __name__ == "__main__":

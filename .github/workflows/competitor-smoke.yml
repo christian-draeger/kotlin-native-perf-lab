@@ -1,0 +1,52 @@
+name: Competitor HTTP smoke
+
+on:
+  push:
+    branches: [main]
+    paths: &competitor_paths
+      - 'competitors/**'
+      - 'scripts/build-competitors.sh'
+      - 'scripts/benchmark-variants.sh'
+      - 'scripts/run-server.sh'
+      - 'scripts/server-process.sh'
+      - 'scripts/smoke*.sh'
+      - '.github/actions/setup-competitors/**'
+      - '.github/workflows/competitor-smoke.yml'
+  pull_request:
+    paths: *competitor_paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Competitors (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: ./.github/actions/setup-competitors
+      - name: Build and check HTTP parity
+        env:
+          BENCHMARK_SUITE: competitors
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          bash scripts/build-competitors.sh
+          ./scripts/smoke-all.sh
+          BIND_HOST=127.0.0.2 ./scripts/smoke-all.sh

@@ -3,6 +3,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/server-process.sh"
 source "$ROOT/scripts/benchmark-load.sh"
+source "$ROOT/scripts/benchmark-variants.sh"
 [[ "$(uname -s)" == Linux ]] || { echo 'This /proc benchmark runs on Linux.' >&2; exit 1; }
 for command in curl python3 git taskset; do
   command -v "$command" >/dev/null || { echo "Missing $command" >&2; exit 1; }
@@ -21,7 +22,6 @@ if (( WARMUP_WINDOWS > 1 )); then
   command -v jstat >/dev/null || { echo 'Install JDK 21 jstat for JVM warm-up checks.' >&2; exit 1; }
 fi
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
-variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
 endpoints=(/health /json /users/123)
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}},$BIND_HOST"
@@ -60,15 +60,22 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 prepare_load
 GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
-{
+(
   echo "timestamp_utc=$STAMP"
   echo "git_sha=$GIT_SHA"
   if [[ "$GIT_SHA" != unavailable ]]; then
+    printf 'git_subject=%s\n' "$(git -C "$ROOT" show -s --format=%s "$GIT_SHA")"
     if [[ -z "$(git -C "$ROOT" status --porcelain)" ]]; then
       echo 'git_worktree=clean'
     else
       echo 'git_worktree=dirty'
     fi
+  fi
+  # Keep custom labels on one metadata line.
+  if [[ -n "${BENCHMARK_LABEL:-}" ]]; then
+    label="${BENCHMARK_LABEL//$'\n'/ }"
+    label="${label//$'\r'/ }"
+    printf 'benchmark_label=%s\n' "${label:0:120}"
   fi
   printf 'kernel=%s\n' "$(uname -sr)"
   printf 'machine=%s\n' "$(uname -m)"
@@ -82,22 +89,37 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     fi
   done
   java ${JAVA_OPTS:-} -XX:+PrintCommandLineFlags -version 2>&1
-  rustc -Vv
-  cargo --version
-  if [[ -x "$ROOT/ktor/gradlew" ]]; then
-    "$ROOT/ktor/gradlew" --version
-  else
-    gradle --version
-  fi
   python3 --version
-  sha256sum "$ROOT"/ktor/build/jvmDist/app.jar "$ROOT"/ktor/build/jvmDist/lib/*.jar \
-    "$ROOT"/ktor/build/bin/native/releaseExecutable/*.kexe "$ROOT"/rust-axum/target/release/axum-baseline \
-    "$ROOT"/kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe |
-    sed "s|  $ROOT/|  |"
-  echo "runs=$RUNS warmup_window_s=$WARMUP max_warmup_windows=$WARMUP_WINDOWS target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
+  cd "$ROOT"
+  if [[ "${BENCHMARK_SUITE:-core}" != competitors ]]; then
+    rustc -Vv
+    cargo --version
+    if [[ -x competitors/ktor/gradlew ]]; then
+      competitors/ktor/gradlew --version
+    else
+      gradle --version
+    fi
+    sha256sum competitors/ktor/build/jvmDist/app.jar competitors/ktor/build/jvmDist/lib/*.jar \
+      competitors/ktor/build/bin/native/releaseExecutable/*.kexe competitors/rust-axum/target/release/axum-baseline \
+      components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+  fi
+  if [[ "${BENCHMARK_SUITE:-core}" != core ]]; then
+    go version competitors/go-http/build/go-http
+    printf 'node=%s\nbun=%s\n' "$(node --version)" "$(bun --version)"
+    uv --version
+    uv pip freeze --python competitors/fastapi/.venv/bin/python
+    competitors/fastapi/.venv/bin/python --version
+    mvn -B --version
+    sha256sum competitors/go-http/build/go-http competitors/spring-boot/target/spring-boot.jar \
+      competitors/hono-node/{package-lock.json,server.js} competitors/elysia-bun/{bun.lock,server.js} \
+      competitors/fastapi/{uv.lock,server.py}
+  fi
+  printf 'variants=%s\n' "${variants[*]}"
+  echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
+  echo "max_warmup_windows=$WARMUP_WINDOWS"
   echo 'port_strategy=distinct TCP port per trial'
   load_environment
-} > "$OUT/environment.txt"
+) > "$OUT/environment.txt"
 
 wrk_args=(--latency -t "$THREADS" -c "$CONNECTIONS" --timeout 2s)
 
@@ -117,12 +139,12 @@ warm_server() {
     run_load "${wrk_args[@]}" -d "${WARMUP}s" "$url" > "$log" 2>&1
     logs+=("$log")
     warmup_seconds=$((window * WARMUP))
-    if [[ "$variant" == ktor-jvm ]]; then
+    if [[ "$variant" == ktor-jvm || "$variant" == spring-boot ]]; then
       jstat -compiler "$server_pid" > "$prefix.warmup.$window.jstat.txt" 2>&1
       compiler_logs+=("$prefix.warmup.$window.jstat.txt")
     fi
     if (( window < 3 )); then continue; fi
-    if [[ "$variant" == ktor-jvm ]]; then compiler_args=(--compiler "${compiler_logs[@]: -3}"); fi
+    if (( ${#compiler_logs[@]} > 0 )); then compiler_args=(--compiler "${compiler_logs[@]: -3}"); fi
     verdict="$(python3 "$ROOT/scripts/warmup.py" "${logs[@]: -3}" "${compiler_args[@]}")"
     printf 'window=%s %s\n' "$window" "$verdict" >> "$prefix.warmup.stability.txt"
     if [[ "${verdict%% *}" == stable ]]; then
@@ -151,7 +173,8 @@ for ((run = 1; run <= RUNS; run++)); do
       python3 "$ROOT/scripts/parse_wrk.py" \
         --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" --csv "$OUT/results.csv" \
         --variant "$variant" --endpoint "$endpoint" --run "$run" --connections "$CONNECTIONS" \
-        --threads "$THREADS" --duration "$DURATION" --warmup "$warmup_seconds" --warmup-stability "$warmup_status" --cpu-start "$cpu_start" \
+        --threads "$THREADS" --duration "$DURATION" --warmup "$warmup_seconds" \
+        --warmup-stability "$warmup_status" --cpu-start "$cpu_start" \
         --cpu-end "$cpu_end" --peak-rss-kib "$peak_rss_kib" --rss-kib "$rss_kib" --git-sha "$GIT_SHA"
       stop_server
     done

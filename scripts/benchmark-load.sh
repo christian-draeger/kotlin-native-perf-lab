@@ -37,7 +37,11 @@ prepare_load() {
 load_environment() {
   if [[ -z "${LOAD_SSH:-}" ]]; then
     wrk --version 2>&1 | sed -n '1p' || true
-    echo 'load_generator=local HTTP/1.1; same host and CPU pool as servers'
+    if [[ "$BIND_HOST" == 127.0.0.1 ]]; then
+      echo 'load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers'
+    else
+      echo 'load_generator=local HTTP/1.1; same host and CPU pool as servers'
+    fi
     return
   fi
 

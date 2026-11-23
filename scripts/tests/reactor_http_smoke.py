@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise fragmented and pipelined requests against the reactor release binary."""
 from concurrent.futures import ThreadPoolExecutor
+import os
 import socket
 import sys
 
@@ -23,7 +24,7 @@ def response(stream):
 
 
 def connect(port):
-    return socket.create_connection(("127.0.0.1", port), timeout=5)
+    return socket.create_connection((os.environ.get("BIND_HOST", "127.0.0.1"), port), timeout=5)
 
 
 def main(port):
@@ -51,7 +52,7 @@ def main(port):
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(check_client, range(24)))
-    print("Reactor stream smoke passed")
+    print("NativeServe stream smoke passed")
 
 
 if __name__ == "__main__":
