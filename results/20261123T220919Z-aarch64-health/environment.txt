@@ -1,0 +1,554 @@
+timestamp_utc=20261123T220919Z
+git_sha=5c44d612e1dc313b80106af60a75000a342f0638
+git_subject=Merge pull request #77 from christian-draeger/feat/flask-django-comparison
+git_worktree=clean
+benchmark_label=Flask and Django Python comparison
+kernel=Linux 7.0.0-1017-azure
+machine=aarch64
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+Architecture:                            aarch64
+CPU op-mode(s):                          32-bit, 64-bit
+Byte Order:                              Little Endian
+CPU(s):                                  4
+On-line CPU(s) list:                     0-3
+Vendor ID:                               ARM
+Model name:                              Neoverse-N2
+Model:                                   0
+Thread(s) per core:                      1
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                r0p0
+BogoMIPS:                                2000.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm uscat ilrcpc flagm sb paca pacg dcpodp sve2 sveaes svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16
+L1d cache:                               256 KiB (4 instances)
+L1i cache:                               256 KiB (4 instances)
+L2 cache:                                4 MiB (4 instances)
+L3 cache:                                128 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-3
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; CSV2, BHB
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+pid 6786's current affinity list: 0-3
+MemTotal:       16324144 kB
+cpuset.cpus.effective=0-3
+-XX:ConcGCThreads=1 -XX:G1ConcRefinementThreads=4 -XX:GCDrainStackTargetSize=64 -XX:InitialHeapSize=261186304 -XX:MarkStackSize=4194304 -XX:MaxHeapSize=4178980864 -XX:MinHeapSize=6815736 -XX:+PrintCommandLineFlags -XX:ReservedCodeCacheSize=251658240 -XX:+SegmentedCodeCache -XX:-THPStackMitigation -XX:+UseCompressedOops -XX:+UseG1GC 
+openjdk version "21.0.13.1" 2026-11-17 LTS
+OpenJDK Runtime Environment Temurin-21.0.13.1+2 (build 21.0.13.1+2-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13.1+2 (build 21.0.13.1+2-LTS, mixed mode, sharing)
+Python 3.14.7
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+binary: rustc
+commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a
+commit-date: 2026-11-09
+host: aarch64-unknown-linux-gnu
+release: 1.100.0
+LLVM version: 23.1.5
+cargo 1.100.0 (3acc79c0c 2026-11-05)
+
+------------------------------------------------------------
+Gradle 9.7.0
+------------------------------------------------------------
+
+Build time:    2026-08-06 14:07:35 UTC
+Revision:      3defbfc59d757b873d787b2261de5c7f8a00970a
+
+Kotlin:        2.4.0
+Groovy:        4.0.32
+Ant:           Apache Ant(TM) version 1.10.17 compiled on April 6 2026
+Launcher JVM:  21.0.13.1 (Eclipse Adoptium 21.0.13.1+2-LTS)
+Daemon JVM:    /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-100000002.0.LTS/arm64 (no Daemon JVM specified, using current Java home)
+OS:            Linux 7.0.0-1017-azure aarch64
+
+55f7182c350651551e7ec0784ebdd4ba826643d2ae1faf4cf26873bdc7a32212  competitors/ktor/build/jvmDist/app.jar
+7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05  competitors/ktor/build/jvmDist/lib/annotations-23.0.0.jar
+47d13e3196c84f2a8ccd014ae563738c3da5b7406b38e03505ec0601a2f4fc37  competitors/ktor/build/jvmDist/lib/config-1.4.9.jar
+2617129ac934b8c5152e6fc616222428809ede444fe7fa83231917bea141ea7f  competitors/ktor/build/jvmDist/lib/kaml-jvm-0.79.0.jar
+33e37d9dfa86c7a29ab34e975b5f4a1287b458878611051f3485652220c1a2cb  competitors/ktor/build/jvmDist/lib/kotlin-reflect-2.3.21.jar
+bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3  competitors/ktor/build/jvmDist/lib/kotlin-stdlib-2.4.21.jar
+d1d75aa01dffbb4d1c520e67e4c4e7f5f6174718e7cb4632412503f2f0e604fa  competitors/ktor/build/jvmDist/lib/kotlinx-coroutines-core-jvm-1.11.0.jar
+1043471e7d5f99680df3a056cf766276e0fe339e48030dea503fc1c94c33743e  competitors/ktor/build/jvmDist/lib/kotlinx-coroutines-slf4j-1.11.0.jar
+c764cb4882bb30a5b4279e07324ef60ed4f82f23a7bb420ee62550266d0f6162  competitors/ktor/build/jvmDist/lib/kotlinx-datetime-jvm-0.8.0-0.6.x-compat.jar
+8589de0b7c476bfdd02a24641685f609ade72f5e595cf2909c168acdba7e6ba4  competitors/ktor/build/jvmDist/lib/kotlinx-io-bytestring-jvm-0.9.1.jar
+765d8851d8ca694706931331b92386844800867e041b720f1f193dbda874d370  competitors/ktor/build/jvmDist/lib/kotlinx-io-core-jvm-0.9.1.jar
+f4a801c647d4351327cd9e1ac4113e2be9ea37a64ab0abae269c25a52e28f35d  competitors/ktor/build/jvmDist/lib/kotlinx-serialization-core-jvm-1.11.0.jar
+bbf3005522426ac4ba2acd6dc38f47ea5a3274ee82b932b8841835c7eaddab74  competitors/ktor/build/jvmDist/lib/kotlinx-serialization-json-io-jvm-1.11.0.jar
+563a25b4eb5c9128ae9c2479f3d1a5c44dcd176112b91cf03682e906eba5c935  competitors/ktor/build/jvmDist/lib/kotlinx-serialization-json-jvm-1.11.0.jar
+3a288b4d75a52d3b2460765067c2fc035bcd18ffcaa0a2296f4b9983cd2f041f  competitors/ktor/build/jvmDist/lib/ktor-client-core-jvm-3.6.1.jar
+9759d0e39dcb8682479c5303625180b90b9cff94d70a5caf78081ba33f78d154  competitors/ktor/build/jvmDist/lib/ktor-events-jvm-3.6.1.jar
+cef2c4f69393eea3937bf3deeca4622a048951b76f38f699ea1d706ef5f5d3b7  competitors/ktor/build/jvmDist/lib/ktor-http-cio-jvm-3.6.1.jar
+77bcd2f92be9c226c2434bcda04c95edc5d407fc3d1b3774a6401b8d95b7f671  competitors/ktor/build/jvmDist/lib/ktor-http-jvm-3.6.1.jar
+94934d96b37c38f17dd7dfaaf9c50cd9c0255bea5ae60fd4cd2476838bd525d8  competitors/ktor/build/jvmDist/lib/ktor-io-jvm-3.6.1.jar
+3d1c8dba07e2d8939015fdb8436e2d28f3c7465e578ab938f9ff67cba5a4f535  competitors/ktor/build/jvmDist/lib/ktor-network-jvm-3.6.1.jar
+6d543198b0454dbe6d6d671f2c6a5c41a4bbd377d73e17018add3a05ae45037f  competitors/ktor/build/jvmDist/lib/ktor-openapi-schema-jvm-3.6.1.jar
+c453ea5c53456c10b0cca4c86477190885042cfd92c68596bd36e34832da4e57  competitors/ktor/build/jvmDist/lib/ktor-serialization-jvm-3.6.1.jar
+73e2709659bf80e6e2a4d4ecc5208f4d8acf8dcd8c14266768bf255ead75b233  competitors/ktor/build/jvmDist/lib/ktor-serialization-kotlinx-json-jvm-3.6.1.jar
+6a163fad390ba4bc93ecfde2b570708065f904fe2ad24dd43784335e06418b44  competitors/ktor/build/jvmDist/lib/ktor-serialization-kotlinx-jvm-3.6.1.jar
+347d322b33adaad6dce55d1fa3ce2c18e1aba1f2b999df5c9ac92433031c12b9  competitors/ktor/build/jvmDist/lib/ktor-server-auth-api-key-jvm-3.6.1.jar
+47dab95a14ee9afe5e5235d9dd150da16f2457a3e04c697eab7bc05f08cc7008  competitors/ktor/build/jvmDist/lib/ktor-server-auth-jvm-3.6.1.jar
+41616d699ed2d8033b0b8ccf8d9af759ec7cc04e00b0b45711a3341618d81fce  competitors/ktor/build/jvmDist/lib/ktor-server-cio-jvm-3.6.1.jar
+63e2acbad0421791d4301cc5eacd96f498c9bbc3e57793da1665a5ab52e156db  competitors/ktor/build/jvmDist/lib/ktor-server-content-negotiation-jvm-3.6.1.jar
+273c891aab65cb5548734209b28d7e4220b5369b012ec4a56057103ed83ec272  competitors/ktor/build/jvmDist/lib/ktor-server-core-jvm-3.6.1.jar
+36a2a61da203eec8bff46626c166ece773841c3b8fa1cc0039fa1a9ec8a82260  competitors/ktor/build/jvmDist/lib/ktor-server-csrf-jvm-3.6.1.jar
+b752c0dc144bd5921f7d6edf095fdbc7ecb0b1cf4e774f7e10a64e879c6b2d76  competitors/ktor/build/jvmDist/lib/ktor-server-routing-openapi-jvm-3.6.1.jar
+ae04912ad16034c9fc83469cc2bdbe3b9b4d21c92e42deb835b95784e19f3594  competitors/ktor/build/jvmDist/lib/ktor-server-sessions-jvm-3.6.1.jar
+365f54d957081de3a7c4d17937a9ece27ad8cc3140ae35a5e8159ea019508445  competitors/ktor/build/jvmDist/lib/ktor-sse-jvm-3.6.1.jar
+0df228f4d134facd49218a5a309fb20a16ff53759dbcdf52714b7129572beafc  competitors/ktor/build/jvmDist/lib/ktor-utils-jvm-3.6.1.jar
+d8dd32ed720cd6f940ef5df74a9f081a42c6c537e6b0a3762bc79f68730d868e  competitors/ktor/build/jvmDist/lib/ktor-websocket-serialization-jvm-3.6.1.jar
+58a3b887d3f220bfcf1e6405386409dbc8eccc5072ff9bb1e75c70cf6388fb2d  competitors/ktor/build/jvmDist/lib/ktor-websockets-jvm-3.6.1.jar
+b5f5f280bb628e9f58f8bd39e7bcd2b0919dc66d90f05b80d3aab22f1b99cbea  competitors/ktor/build/jvmDist/lib/okio-jvm-3.12.0.jar
+e91ff6d720609e7a194ffe758c3ed5c84e798617ae07b0a0f6a4fe229741b4bb  competitors/ktor/build/jvmDist/lib/slf4j-api-2.0.19.jar
+733e1347e3ec909e8a7ee199e48a64d0180569461b3bc08c8a6bb1335f5ce1bd  competitors/ktor/build/jvmDist/lib/snakeyaml-engine-kmp-jvm-3.1.1.jar
+8d0fd2aeb48d19dc49c563ebc00f274947e45f716c107535c12ead63decd688d  competitors/ktor/build/jvmDist/lib/urlencoder-lib-jvm-1.6.0.jar
+fc7fecbf292080d0c4a95cdf1c00fbdb38e6a5d9df97a7710e67f52b2df105db  competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe
+de4736d2869cd3055213843a190fed2154ff2628a262df6aeb1f40bb192d960a  competitors/rust-axum/target/release/axum-baseline
+a732f83235029987c2f31f6aed4c1ae4a4749d017475356a16ac21d92d24049b  components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+competitors/go-http/build/go-http: go1.27.4
+node=v24.22.3
+bun=1.4.5
+uv 0.13.9 (aarch64-unknown-linux-gnu)
+python_environment=fastapi
+Python 3.14.7
+annotated-doc==0.0.7
+annotated-types==0.8.0
+anyio==4.16.0
+click==8.5.1
+fastapi==0.165.0
+h11==0.16.0
+httptools==0.9.0
+idna==3.20
+opentelemetry-api==1.45.2
+pydantic==2.14.4
+pydantic-core==2.50.5
+starlette==1.10.0
+typing-extensions==4.16.0
+typing-inspection==0.4.5
+uvicorn==0.54.0
+uvloop==0.23.0
+python_environment=flask
+Python 3.14.7
+blinker==1.9.0
+click==8.5.1
+flask==3.1.3
+itsdangerous==2.2.0
+jinja2==3.1.6
+markupsafe==3.0.4
+waitress==3.0.2
+werkzeug==3.1.9
+python_environment=django
+Python 3.14.7
+asgiref==3.13.0
+click==8.5.1
+django==6.1.3
+h11==0.16.0
+httptools==0.9.0
+sqlparse==0.6.1
+uvicorn==0.54.0
+uvloop==0.23.0
+Apache Maven 3.9.12 (848fbb4bf2d427b72bdb2471c22fced7ebd9a7a1)
+Maven home: /usr/share/apache-maven-3.9.12
+Java version: 21.0.13.1, vendor: Eclipse Adoptium, runtime: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-100000002.0.LTS/arm64
+Default locale: en_US, platform encoding: UTF-8
+OS name: "linux", version: "7.0.0-1017-azure", arch: "aarch64", family: "unix"
+.NET SDK:
+ Version:           10.0.404
+ Commit:            2ab2854867
+ Workload version:  10.0.400-manifests.ad9f6d83
+ MSBuild version:   18.9.15+2ab285486
+
+Runtime Environment:
+ OS Name:     ubuntu
+ OS Version:  24.04
+ OS Platform: Linux
+ RID:         linux-arm64
+ Base Path:   /usr/share/dotnet/sdk/10.0.404/
+
+.NET workloads installed:
+There are no installed workloads to display.
+Configured to use workload sets when installing new manifests.
+No workload sets are installed. Run "dotnet workload restore" to install a workload set.
+
+Host:
+  Version:      11.0.0
+  Architecture: arm64
+  Commit:       297acf930f
+
+.NET SDKs installed:
+  8.0.134 [/usr/share/dotnet/sdk]
+  8.0.206 [/usr/share/dotnet/sdk]
+  8.0.319 [/usr/share/dotnet/sdk]
+  8.0.428 [/usr/share/dotnet/sdk]
+  9.0.124 [/usr/share/dotnet/sdk]
+  9.0.205 [/usr/share/dotnet/sdk]
+  9.0.321 [/usr/share/dotnet/sdk]
+  10.0.115 [/usr/share/dotnet/sdk]
+  10.0.204 [/usr/share/dotnet/sdk]
+  10.0.303 [/usr/share/dotnet/sdk]
+  10.0.404 [/usr/share/dotnet/sdk]
+  11.0.100 [/usr/share/dotnet/sdk]
+
+.NET runtimes installed:
+  Microsoft.AspNetCore.App 8.0.6 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 8.0.22 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 8.0.34 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 9.0.6 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 9.0.23 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.8 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.11 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 10.0.15 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.AspNetCore.App 11.0.0 [/usr/share/dotnet/shared/Microsoft.AspNetCore.App]
+  Microsoft.NETCore.App 8.0.6 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 8.0.22 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 8.0.34 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 9.0.6 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 9.0.23 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.8 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.11 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 10.0.15 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+  Microsoft.NETCore.App 11.0.0 [/usr/share/dotnet/shared/Microsoft.NETCore.App]
+
+Other architectures found:
+  None
+
+Environment variables:
+  DOTNET_MULTILEVEL_LOOKUP                 [0]
+  DOTNET_NOLOGO                            [1]
+  DOTNET_ROOT                              [/usr/share/dotnet]
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE        [1]
+
+global.json file:
+  /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/aspnet-core/global.json
+
+Learn more:
+  https://aka.ms/dotnet/info
+
+Download .NET:
+  https://aka.ms/dotnet/download
+36928f01e52e64113e55c1f1a4dcdadd42c192668a61bbd1f3bf714e379ccc7f  competitors/go-http/build/go-http
+f46027546bd852710dddd3eec6671e9ff70fa31c9c8158458286e7a3e3efd191  competitors/spring-boot/target/spring-boot.jar
+ab85cdd710bb99987bf68899662c92f4f9a4c0bf1c88aba70c61b35073d2ec0c  competitors/spring-webflux/target/spring-webflux.jar
+2a25a7f6e5ba91762f58b82609fbc455481c51c10a21519b5e33ade02ed401b6  competitors/hono-node/package-lock.json
+2538a364e88fe574ee0948c54c37d9a99e9e32e8022dafa6cfca178236582c55  competitors/hono-node/server.js
+fa072c275bf8927fad26b1e71b6092421ae6585614bcb8325d34ddaef24b98d2  competitors/elysia-bun/bun.lock
+c6f41ac7dc5984f1fbff85cb28611fd02f124a136402d1a426d0c1e6bd0b989d  competitors/elysia-bun/server.js
+490806b3116899cd1806ecbb04f5552d28d766a1486c7e234aebf233bf57b716  competitors/fastapi/uv.lock
+59f62fcbfbe72c42083d17207b3112dcd4b89b0d8d8b943845f3ce07a911fec1  competitors/fastapi/server.py
+cdc3abac6b20e177bfe6bfcffaa99de3af7e541117285db6b1854ed3ee00f90c  competitors/flask/uv.lock
+3c936ef2a899eddbc919ebef38c7ded95fefd5c825a38e859f58bfd0067b3bb2  competitors/flask/server.py
+c885d9f9885243dbf88836aace0eb93dee3aadcd174fb6828b396b2be08abe6d  competitors/django/uv.lock
+c82870a63fcbf2a0d3b93959086542d5f57bdf3afd7c00f9862caa46d61e24c7  competitors/django/server.py
+50766629f319cf38448a8585b31b2c71eaf1e05221d2816d250b5ce0190921c8  competitors/django/settings.py
+f46b65819cad1f8a42a14207e19b73c5bcabf650f0f929d65f76c1edfff506a1  competitors/aspnet-core/target/publish/AspNetCore.dll
+4c9bab374a4e5a49ba80edbcb27c520bc80f26e19dd117e11bbb8a8dfcbb04cd  competitors/kotlin-jvm/http4k/target/app.jar
+ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478  competitors/kotlin-jvm/http4k/target/lib/annotations-13.0.jar
+5775b4dbae497b0af6be3f5a76608134600b78abf4e803ec4b13774e498d4270  competitors/kotlin-jvm/http4k/target/lib/http4k-core-6.61.0.0.jar
+4c66779a9ad7d240bfee063b0b7d9180d82871e99864a0394abf4cca22341944  competitors/kotlin-jvm/http4k/target/lib/http4k-format-core-6.61.0.0.jar
+b70441b902a0701dcdf850a75a6b5ee206459f2af5782aaccb72ed9e465628a3  competitors/kotlin-jvm/http4k/target/lib/http4k-format-jackson-6.61.0.0.jar
+7652716579783f9a6bf70210bdfe9faa5c36a4b6db5c096e8ca11ecc58680090  competitors/kotlin-jvm/http4k/target/lib/http4k-realtime-core-6.61.0.0.jar
+76ade93c38f05539e4245c3ae1f743943b43641aa04275c85bbc1f7331fc7f5f  competitors/kotlin-jvm/http4k/target/lib/http4k-server-jetty-6.61.0.0.jar
+21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0  competitors/kotlin-jvm/http4k/target/lib/jackson-annotations-2.22.jar
+8a501126a385b25841915d839508f8a66e2a0dbc8a6709d055ef3b3e852b094c  competitors/kotlin-jvm/http4k/target/lib/jackson-core-2.22.3.jar
+556db5439e206114346043f68d200497dc96a0bca62a360a81784092ebd0e0a9  competitors/kotlin-jvm/http4k/target/lib/jackson-databind-2.22.3.jar
+bca109a9edba9abd63fe637e9f6d3888a3d6f314f0a381f396a9e82b9eb1a492  competitors/kotlin-jvm/http4k/target/lib/jackson-module-kotlin-2.22.3.jar
+3bb84bfdd0992453986a8f7422dbf55cf779a0a780ff8a68041bb6119fb997fd  competitors/kotlin-jvm/http4k/target/lib/jetty-http-12.1.13.jar
+946338a5db4e906ba0698dcdae350394736062cf915b5f16ebf787bcee7fffae  competitors/kotlin-jvm/http4k/target/lib/jetty-io-12.1.13.jar
+978265f1ac637c504b537f5d56e07d4a47e7c4bb0752d9dd66b79f5be754abfa  competitors/kotlin-jvm/http4k/target/lib/jetty-server-12.1.13.jar
+3e408e60fe71a337979004fc4e47bfd3c08a931cf33b46b6a5dc4dbdd088c2fd  competitors/kotlin-jvm/http4k/target/lib/jetty-util-12.1.13.jar
+fcd3abf1e4749751fc85a7b39c614f85feb07eee0bcbe7b8cb10b9bbb15904d0  competitors/kotlin-jvm/http4k/target/lib/jetty-websocket-core-common-12.1.13.jar
+dbe21adebf357f27033b2b76bb6b40ae5ecaa40fe3ba4b9d10bf7f4795fa93dc  competitors/kotlin-jvm/http4k/target/lib/jetty-websocket-core-server-12.1.13.jar
+2b71c6fd53619289188c169adaedf617ed01213d2c8f7063e4c2d0a88bbf7ece  competitors/kotlin-jvm/http4k/target/lib/jetty-websocket-jetty-api-12.1.13.jar
+3d1eced18d1aee79aa832fa90eb021e1eee9f717c437aa0ab81b8d85affe35c3  competitors/kotlin-jvm/http4k/target/lib/jetty-websocket-jetty-common-12.1.13.jar
+643fb282a75b1a8503990020db5cbef480be12dc997d37d8ab26dd2d5c191eef  competitors/kotlin-jvm/http4k/target/lib/jetty-websocket-jetty-server-12.1.13.jar
+bcd75a36ca4ad8e06117214ed807f8dea2fe61a71e07f91ca14f4335024b8463  competitors/kotlin-jvm/http4k/target/lib/kotlin-reflect-2.1.21.jar
+bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3  competitors/kotlin-jvm/http4k/target/lib/kotlin-stdlib-2.4.21.jar
+7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832  competitors/kotlin-jvm/http4k/target/lib/slf4j-api-2.0.17.jar
+695aa30cfbff0b07ce945b585d9d8876726865c16af4ac3be4d5f415fabd8a79  competitors/kotlin-jvm/javalin/target/app.jar
+ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478  competitors/kotlin-jvm/javalin/target/lib/annotations-13.0.jar
+ae4e6e10d59d0a1500317764b21881ad883f8550e33c66e6142f7032c6fb566c  competitors/kotlin-jvm/javalin/target/lib/asm-9.11.1.jar
+6a5095ec53726156a78b2cd2efd45bc4e877754eca7c234f61224a53d6bfa661  competitors/kotlin-jvm/javalin/target/lib/asm-commons-9.11.1.jar
+2b15c3c1b288a9fad3bb2cd6d988ba9521554914ed1f2a2029141fa3f483154a  competitors/kotlin-jvm/javalin/target/lib/asm-tree-9.11.1.jar
+e5b60c3088e0887b290ff9226394354589a1dad583743944b7f5538661056b4c  competitors/kotlin-jvm/javalin/target/lib/jackson-annotations-2.23.jar
+449798beb4c4ec26de9cc25b39ca2198036883fb905ca968cbef7136d19a25d9  competitors/kotlin-jvm/javalin/target/lib/jackson-core-2.23.0.jar
+abd1edd2736c764da03fe6cb7a9de70d48dd0a198aed131604c564bff62f9cc1  competitors/kotlin-jvm/javalin/target/lib/jackson-databind-2.23.0.jar
+5f65fdaf424eee2b55e1d882ba9bb376be93fb09b37b808be6e22e8851c909fe  competitors/kotlin-jvm/javalin/target/lib/jakarta.annotation-api-2.1.1.jar
+beaf74c4f2618189309e3f4a09c43effab633dd96aa1f6dc58a6ba7ee0042717  competitors/kotlin-jvm/javalin/target/lib/jakarta.enterprise.cdi-api-4.0.1.jar
+53acafe65b6ef0195fa1b8a0ef2650e5aa024c32cb4059c4df372d6b32089cd3  competitors/kotlin-jvm/javalin/target/lib/jakarta.enterprise.lang-model-4.0.1.jar
+f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c  competitors/kotlin-jvm/javalin/target/lib/jakarta.inject-api-2.0.1.jar
+ef787d3f713fc6ff4f02cd4b0dbed08f93d8af3400c90cbb43fb4b5c0583710b  competitors/kotlin-jvm/javalin/target/lib/jakarta.interceptor-api-2.1.0.jar
+c034eb1afb158987dbb53a5fea0cadf611c8dae8daadd59c44d9d5ab70129cef  competitors/kotlin-jvm/javalin/target/lib/jakarta.servlet-api-6.0.0.jar
+50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875  competitors/kotlin-jvm/javalin/target/lib/jakarta.transaction-api-2.0.1.jar
+ed386c3e4878e81f08952f649977850a7add1a26bf0680e3cc0c3ff1897ac067  competitors/kotlin-jvm/javalin/target/lib/javalin-7.3.0.jar
+6ba62b761cb2de0b9f106829513fd92e43ae6f558a57dac7219a4d161566ee1d  competitors/kotlin-jvm/javalin/target/lib/jetty-annotations-12.1.15.jar
+79d056119a8c0216cd64822aa303b95dfac4b5e9a6342c17d5aa3b51b676a5e7  competitors/kotlin-jvm/javalin/target/lib/jetty-ee-webapp-12.1.15.jar
+21d0458733c951e0a3c0d6ff09e6104a732404f2aa45cb4be0bb1d843872ffe8  competitors/kotlin-jvm/javalin/target/lib/jetty-ee10-annotations-12.1.15.jar
+67688bce3803be207fe760fcb6c3915b64df9e88a4d833b624aa76fe3f45403d  competitors/kotlin-jvm/javalin/target/lib/jetty-ee10-plus-12.1.15.jar
+cf35d33d73b4033d53d236ed3147485b20c0faa766ee3161082c3247fd665534  competitors/kotlin-jvm/javalin/target/lib/jetty-ee10-servlet-12.1.15.jar
+75c34cfd0bb13e34e17efbaa63bd37ac5573d42079175f329be1d2156744366d  competitors/kotlin-jvm/javalin/target/lib/jetty-ee10-webapp-12.1.15.jar
+1efe697f89496858c4aac23b4ddc18eb08b9b9dacb71f679ac2947dc833bf6c7  competitors/kotlin-jvm/javalin/target/lib/jetty-ee10-websocket-jetty-server-12.1.15.jar
+25050ac96ec969e1d907cb15d1a5a7931b5a8b0f3fca829b00572d334167df72  competitors/kotlin-jvm/javalin/target/lib/jetty-ee10-websocket-servlet-12.1.15.jar
+641774717e2fa668ce3a8915c51ce1f4503037a1209620d7bbd074e70b23b7fd  competitors/kotlin-jvm/javalin/target/lib/jetty-http-12.1.15.jar
+b5f940782fe61bb1b51269eba7cadd1afa771e2bd649e1fa48057d1647ec9212  competitors/kotlin-jvm/javalin/target/lib/jetty-io-12.1.15.jar
+78415d2d5abc981b8f79865ec822eef3f1b66262d8b019ca25c0844dc2f42f05  competitors/kotlin-jvm/javalin/target/lib/jetty-jndi-12.1.15.jar
+84e316cecf7b29576309ef92810686fa5513ccae0a558b66766de69431a801c0  competitors/kotlin-jvm/javalin/target/lib/jetty-plus-12.1.15.jar
+d7f5f68366310075a05596d40ce22e745b7412852112bab8b05d2b092cd565f7  competitors/kotlin-jvm/javalin/target/lib/jetty-security-12.1.15.jar
+38a76ffcd2404dad9a5395d35e741934dcff4ae9d9ab34336d3565582ed1f5ef  competitors/kotlin-jvm/javalin/target/lib/jetty-server-12.1.15.jar
+fa13ef70d76f312c4850d9fdaefba7c41a3ccb5a5fe15c54fd1f8710d599c47b  competitors/kotlin-jvm/javalin/target/lib/jetty-session-12.1.15.jar
+74cb58a645f9d265d8e061b9227ec13c7acbb16c34bd6610eca229f58e928f37  competitors/kotlin-jvm/javalin/target/lib/jetty-util-12.1.15.jar
+331b44e233722de769ad9607714ad3402366e46bef0097e2029c5080cc90ef8c  competitors/kotlin-jvm/javalin/target/lib/jetty-websocket-core-common-12.1.15.jar
+9f303cf6186e85361207920c74bf4f90e2e3403004df4cdcfd6099fd6281b4f2  competitors/kotlin-jvm/javalin/target/lib/jetty-websocket-core-server-12.1.15.jar
+d7bd7a29e0560521c48ae3b3cb585d0f3bce9277ba670c82c4b96e19efd278d7  competitors/kotlin-jvm/javalin/target/lib/jetty-websocket-jetty-api-12.1.15.jar
+68e98204714a251895538e6719d7ed1d6763b0af551a789b71e5ff339e20d5b4  competitors/kotlin-jvm/javalin/target/lib/jetty-websocket-jetty-common-12.1.15.jar
+20d88a1f43e74db18039983d3e5c1cb6ad45f635b34ba7f8978236debc82b487  competitors/kotlin-jvm/javalin/target/lib/jetty-websocket-jetty-server-12.1.15.jar
+830364d9fb534a501fb54f76e2caf64ec461b34b12c5fd9b7795102b91df9348  competitors/kotlin-jvm/javalin/target/lib/jetty-xml-12.1.15.jar
+bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3  competitors/kotlin-jvm/javalin/target/lib/kotlin-stdlib-2.4.21.jar
+7e1446499b359675d8aabe6af2de86b85e72ae8a2a932c0b40d0e5ba57097439  competitors/kotlin-jvm/javalin/target/lib/slf4j-api-2.0.20.jar
+e44fc6030cb7972174f9ee3c4fb25e34e1544613fcebe0c20a9b55e0b93ddf88  competitors/kotlin-jvm/micronaut/target/app.jar
+ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478  competitors/kotlin-jvm/micronaut/target/lib/annotations-13.0.jar
+21ddb598807d3a51a876704eb979d9296e1c6a6f47ab1826ff88c6d6a127a2d0  competitors/kotlin-jvm/micronaut/target/lib/jackson-annotations-2.22.jar
+8c5623b98f32d5f7e1287ff61ed50e08ab7b11381e991fff89327faabba42261  competitors/kotlin-jvm/micronaut/target/lib/jackson-core-2.21.7.jar
+1290c2795e93e8a6861a6c4d9ff0d844d32f5ea178362cb2721edf5561e828b1  competitors/kotlin-jvm/micronaut/target/lib/jackson-databind-2.21.7.jar
+b8f62f98363ed9aa259b3a479a64fcbe7e081158a8bec6733972e900d12f4e47  competitors/kotlin-jvm/micronaut/target/lib/jackson-datatype-jdk8-2.21.7.jar
+5989b937f0aa5b6407e7a061077c9bfcac0590dc0a32e54b2fac6a3e2d49e812  competitors/kotlin-jvm/micronaut/target/lib/jackson-datatype-jsr310-2.21.7.jar
+5f65fdaf424eee2b55e1d882ba9bb376be93fb09b37b808be6e22e8851c909fe  competitors/kotlin-jvm/micronaut/target/lib/jakarta.annotation-api-2.1.1.jar
+f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c  competitors/kotlin-jvm/micronaut/target/lib/jakarta.inject-api-2.0.1.jar
+bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3  competitors/kotlin-jvm/micronaut/target/lib/kotlin-stdlib-2.4.21.jar
+a9682602f6340d84f19bbf2dbe7ba636cbf512fafb4b3a21cedd226791afc50d  competitors/kotlin-jvm/micronaut/target/lib/micronaut-aop-4.10.37.jar
+e5df99ca0f6a95e0e14d93968fc81155bc09bc33c73c14bf25149662efaaec3f  competitors/kotlin-jvm/micronaut/target/lib/micronaut-buffer-netty-4.10.37.jar
+3b9cb6100260b2f35867eeb84dd27592109800fddeeb80f7bf0df849274af1bd  competitors/kotlin-jvm/micronaut/target/lib/micronaut-context-4.10.37.jar
+ab93dc1c41dd33991e2a14c885c7021bb8d0cf815a01a4ab4952e9978cce42e7  competitors/kotlin-jvm/micronaut/target/lib/micronaut-context-propagation-4.10.37.jar
+ecabf0a2ca7bea735dec332a3ef4b91b8fa1cefa6dd07f2f562ae5035ff34bfe  competitors/kotlin-jvm/micronaut/target/lib/micronaut-core-4.10.37.jar
+9994c5809171c6aef2cdecba498be037e1e701a115c57fd5d0afdfca933a7295  competitors/kotlin-jvm/micronaut/target/lib/micronaut-core-reactive-4.10.37.jar
+ade82d72c803349422bdd3b3f1a43a50007cbca58c823580ae7a55f40a559b71  competitors/kotlin-jvm/micronaut/target/lib/micronaut-http-4.10.37.jar
+0d9816569db035572be9942fd6437c5f39c553e07fa9eda128b94628b7b5eb47  competitors/kotlin-jvm/micronaut/target/lib/micronaut-http-netty-4.10.37.jar
+e0adfbd1263ee3d0006b94646d65552a6a85fafec67bc51fa2108668469224a7  competitors/kotlin-jvm/micronaut/target/lib/micronaut-http-server-4.10.37.jar
+3d491736c93d17cb8aa4134a0249ff8a7d5cd6a6d32fccb4ac2e2dd8e317c6b5  competitors/kotlin-jvm/micronaut/target/lib/micronaut-http-server-netty-4.10.37.jar
+52146820ee422c2e5fd8afd70f69229377cc66b672418aee7f4dad26c5688e7a  competitors/kotlin-jvm/micronaut/target/lib/micronaut-inject-4.10.37.jar
+1d6a574bdc76381cf3667063f94dba0e26b170dd03a66a1fe649488a8cd92a84  competitors/kotlin-jvm/micronaut/target/lib/micronaut-jackson-core-4.10.37.jar
+a7d33c2fc71959204c85f4dfc5ac657e66a46140b3de47ba2eea700c068a7d81  competitors/kotlin-jvm/micronaut/target/lib/micronaut-jackson-databind-4.10.37.jar
+da83b8c9b53f2ceb80ed86c14be2d38b9be54f5749d4761abf534a5114719403  competitors/kotlin-jvm/micronaut/target/lib/micronaut-json-core-4.10.37.jar
+68f5edfff56c48359205b11ef2a78257eabb9201075970ed4ca7931649639804  competitors/kotlin-jvm/micronaut/target/lib/micronaut-router-4.10.37.jar
+794136fc6be78e44a286c2b1420a182e135c6d06eb8c397030c1551ee50acccd  competitors/kotlin-jvm/micronaut/target/lib/netty-buffer-4.2.20.Final.jar
+5a66da26b86d7eecedd9e0d8fe0e22ef1733bbf873e476cb9b860afbed22210c  competitors/kotlin-jvm/micronaut/target/lib/netty-codec-base-4.2.20.Final.jar
+7ebae4ac80c01e2d279d0e50d377bcdaf0cf8f2f65797e0578afc810a66ab57d  competitors/kotlin-jvm/micronaut/target/lib/netty-codec-compression-4.2.20.Final.jar
+d08b0d473c48c61ebb2bc4d145111fa1777832aee4d2be1024891e904e36eaf5  competitors/kotlin-jvm/micronaut/target/lib/netty-codec-http-4.2.20.Final.jar
+168790c8d10d2e7cc53fa08906162e3d6c23b4528e7d062eea328d4a281484c6  competitors/kotlin-jvm/micronaut/target/lib/netty-codec-http2-4.2.20.Final.jar
+5807fef7eb619bc0a5d1c0e6c83199ea9bca8503203a3eb73cfdccec2d215743  competitors/kotlin-jvm/micronaut/target/lib/netty-common-4.2.20.Final.jar
+211dbbba074298046b37f841ad9ca89ed91968f6b9e97400c99ab4e6177b1f96  competitors/kotlin-jvm/micronaut/target/lib/netty-handler-4.2.20.Final.jar
+cb7a6027e4f366fb28dcea7e1f7088ca16bd23c2cc38e8ddfdac77a77bd144dc  competitors/kotlin-jvm/micronaut/target/lib/netty-resolver-4.2.20.Final.jar
+ff4f1f8158c714c1b485ef10cf2456fbd3c1b2930256b70287aeb7dc3ad94783  competitors/kotlin-jvm/micronaut/target/lib/netty-transport-4.2.20.Final.jar
+6f600d5cbd3ce39e50680de66b00d7e6a9652dac7d08a5b022101d717cb7fb52  competitors/kotlin-jvm/micronaut/target/lib/netty-transport-native-unix-common-4.2.20.Final.jar
+f75ca597789b3dac58f61857b9ac2e1034a68fa672db35055a8fb4509e325f28  competitors/kotlin-jvm/micronaut/target/lib/reactive-streams-1.0.4.jar
+474f94cabe5fda8877147521f37c791c95ef6b4a9dd59e589a6ddcc21b0d8e39  competitors/kotlin-jvm/micronaut/target/lib/reactor-core-3.7.12.jar
+7b751d952061954d5abfed7181c1f645d336091b679891591d63329c622eb832  competitors/kotlin-jvm/micronaut/target/lib/slf4j-api-2.0.17.jar
+349e425590d0a45efd947818f72952f79568f3cdee3e906ca52894ff89003dcd  competitors/kotlin-jvm/quarkus/target/app.jar
+59fc37cb0ac2179371dd13c2cdcac58735dd1226a3437dfaf19244aaef54cf8b  competitors/kotlin-jvm/quarkus/target/quarkus-app/app/app.jar
+19eb62fe3c60ad3f5c6b5aad4b6b879d79daf95ad2078b14683aba95c3a5be33  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.quarkus.quarkus-bootstrap-runner-3.40.1.jar
+406f021aedcd1ddb4521fe9fa947d00bfe8e55f6f1d87e6904618eb1f83aa78b  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.quarkus.quarkus-classloader-commons-3.40.1.jar
+33638b290e946702730acf6e57aec4e3dd339815c3fa0f0ce5019288dc3367b9  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.quarkus.quarkus-development-mode-spi-3.40.1.jar
+f0ea7643b20999443d2e53dcc490ad308e38ca9473b83abcaa9bb09bbf1b0f14  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.quarkus.quarkus-value-registry-3.40.1.jar
+3a808a8e3e41d2519de206067a03365407c3e8c4b9801bad28d82ae9dff1c0ad  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.quarkus.quarkus-vertx-latebound-mdc-provider-3.40.1.jar
+4454a2f32caeadb47cf6f0565c667f64c21facbee959cf15bcfc8ec8755c471a  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-constraint-2.19.0.jar
+845825ee711b0e0511c2cd12430680b767c6ee69e60d6b32bb90befd52420927  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-cpu-2.19.0.jar
+27863f0441acd0b003536f63ddfd40f9f8c02f16d97d1fd1e9f616d683541aaa  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-expression-2.19.0.jar
+c78f2661e82821d3ac7153b88bec4aaec375e041aae261832e5e5f4ac17f4800  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-function-2.19.0.jar
+33d549ed88eb279926706a894459f8fc4ad8a23b1eb01b01b4c72d3e723da877  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-io-2.19.0.jar
+f3d1be529e43214df263f29703dec41bc9b8d1bd0a4af8678166814ae2da5a96  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-net-2.19.0.jar
+ac12ba8e86119ebd0a3b14d1053a3b6a4722f63978e9c718fb1ffcbbd4e3a3b5  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-os-2.19.0.jar
+56b3173ab124b82559fe6f16bfcbefbe7f904c0e53d2507bb2e3606b43d6d1de  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/io.smallrye.common.smallrye-common-ref-2.19.0.jar
+f4426e1641c8f0fa2f025a4cd7c40c285abaf265930e6717adfcaef03d034850  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/org.crac.crac-1.5.0.jar
+7c12ee575508f81e22b1db9334b969d0ec54ef0fd1dcba24eeab1a44235fc366  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/org.jboss.logging.jboss-logging-3.6.3.Final.jar
+91d3d76c1e41d403cd717026cd6e8c4495068cb3a4a06461d9d984920fbb856c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/boot/org.jboss.logmanager.jboss-logmanager-3.2.2.Final.jar
+5fcf13ad78d07319cc507465dcf61cbc3efee9f45c9ae1c42a9902414696bc0b  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.aayushatharva.brotli4j.brotli4j-1.23.0.jar
+900c73dac7330ebe966071c770d2d4357c4de3f9417262ed4408dc08f2b573b6  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.aayushatharva.brotli4j.native-linux-aarch64-1.23.0.jar
+7f298d44dbb7688419f0179ee1dfa0e4436633272b05d38a5faf3a2b8d08697b  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.aayushatharva.brotli4j.service-1.23.0.jar
+53ca085f4a150f703f49e1aabd935bd03b43e1ea3d55d135438292af22cef56b  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.fasterxml.jackson.core.jackson-annotations-2.21.jar
+8c5623b98f32d5f7e1287ff61ed50e08ab7b11381e991fff89327faabba42261  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.fasterxml.jackson.core.jackson-core-2.21.7.jar
+1290c2795e93e8a6861a6c4d9ff0d844d32f5ea178362cb2721edf5561e828b1  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.fasterxml.jackson.core.jackson-databind-2.21.7.jar
+b8f62f98363ed9aa259b3a479a64fcbe7e081158a8bec6733972e900d12f4e47  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jdk8-2.21.7.jar
+5989b937f0aa5b6407e7a061077c9bfcac0590dc0a32e54b2fac6a3e2d49e812  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.fasterxml.jackson.datatype.jackson-datatype-jsr310-2.21.7.jar
+ffe66bf4bbb7b4f201aad456294312f13b3649aa392c36d95e786c910a0d513a  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/com.fasterxml.jackson.module.jackson-module-parameter-names-2.21.7.jar
+5bef3ea2b9e80c5e8d03151ca1609bd75fd1e264863bf3e2f8d538392c0f2c38  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-buffer-4.1.138.Final.jar
+21b9b7717da9ed7034c7a9ef4fcea4a08825e8f52d775da4d898364edf99327f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-codec-4.1.138.Final.jar
+715d8ba984fde2c9ffc35917c8c1dfdea6b10f0460922f4f6f587c92db8f4ef1  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-codec-dns-4.1.138.Final.jar
+56cc45103a0d24329e3065305c802360beb0c921318222142c333059421f3964  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-codec-haproxy-4.1.138.Final.jar
+7d9000e53c8e37504be42b8dd7b646a7d1c73ad2cf801527fe3c6301880fe06f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-codec-http-4.1.138.Final.jar
+c7521231535c252903d9e424e162f789b5b55b0b0799628ea466a9b3daf49dae  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-codec-http2-4.1.138.Final.jar
+bc15ad96188a6eee2d0c5f7f8e443fa916fa30e74a65e220b1ac0a04574dda87  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-codec-socks-4.1.138.Final.jar
+b4ebb8fa44cd5790731928a83fd0f25a530e41c407c093bef4a0196db30b693f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-common-4.1.138.Final.jar
+a79fb814e029db17da82baea25a0340172af2c59f107fd20b394c1fa28680f21  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-handler-4.1.138.Final.jar
+fd26635e06af15b2dd3f7502a195dc19fcd451264948a8707fb26f60e4d510b9  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-handler-proxy-4.1.138.Final.jar
+50c338a0e5c9997513e738f0fcb47d579a9e8852d317ba367f5d141e210187c0  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-resolver-4.1.138.Final.jar
+a636815e5bcc9501a7d2c9bdba8b058811ddec5d0c76ec58fc6a165f4facf21c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-resolver-dns-4.1.138.Final.jar
+7a4437abf98b0cec053af4443fe321177d2cfccfec7bcad4e7d8b75571bbec4d  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-tcnative-classes-2.0.84.Final.jar
+6c064c1cae4d410b920abfc07959a49db1b4778a9547614373e97d31cab0cad6  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-transport-4.1.138.Final.jar
+8d1ada8f185d6f6da4cd79f9daeef39f1db49908cfec8bc2a1fb602458aa2341  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.netty.netty-transport-native-unix-common-4.1.138.Final.jar
+06ef89b8a2da007286342f1855452ae50655d78263e28cc9448d414c4187be54  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.arc.arc-3.40.1.jar
+6e67b61817de34142d2fd97359d9e6b7619cfb8ab2c733f835cb9f85983fb00c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-arc-3.40.1.jar
+3f75b567f56ed89f80451176656a78fdcced7571330f7e7c7527f1f3ea987d97  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-core-3.40.1.jar
+7ea00fcfeaf26c5bd6c925c1ab5247b06ff4afc8528812cdca741fc34bba641d  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-credentials-3.40.1.jar
+a6034133b21de4e3aee4bc9e250f8416abfbdc0c86e6e0737f766415c3866169  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-fs-util-1.4.2.jar
+95b89d56a93027a9c3d525edb067ae694d71f0dd5d8c99611316f9c63744a35e  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-jackson-3.40.1.jar
+01088afd376475fdf91d5abab712519bd23f167aded8713fdebf0b1e3e8344f1  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-jsonp-3.40.1.jar
+de72ca16c20ef9af8017bc7d671765dd8e6477534c76ba96b5dfba26475db4bd  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-kotlin-3.40.1.jar
+eb0c14df189da848ce262920c3315a7ad1d7669f18fb12673e3b9099e69d41b7  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-mutiny-3.40.1.jar
+c76df5a03a93c634d4a271ca6d8e8a8b352e34bd710782e6d56218c137e966c5  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-netty-3.40.1.jar
+d5c5a4ab594ee9f80a176bfe9150fc16aa437a44ccaf82175a21668e68afb4e7  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-rest-3.40.1.jar
+afda6cd5fe96873e2354e4a43266b52c44c06658dd62f472829ba93a1faafd88  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-rest-common-3.40.1.jar
+39fe05c33c2be3008f0796e86bdd4f063796e549c4fd530f331e6c61f802080c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-rest-jackson-3.40.1.jar
+98373d60e3e93096a51562c9ab85b69cb3068a290b411161b3b0c8dfe329f725  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-rest-jackson-common-3.40.1.jar
+40ff486b1a8bdb550fcf344d584c04dad9eea69e68e341446c811ae20b82e985  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-rest-kotlin-3.40.1.jar
+f155068d9d4fe20ad1e0f2bfc23f1139160a1e53fcc73644d3c0f63faa408668  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-security-runtime-spi-3.40.1.jar
+fb47ec4762179cdda80181e53e9574a914325bddee30158cf776e6bc839d8275  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-smallrye-context-propagation-3.40.1.jar
+d80244e55b66057b9c3e400dfe39dbc57fde7192ea75a5547bc110cd7096a67f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-tls-registry-3.40.1.jar
+811dd9659d23724fc15109fbcc5754bcbe436705441ce43f771e047b550ab5e1  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-tls-registry-spi-3.40.1.jar
+8e7399a09a8a235e495ffd2b0c66b9d35d0ce8a280d6827f6a6876d77c0d61bc  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-vertx-3.40.1.jar
+49260443ad38c239e6b42e0ff4072b9b77142fdb4a7e2d4cda2aa43b12ca1aa7  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-vertx-http-3.40.1.jar
+92b83d17824bf540d8f1339e5ab949985257cbb4417a956c95efff7daa984810  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-vertx-kotlin-3.40.1.jar
+eac8ea03397d8849f474c65af22b8348313a77dfa91621c8b54b80cce648321c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.quarkus-virtual-threads-3.40.1.jar
+be95ef455fcb19233b375f6b823ccee8188dd768d1f31f97e4185390d5b35553  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-3.40.1.jar
+a81e52d3f430a8af4f1ec0ffc5f3c1e30d81756561b480bd63aee390e039be2a  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-common-3.40.1.jar
+8e5f04e41ac3fea678a13feed770b4253a71c8b94687761d3e1146008beabaa0  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-common-types-3.40.1.jar
+e334cc0950bb83a6bea6cd90d8158512041fce8d53037dab8e250471fb9bd54f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-jackson-3.40.1.jar
+2825004d47480c9452bb6e0510486020512014e278146aff4a5992e9fb7cda16  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.resteasy.reactive.resteasy-reactive-vertx-3.40.1.jar
+9176a0e5b88d7b29ab28b5137d5702d44a248da3d7e7fa80f1b89d4ec64f929a  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.security.quarkus-security-2.3.2.jar
+0f800dc92ea4ade6a3dc0dba32b2f825a1da38b5c8dffaac3a7e1d1be1771381  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.quarkus.vertx.utils.quarkus-vertx-utils-3.40.1.jar
+2444ab1430505d1a8a9f6c9797fba60e14948bfe27cf8c98ae012c37bf768c15  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.certs.smallrye-private-key-pem-parser-0.9.4.jar
+a29ef5d8ed9e306ed683a4d680bb1c03f89c41196aa0a41c95eb0dda8e81e346  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.common.smallrye-common-annotation-2.19.0.jar
+868c3fcb738281b2b360ba706b9074b674ee6c697d971a52bd77f4099ba2fd5c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.common.smallrye-common-classloader-2.19.0.jar
+973738a728d8efac3c0ab75d3a54236ce5f9c435b4b4a2f9bc0f16a0c46001ff  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.common.smallrye-common-search-2.19.0.jar
+2c3d3326bab62064e7120ad6c1e4f99e267176b2efd74a44b3ab2cd5aa5c69d6  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.common.smallrye-common-vertx-context-2.19.0.jar
+d93d4fec79674f67391c44fc995c61209ef72e816b0fc40ffd631ab883310c14  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.config.smallrye-config-3.17.2.jar
+ebbb7b03044580440f63788cb743664749e7169b8eb382b3cfc44a4fb328bb85  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.config.smallrye-config-common-3.17.2.jar
+092050099d3144bcc64b33165b3c2b7d25a519808d3c7618a6e1c1debcc0d832  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.config.smallrye-config-core-3.17.2.jar
+468035abda56638307e8dad7d4be3bd818b05725f0559140b32e087be017b83f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.mutiny-3.3.0.jar
+d356e1e0b8c2b3037d01779e0bba5016651afa7bac32c100777fe65494211374  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.mutiny-kotlin-3.3.0.jar
+e7b20ad3a01d0b0944dfbf86538392621ef38e87e6c69722902fc5bc9af674ff  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.mutiny-smallrye-context-propagation-3.3.0.jar
+623dc619ec3866c6ce6365ed46cd948fe1b6cae93d64006249294ef8a941d943  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.mutiny-zero-flow-adapters-1.2.1.jar
+d4defd33cf294ac695d7817b764f52626d7690d0bee944ba4b84ffa02278faab  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-auth-common-3.23.1.jar
+8b14169047ddbb2e5da91de00b37d62ff8b2ca49ae4553a0742660c50fe91065  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-bridge-common-3.23.1.jar
+dc5578295b8e5dc10f9fd8028ecb3ac3ed8b2ccc54b8b80172181188f577372e  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-core-3.23.1.jar
+ab996413864654f8977a4459154d36b093dabd661e8d17c3854d2ca20616bf8c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-runtime-3.23.1.jar
+95b798fd11f3d199593388c85aea6f9ffbae178a2d48444d9d79b4ca3714fa57  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-uri-template-3.23.1.jar
+106413b6575604c1eff68a1ad6bbe890d635a7c55ee198858ce4bd8012189da0  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-web-3.23.1.jar
+05e78bf89604a2653ede8cdad2f540aa63e5e97d1304188a86769db9a57e7558  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.reactive.smallrye-mutiny-vertx-web-common-3.23.1.jar
+bc7d83a626d92d223c9f479c24c80e09df4c801781134ace9d826803b8f8eaff  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.smallrye-context-propagation-2.3.0.jar
+da0bc273588cefb478e98c4e137f65cc394a54253e35684d5d917060fdc4147c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.smallrye-context-propagation-api-2.3.0.jar
+0fb685500b833b819c934147f0d2f0ab00397df196442aa3fa0b1a6d962dedd0  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.smallrye-context-propagation-storage-2.3.0.jar
+49a19f12fbbeb83a109ef3cb983ebdc0c49607fbe7bc01ec96655538e79f7a86  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.smallrye-fault-tolerance-kotlin-6.11.4.jar
+70b53bc8d55093b2b5db4482569544ea5849de149d9df84b0094be7b1e217bc1  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.smallrye.smallrye-fault-tolerance-vertx-6.11.4.jar
+2fc9f280b2193718db2bde020e8ca9107eff2a78d27389b7c4db63f72980c4de  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-auth-common-4.5.34.jar
+b57384bda3c9ebb78cc734ddf0d83bd6b55335ceb259e41d315854f9b737318a  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-bridge-common-4.5.34.jar
+64f815df240092bf7bbdd2dfbc922bce7f1e41375f17a93622567a36e40702ea  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-codegen-4.5.34.jar
+750ec27491f9eea3df24e3a85670a0b1998827bb729ec95b2d9d3dbbfdf8792c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-core-4.5.34.jar
+d303e9f044347bc350241dfb2150f05d3b93d6c7f56c74757861ca582e8f62df  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-uri-template-4.5.34.jar
+14ae3cadbac1d0794cbf5e66fdb3cc61611235ac05f57bfdb65d9c21a6b97add  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-web-4.5.34.jar
+378371867305e73cddcea7027217d9a9fddbd18e57de74021824cb2bf1962019  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/io.vertx.vertx-web-common-4.5.34.jar
+c9db52100ce6c8aac95cc39075f95720d2e561b11f8051b81c121ad4effd7004  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.activation.jakarta.activation-api-2.1.4.jar
+b01f55552284cfb149411e64eabca75e942d26d2e1786b32914250e4330afaa2  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.annotation.jakarta.annotation-api-3.0.0.jar
+7e84b5bed49de32b79cc5e85d90b6f5adb1a953ac67283adbb41c1e297f9c605  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.el.jakarta.el-api-6.0.1.jar
+c42c808f17925129a0800f618febe050d966e181a4c7384c8a5e7a0283d68699  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.enterprise.jakarta.enterprise.cdi-api-4.1.0.jar
+bb56f571f60d2862b2387d5468fe8f5540f8094727283ed991f89082708095ee  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.enterprise.jakarta.enterprise.lang-model-4.1.0.jar
+f7dc98062fccf14126abb751b64fab12c312566e8cbdc8483598bffcea93af7c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.inject.jakarta.inject-api-2.0.1.jar
+d240d72b4dd38a2e431c804079810010cb97903678fa5f987fb7434878b04398  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.interceptor.jakarta.interceptor-api-2.2.0.jar
+bc934142805ea1d794f1440563965a3861a2a9fb7414ecd3fe44f26500734414  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.json.jakarta.json-api-2.1.3.jar
+50c0a7c760c13ae6c042acf182b28f0047413db95b4636fb8879bcffab5ba875  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.transaction.jakarta.transaction-api-2.0.1.jar
+6b3b3628b8b4aedda0d24c3354335e985497d8ef3c510b8f3028e920d5b8663d  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.ws.rs.jakarta.ws.rs-api-3.1.0.jar
+5e489b6c874c4119e003ff1403db523ee3a8959ec499f3de29e77245efccf216  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/jakarta.xml.bind.jakarta.xml.bind-api-4.0.5.jar
+0d4eaa7e17730e153b1e0613104a989af7d7a0d4ba4d19c84c71862bff993773  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.eclipse.microprofile.config.microprofile-config-api-3.1.1.jar
+69ccc04487e87779d4970aa50c673cc34a9df080c1c0e8d8eab2e8b46f825cf4  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.eclipse.microprofile.context-propagation.microprofile-context-propagation-api-1.3.jar
+03dc4dc834a928730d52a50952de0f30c35e0daf048889132be19ee1e5053a6c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.eclipse.parsson.parsson-1.1.9.jar
+ce4088809c7512228cb34b54686223dec45532b97366a36830f82926b58a4c6c  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jboss.logging.commons-logging-jboss-logging-2.0.0.Final.jar
+ba469a975e9d1e79f34a8baa1a0afa8b01bbd8cf080537c0e0899476d31db84b  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jboss.slf4j.slf4j-jboss-logmanager-2.0.2.Final.jar
+ac0fd044686122014143267d3688245852ca07c6c4474320c9172062a5af6634  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jboss.threads.jboss-threads-3.9.2.jar
+d65e5f38bcd0984e26f87187687f1f70dd52740c4d5e046f8d104e01ab5db95f  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jctools.jctools-core-4.0.5.jar
+ebc7aec252ed0c7d2d04c039d7f00e69f7b86b1f493c741d67b3ef31b986b054  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.annotations-26.1.0.jar
+25a1aef7454d46548ecaaf51021b0e52e38141a62ed75af124da109b7324c4e5  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlin.kotlin-reflect-2.4.10.jar
+bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlin.kotlin-stdlib-2.4.21.jar
+e7a8fe7cacf3b9c838f6b3fcb26dfdd41f844551a3ba67fd3f959a0d9d5c0bef  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlin.kotlin-stdlib-jdk7-2.4.10.jar
+08346b7f4cfba40c1139161c9f30b68199f425cecf3b63de67838063f34a05c7  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlin.kotlin-stdlib-jdk8-2.4.10.jar
+04e7737fb15cf5f3aed83a91141a5303a0b2acd886f5bbc35cdbe791ad63dfee  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlinx.kotlinx-coroutines-core-1.11.0.jar
+d1d75aa01dffbb4d1c520e67e4c4e7f5f6174718e7cb4632412503f2f0e604fa  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlinx.kotlinx-coroutines-core-jvm-1.11.0.jar
+1238f179da55360725ec49b887225317f31ae89bd29b652cbe139ff59f5d45cb  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jetbrains.kotlinx.kotlinx-coroutines-jdk8-1.11.0.jar
+1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.jspecify.jspecify-1.0.0.jar
+f75ca597789b3dac58f61857b9ac2e1034a68fa672db35055a8fb4509e325f28  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.reactivestreams.reactive-streams-1.0.4.jar
+44508fd1576500688c790b190acdd16fec4f8c79a3e0b900afd70503cf055f55  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.slf4j.slf4j-api-2.0.18.jar
+fa4a710db7ae3e598a5f41639eb54e9f7b09de5fd0f58f56bd6070f21d956374  competitors/kotlin-jvm/quarkus/target/quarkus-app/lib/main/org.wildfly.common.wildfly-common-2.0.1.jar
+44672b930a5160206466194b59a98cd9f6f9967c64515fb3abc06cbc908786f4  competitors/kotlin-jvm/quarkus/target/quarkus-app/quarkus-run.jar
+93c30f5ec0cb5891df1a61d365751b9e5682770765ca232a5b3cb27887c975df  competitors/kotlin-jvm/quarkus/target/quarkus-app/quarkus/generated-bytecode.jar
+b971405901fd20c5ddf2028f45b584211da1c904c6a82ed43242b2f2d560e4fe  competitors/kotlin-jvm/quarkus/target/quarkus-app/quarkus/transformed-bytecode.jar
+1b4632a10ad9410653656c946dd11ca4116c42349d38b0c5733874eee47b0ba5  competitors/kotlin-jvm/vertx/target/app.jar
+ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478  competitors/kotlin-jvm/vertx/target/lib/annotations-13.0.jar
+53ca085f4a150f703f49e1aabd935bd03b43e1ea3d55d135438292af22cef56b  competitors/kotlin-jvm/vertx/target/lib/jackson-annotations-2.21.jar
+604ef7765013daf5cde192e40bc4c8412c4ca93f4aaf7bf8e9a62fad1e1026bb  competitors/kotlin-jvm/vertx/target/lib/jackson-core-2.21.8.jar
+762caa009970e8c35527fcc2cfbde50afed0d6a195ee4a7fac22d80fea72c471  competitors/kotlin-jvm/vertx/target/lib/jackson-core-3.1.8.jar
+abd1edd2736c764da03fe6cb7a9de70d48dd0a198aed131604c564bff62f9cc1  competitors/kotlin-jvm/vertx/target/lib/jackson-databind-2.23.0.jar
+2e7583c96f3eaf11591a727c75278b25a0f1227d29a7c5e8306f252f441bfb58  competitors/kotlin-jvm/vertx/target/lib/jackson-databind-3.1.8.jar
+bd8250210584cb659847dce9cda660f8e9906e5def7fbebcea93dc6dcb6a88a3  competitors/kotlin-jvm/vertx/target/lib/kotlin-stdlib-2.4.21.jar
+794136fc6be78e44a286c2b1420a182e135c6d06eb8c397030c1551ee50acccd  competitors/kotlin-jvm/vertx/target/lib/netty-buffer-4.2.20.Final.jar
+5a66da26b86d7eecedd9e0d8fe0e22ef1733bbf873e476cb9b860afbed22210c  competitors/kotlin-jvm/vertx/target/lib/netty-codec-base-4.2.20.Final.jar
+eb558b7906be9f37cfff0ef71acb0865aa3b7cf2e52ba0a646e6e79d487d1711  competitors/kotlin-jvm/vertx/target/lib/netty-codec-classes-quic-4.2.20.Final.jar
+7ebae4ac80c01e2d279d0e50d377bcdaf0cf8f2f65797e0578afc810a66ab57d  competitors/kotlin-jvm/vertx/target/lib/netty-codec-compression-4.2.20.Final.jar
+8296127e74eb871eea6e17520ad5d12aec37700252a61165057b28df6e5f9499  competitors/kotlin-jvm/vertx/target/lib/netty-codec-dns-4.2.20.Final.jar
+d08b0d473c48c61ebb2bc4d145111fa1777832aee4d2be1024891e904e36eaf5  competitors/kotlin-jvm/vertx/target/lib/netty-codec-http-4.2.20.Final.jar
+168790c8d10d2e7cc53fa08906162e3d6c23b4528e7d062eea328d4a281484c6  competitors/kotlin-jvm/vertx/target/lib/netty-codec-http2-4.2.20.Final.jar
+9d3698b9787ddb46226c3e3e4d1d51415503b18eb3be9da19b4918b4cb6e63bf  competitors/kotlin-jvm/vertx/target/lib/netty-codec-http3-4.2.20.Final.jar
+8510f0ceee40a4254760b2927431e2403a6588c4068022e2440356acfc5e24c1  competitors/kotlin-jvm/vertx/target/lib/netty-codec-socks-4.2.20.Final.jar
+5807fef7eb619bc0a5d1c0e6c83199ea9bca8503203a3eb73cfdccec2d215743  competitors/kotlin-jvm/vertx/target/lib/netty-common-4.2.20.Final.jar
+211dbbba074298046b37f841ad9ca89ed91968f6b9e97400c99ab4e6177b1f96  competitors/kotlin-jvm/vertx/target/lib/netty-handler-4.2.20.Final.jar
+9fd508051bb39829117e4dbfa2d0b485aafb88d2d627ae6ec1fed5a3faa3842a  competitors/kotlin-jvm/vertx/target/lib/netty-handler-proxy-4.2.20.Final.jar
+cb7a6027e4f366fb28dcea7e1f7088ca16bd23c2cc38e8ddfdac77a77bd144dc  competitors/kotlin-jvm/vertx/target/lib/netty-resolver-4.2.20.Final.jar
+9a1dc5abc7f146bf0ff0938dceb384f7c972dc052cd9cd2f367cb30a0718fa71  competitors/kotlin-jvm/vertx/target/lib/netty-resolver-dns-4.2.20.Final.jar
+3c1bcba8d80d7002277effe67509979b3a7bd22341bab276b946837f0b76f831  competitors/kotlin-jvm/vertx/target/lib/netty-tcnative-classes-2.0.85.Final.jar
+ff4f1f8158c714c1b485ef10cf2456fbd3c1b2930256b70287aeb7dc3ad94783  competitors/kotlin-jvm/vertx/target/lib/netty-transport-4.2.20.Final.jar
+6f600d5cbd3ce39e50680de66b00d7e6a9652dac7d08a5b022101d717cb7fb52  competitors/kotlin-jvm/vertx/target/lib/netty-transport-native-unix-common-4.2.20.Final.jar
+2a938038d4893f27d6d5485df7f407ba03c07fbc0f5e5b61e41b62a1172268a1  competitors/kotlin-jvm/vertx/target/lib/vertx-auth-common-5.2.3.jar
+eb419813e2944f19aff35d22ef019911d6710ca3d9df18738fa75d4295f27f61  competitors/kotlin-jvm/vertx/target/lib/vertx-bridge-common-5.2.3.jar
+08039d0e9c197fa3c1bfce3f86be7824602a2e1c22d0f482d2ac63de1a3c59f6  competitors/kotlin-jvm/vertx/target/lib/vertx-core-5.2.3.jar
+6e9a97fcebf674770f65051a1fe681863c54a86da48d3ca9722b5773eba345af  competitors/kotlin-jvm/vertx/target/lib/vertx-core-logging-5.2.3.jar
+9ba99a984f2b83465cfd9eab28abda7c6389dd01bea22066123d1b6dbe8eab8f  competitors/kotlin-jvm/vertx/target/lib/vertx-eventbus-bridge-common-5.2.3.jar
+a73888a49795dd75fc48d36e809d9674b4ea8e15855689f1972df2952e9bdc9e  competitors/kotlin-jvm/vertx/target/lib/vertx-web-5.2.3.jar
+3d38746aaa97f4418ddd63c9351a005a9511f60cccd5319f46c926d4b5ebf9d6  competitors/kotlin-jvm/vertx/target/lib/vertx-web-common-5.2.3.jar
+variants=ktor-jvm ktor-native rust-axum kotlin-reactor go-http hono-node elysia-bun fastapi spring-boot aspnet-core quarkus vertx micronaut http4k javalin spring-webflux flask django
+benchmark_suite=expanded
+benchmark_endpoint=/health
+runs=3 warmup_s=10 target_duration_s=5 threads=2 connections=16 timeout_s=2
+max_warmup_windows=1
+port_strategy=distinct TCP port per trial
+wrk debian/4.1.0-4build2 [epoll] Copyright (C) 2012 Will Glozer
+load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers
+benchmark_source=github-hosted-actions
+ci_run_id=45275824942
+ci_run_attempt=1
+benchmark_outcome=success
+runner_image=ubuntu24-arm64
+runner_image_version=20261116.188.1
+runner_label=ubuntu-24.04-arm
+native_build_arch=x86_64
