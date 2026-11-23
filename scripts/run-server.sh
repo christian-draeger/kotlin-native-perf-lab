@@ -18,9 +18,17 @@ case "$variant" in
     [[ -x "$bin" ]] || { echo 'Missing Axum release binary. Run scripts/build-all.sh' >&2; exit 1; }
     exec "$bin"
     ;;
-  nativeserve|kotlin-reactor)
+  nativeserve-reference)
+    exec env NATIVESERVE_WORKERS=1 "${NATIVESERVE_REFERENCE_BINARY:?Missing NativeServe reference binary}"
+    ;;
+  nativeserve|kotlin-reactor|nativeserve-workers-2)
     bin="$ROOT/components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe"
     [[ -x "$bin" ]] || { echo 'Missing NativeServe release binary. Run scripts/build-all.sh' >&2; exit 1; }
+    if [[ "$variant" == nativeserve-workers-2 ]]; then
+      export NATIVESERVE_WORKERS=2
+    elif [[ "${BENCHMARK_SUITE:-}" == workers ]]; then
+      export NATIVESERVE_WORKERS=1
+    fi
     exec "$bin"
     ;;
   go-http)
