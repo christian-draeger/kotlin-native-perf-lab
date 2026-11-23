@@ -2,7 +2,9 @@
 
 ## Question
 
-How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and the **Kotlin/Native reactor** compare on equivalent HTTP handlers?
+How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and **NativeServe** compare on equivalent HTTP handlers?
+
+The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, and Spring Boot MVC/Tomcat. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
 
 ## Measurements
 
@@ -29,7 +31,7 @@ How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and the **K
 
 Use two Linux machines on a private network and synchronize their clocks. Install `wrk` on the load machine and configure an OpenSSH host alias with a verified host key and noninteractive authentication. The load host must reach the server's chosen interface and TCP range. Use a distinct physical load machine for controlled results.
 
-Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. For other run counts allow 12 ports per repetition.
+Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. The core suite uses 12 ports per repetition, the expanded suite 27, and the additional competitors alone 15.
 
 ```bash
 ./scripts/build-all.sh

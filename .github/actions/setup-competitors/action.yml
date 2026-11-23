@@ -1,0 +1,22 @@
+name: Set up benchmark competitors
+description: Install the pinned toolchains for Go, Node.js, Bun and FastAPI
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+      with:
+        go-version-file: competitors/go-http/go.mod
+        cache: false
+    - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: '24.22.3'
+        cache: npm
+        cache-dependency-path: competitors/hono-node/package-lock.json
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version: '1.4.5'
+    - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      with:
+        python-version: '3.14.7'
+    - shell: bash
+      run: python -m pip install 'uv==0.13.9'
