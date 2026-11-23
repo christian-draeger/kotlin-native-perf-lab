@@ -46,8 +46,16 @@ The harness opens an SSH control connection, compares machine IDs, estimates clo
 - The CPU numerator is the change in cumulative process user and system time from `/proc/<pid>/stat` around the measured load. Its boundary includes starting and draining the load generator, and its accounting excludes the load generator and any CPU activity that Linux charges outside the server process.
 - The denominator for a valid run is the wrk completed response count. wrk flags HTTP statuses 400 and above and socket errors. The separate smoke checks require HTTP 200, verify the payloads and headers, and exercise keep-alive. wrk accepts 3xx and does not inspect payloads under load.
 - `VmHWM` includes process startup and warm-up. The CSV also records resident memory at the end of each measurement.
-- Check the warm-up and measurement logs before interpreting the table. A trial with zero completed responses, socket errors, or wrk HTTP errors is retained and left out of the aggregate. The fixed warm-up provides the same preconditioning workload across variants. Confirm JVM steady state separately.
+- Check the warm-up and measurement logs before interpreting the table. A trial with zero completed responses, socket errors, or wrk HTTP errors is retained and left out of the aggregate. The fixed warm-up provides the same preconditioning workload across variants. Confirm steady state with the pilot below before using controlled results.
 - Profile separately from throughput collection. Use JFR for JVM execution and allocation samples and Linux perf for Native and Rust on native CPU hardware. Report the endpoint and where samples were collected.
+
+## Pilot warm-up and concurrency
+
+Set `WARMUP_WINDOWS` to at least three to test steady state. Each wrk window uses the planned workload for `WARMUP` seconds. Three consecutive error-free windows must have at most 10% spread from minimum to maximum requests per second. Ktor/JVM also needs an unchanged HotSpot compiled-method count over those windows. The first qualifying window ends the warm-up. The cap is `WARMUP × WARMUP_WINDOWS` seconds of target load. The harness keeps every raw window, compiler snapshot and stability decision. It measures and flags trials that do not stabilize before the cap, and the summary omits those trials.
+
+On the target hardware, use this pilot to choose a fixed preconditioning budget that covers all four variants at each concurrency. Keep the thresholds and window length fixed during the pilot and report when a hardware or workload combination needs a longer cap. The hosted CI series use a short fixed warm-up and remain exploratory.
+
+For latency, use one thread and one connection. For throughput, run separate suites at 16, 64 and 256 connections with a fixed thread count that divides each count. Apply the same warm-up rule and repetition count to all four servers at each concurrency.
 
 ## Record the investigation
 

@@ -26,6 +26,7 @@ def main():
         parser.add_argument("--" + key, type=int, required=True)
     for key in ("cpu-start", "cpu-end"):
         parser.add_argument("--" + key, type=float, required=True)
+    parser.add_argument("--warmup-stability", choices=("unchecked", "stable", "unstable"), default="unchecked")
     args = parser.parse_args()
 
     stats = read_stats(args.log)
@@ -35,7 +36,12 @@ def main():
     cpu = args.cpu_end - args.cpu_start
     if duration <= 0 or cpu < 0:
         raise ValueError(f"Invalid duration or CPU counters in {args.log}")
-    valid = requests > 0 and int(warmup["requests"]) > 0 and error_count(stats) == error_count(warmup) == 0
+    valid = (
+        requests > 0
+        and int(warmup["requests"]) > 0
+        and error_count(stats) == error_count(warmup) == 0
+        and args.warmup_stability != "unstable"
+    )
     row = {
         "variant": args.variant,
         "endpoint": args.endpoint,
@@ -63,6 +69,7 @@ def main():
         "target_duration_s": args.duration,
         "duration_s": duration,
         "warmup_s": args.warmup,
+        "warmup_stability": args.warmup_stability,
         "git_sha": args.git_sha,
     }
     new_file = not args.csv.exists()
