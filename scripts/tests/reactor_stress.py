@@ -2,7 +2,7 @@
 """Exercise the reactor's resource bounds with an isolated release fixture."""
 
 from contextlib import ExitStack
-from http.client import HTTPConnection
+from http.client import HTTPConnection, IncompleteRead
 from pathlib import Path
 import socket
 import subprocess
@@ -10,6 +10,7 @@ import sys
 import time
 
 BODY_BYTES = 8 * 1024 * 1024
+STREAM_BYTES = BODY_BYTES - 3
 MIB = 1024 * 1024
 CONNECTIONS = 8
 
@@ -35,13 +36,13 @@ def request(route):
     return f"GET {route} HTTP/1.1\r\nHost: localhost\r\n\r\n".encode("ascii")
 
 
-def pending_client(port):
+def pending_client(port, route="/large", following="/large"):
     conn = socket.socket()
     try:
         conn.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
         conn.settimeout(5)
         conn.connect(("127.0.0.1", port))
-        conn.sendall(request("/large") + request("/large"))
+        conn.sendall(request(route) + request(following))
         assert conn.recv(1, socket.MSG_PEEK) == b"H"
         return conn
     except BaseException:
@@ -120,6 +121,51 @@ def test_limits(port, pid):
     print(f"Reactor resource checks passed (fds={open_fds()}, live heap {initial_heap} -> {final_heap} bytes)")
 
 
+def test_streams(port, server):
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(request("/stream") + request("/health"))
+        with conn.makefile("rb") as response:
+            assert response.readline().startswith(b"HTTP/1.1 200 ")
+            headers = []
+            while (line := response.readline()) != b"\r\n":
+                assert line
+                headers.append(line)
+            assert f"Content-Length: {STREAM_BYTES}\r\n".encode("ascii") in headers
+            for start in range(0, STREAM_BYTES, 65536):
+                length = min(STREAM_BYTES - start, 65536)
+                assert response.read(length) == b"s" * length
+            assert response.readline().startswith(b"HTTP/1.1 200 ")
+            while (line := response.readline()) != b"\r\n":
+                assert line
+            assert response.read(2) == b"ok"
+
+    try:
+        fetch(port, "/truncated-stream")
+    except IncompleteRead as error:
+        assert error.partial == b"s" and error.expected == STREAM_BYTES - 1
+    else:
+        raise AssertionError("Premature end of stream did not close the connection")
+
+    def active_streams(count):
+        return fetch(port, "/open-streams") == (200, str(count).encode("ascii"))
+
+    assert active_streams(0)
+    with pending_client(port, "/stream", "/health"):
+        assert active_streams(1)
+        assert fetch(port, "/health") == (200, b"ok")
+    wait_until(lambda: active_streams(0), "Disconnected stream leaked its source")
+
+    with pending_client(port, "/stream", "/health"):
+        assert active_streams(1)
+        wait_until(lambda: active_streams(0), "Idle stream leaked its source")
+
+    with pending_client(port, "/stream", "/health"):
+        assert active_streams(1)
+        assert fetch(port, "/stop") == (200, b"ok")
+        assert server.wait(timeout=5) == 0, "Shutdown did not release the stalled stream"
+    print("Response streaming checks passed (pipeline, truncation, disconnect, idle, drain)")
+
+
 def main(binary):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -136,8 +182,10 @@ def main(binary):
 
             wait_until(ready, "Fixture never became ready")
             test_limits(port, server.pid)
+            test_streams(port, server)
         finally:
-            server.terminate()
+            if server.poll() is None:
+                server.terminate()
             server.wait(timeout=5)
 
 
