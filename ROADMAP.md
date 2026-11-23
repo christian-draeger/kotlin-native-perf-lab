@@ -39,8 +39,27 @@ The first public preview should provide a runnable starter, one documented build
 | [3 · Controlled measurement and profiles](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/4) | Run a native Linux reference host with a separate load generator, validate steady state and collect symbolized profiles. | Matched release workloads, raw trials on each tested architecture, measured dispersion and at least one ranked bottleneck. |
 | [4 · Measured optimization](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/5) | Evaluate scheduling, buffers, generated route matching and serialization one at a time when the profiles warrant them. | Before and after trials for all four variants and a recorded decision for each change, including regressions. |
 | [5 · Supported preview release](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/6) | Harden the supported HTTP surface, package both Linux architectures and publish onboarding with the measured scorecard. | Verified binaries and consumer example, checksums, compatibility notes, resource bounds and a public result with its conditions. |
+| [6 · Ktor Native engine and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/7) | Extend the transport for streaming and cancellation, then provide an engine selected through normal Ktor configuration. | The same Ktor Native application passes compatibility checks and a controlled CIO versus NativeServe comparison on the documented platforms. |
+| [7 · JVM transport and Ktor comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/8) | Reuse the shared protocol and routing logic with a JVM transport and a packaged Ktor JVM engine. | A clean-checkout consumer and a measured comparison of the same Ktor JVM application on CIO, Netty and NativeServe. |
+| [8 · Spring WebFlux integration and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/9) | Implement the reactive HTTP adapter and Boot starter, compare engines, then assess Servlet compatibility. | Backpressure and lifecycle tests, a one-dependency consumer, a controlled Reactor Netty versus NativeServe comparison and a documented Spring MVC feasibility decision. |
 
 The critical path starts with [baseline integration](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/2), [quick CI feedback](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/3), [resource ownership](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/4), then [parsing](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/5), [transport](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/6), [parity](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/7) and [four-way measurement](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/8). The controlled host work can proceed alongside API, docs and packaging preparation.
+
+## Framework integration sequence
+
+After the [supported preview](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/24), the integration work proceeds through three measured stages.
+
+| Stage | Implementation and validation issues |
+| --- | --- |
+| Ktor Native | [Bounded streaming and cancellation](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/37), [engine adapter](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/38), then [CIO comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/39). |
+| JVM | [Shared-API transport](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/40), [Ktor engine and consumer package](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/41), then [CIO and Netty comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/42). |
+| Spring WebFlux | [Reactive HTTP adapter](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/43), [Boot starter](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/44), then [Reactor Netty comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/45). |
+
+Each engine comparison uses the same application module, routes, plugins or filters, codecs and response semantics across its variants. Add equivalent request-body, streaming and asynchronous-handler workloads in dedicated integration fixtures. Record the supported feature surface and verify cancellation, resource limits and lifecycle before collecting load measurements.
+
+Give each integration suite its own recorded identity, including framework, engine, runtime, architecture and exact launch configuration, and publish its raw evidence and history on Pages. Use dedicated hosts, validated warm-up and at least five valid repetitions per cell for controlled conclusions. Record regressions and choose a measured tolerance for each integration.
+
+After the WebFlux comparison, [assess Spring MVC and Servlet compatibility](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/46). The assessment covers Servlet contracts, maintenance cost, operational behavior and the evidence for investing in a full implementation. A decision to proceed creates a dedicated delivery milestone with a matched Tomcat or Jetty comparison.
 
 ## Validation and performance decisions
 
