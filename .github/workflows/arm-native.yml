@@ -2,6 +2,10 @@ name: Build Kotlin binaries for Linux ARM64
 
 on:
   workflow_call:
+    inputs:
+      stress_fixture:
+        type: boolean
+        default: false
     outputs:
       artifact_id:
         description: Kotlin JVM distribution and Linux ARM64 release executables
@@ -30,6 +34,7 @@ jobs:
       - name: Build and verify the ARM64 release executables
         env:
           LC_ALL: C
+          INCLUDE_STRESS: ${{ inputs.stress_fixture }}
         run: |
           test "$(uname -m)" = x86_64
           gradle -p ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
@@ -40,6 +45,12 @@ jobs:
             cp "$executable" "$RUNNER_TEMP/arm-native/"
           done
           cp -R ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
+          if [[ "$INCLUDE_STRESS" == true ]]; then
+            gradle -p kotlin-reactor -Pbenchmark.targetArch=aarch64 linkStressReleaseExecutableNative
+            fixture=kotlin-reactor/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
+            readelf -h "$fixture" | grep -E 'Machine:[[:space:]]+AArch64$'
+            cp "$fixture" "$RUNNER_TEMP/arm-native/"
+          fi
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         id: upload
         with:

@@ -55,3 +55,15 @@ jobs:
           ./scripts/build-all.sh
       - name: Check HTTP parity
         run: ./scripts/smoke-all.sh
+      - name: Exercise reactor resource bounds
+        env:
+          EXPECTED_ARCH: ${{ inputs.arch }}
+        run: |
+          if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
+            fixture="$RUNNER_TEMP/arm-native/reactor-stress-fixture.kexe"
+            chmod +x "$fixture"
+          else
+            gradle -p kotlin-reactor linkStressReleaseExecutableNative
+            fixture=kotlin-reactor/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
+          fi
+          python3 scripts/tests/reactor_stress.py "$fixture"
