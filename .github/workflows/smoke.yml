@@ -41,7 +41,7 @@ jobs:
   arm_native:
     uses: ./.github/workflows/arm-native.yml
     with:
-      stress_fixture: true
+      smoke_fixtures: true
 
   arm_smoke:
     needs: arm_native

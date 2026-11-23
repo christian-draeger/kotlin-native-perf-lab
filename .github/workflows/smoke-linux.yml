@@ -67,3 +67,22 @@ jobs:
             fixture=components/nativeserve/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
           fi
           python3 scripts/tests/reactor_stress.py "$fixture"
+      - name: Verify the separate NativeServe consumer
+        env:
+          EXPECTED_ARCH: ${{ inputs.arch }}
+        run: |
+          if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
+            binary="$RUNNER_TEMP/arm-native/hello.kexe"
+            chmod +x "$binary"
+          else
+            example=components/nativeserve/examples/hello
+            ./components/nativeserve/gradlew -p "$example" linkReleaseExecutableNative
+            binary="$example/build/bin/native/releaseExecutable/hello.kexe"
+          fi
+          "$binary" 18080 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          base=http://127.0.0.1:18080
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health")" = ok
+          test "$(curl -fsS "$base/")" = 'Hello from NativeServe'
+          kill -0 "$pid"
