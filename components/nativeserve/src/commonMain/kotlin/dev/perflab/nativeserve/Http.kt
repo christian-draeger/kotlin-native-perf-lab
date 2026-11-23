@@ -57,10 +57,10 @@ internal fun Response.encode(version: String, keepAlive: Boolean): ByteArray {
         else -> ""
     }
     val head = buildString {
-        append("$version $status $reason\r\n")
-        contentType?.let { append("Content-Type: $it\r\n") }
+        append(version).append(' ').append(status).append(' ').append(reason).append("\r\n")
+        contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
         if (status == 405) append("Allow: GET\r\n")
-        if (status != 204 && status != 304) append("Content-Length: ${payload.size}\r\n")
+        if (status != 204 && status != 304) append("Content-Length: ").append(payload.size).append("\r\n")
         append(if (keepAlive) "Connection: keep-alive\r\n" else "Connection: close\r\n")
         append("\r\n")
     }.encodeToByteArray()

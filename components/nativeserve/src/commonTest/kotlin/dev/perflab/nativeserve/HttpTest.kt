@@ -3,6 +3,7 @@ package dev.perflab.nativeserve
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -59,6 +60,42 @@ class HttpTest {
         assertEquals(405, routes.respond(Request("POST", "/users/123", null)).status)
         assertEquals(500, routes.respond(Request("GET", "/bad-json", null)).status)
         assertFailsWith<IllegalArgumentException> { routes.get("/users/{other}") { text("duplicate") } }
+    }
+
+    @Test
+    fun jsonWireBytesStayIdenticalAcrossRepeatedResponses() {
+        val payload = "{\"id\":123,\"name\":\"Grüße\",\"active\":true}"
+        val bodyLength = payload.encodeToByteArray().size
+        repeat(20) {
+            val response = json(User(123, "Grüße", true), status = 201)
+            assertContentEquals(
+                ("HTTP/1.1 201 Created\r\nContent-Type: application/json\r\nContent-Length: $bodyLength\r\n" +
+                    "Connection: keep-alive\r\n\r\n$payload").encodeToByteArray(),
+                response.encode("HTTP/1.1", keepAlive = true),
+            )
+            assertContentEquals(
+                ("HTTP/1.0 201 Created\r\nContent-Type: application/json\r\nContent-Length: $bodyLength\r\n" +
+                    "Connection: close\r\n\r\n$payload").encodeToByteArray(),
+                response.encode("HTTP/1.0", keepAlive = false),
+            )
+        }
+    }
+
+    @Test
+    fun bodylessAndMethodErrorWireBytesStayIdentical() {
+        val payload = User(123, "Grüße", true)
+        for ((status, reason) in listOf(204 to "No Content", 304 to "Not Modified")) {
+            assertContentEquals(
+                ("HTTP/1.1 $status $reason\r\nContent-Type: application/json\r\n" +
+                    "Connection: close\r\n\r\n").encodeToByteArray(),
+                json(payload, status).encode("HTTP/1.1", keepAlive = false),
+            )
+        }
+        assertContentEquals(
+            ("HTTP/1.1 405 Method Not Allowed\r\nAllow: GET\r\nContent-Length: 0\r\n" +
+                "Connection: close\r\n\r\n").encodeToByteArray(),
+            emptyResponse(405).encode("HTTP/1.1", keepAlive = false),
+        )
     }
 
     private fun rejection(value: String): Int {
