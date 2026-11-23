@@ -1,0 +1,2 @@
+variant,endpoint,run,valid,requests,rps,p50_us,p95_us,p99_us,cpu_start_seconds,cpu_end_seconds,cpu_seconds,cpu_seconds_per_million_requests,peak_rss_kib,end_rss_kib,connect_errors,read_errors,write_errors,timeouts,http_errors,warmup_errors,threads,connections,target_duration_s,duration_s,warmup_s,git_sha
+ktor-jvm,/health,1,1,149451,29824.199,409,2917,7562,37.89,56.11,18.22,121.913,313464,302136,0,0,0,0,0,0,2,16,5,5.011065,10,d8376af9477c281c17de9b72650b437dbf832b88

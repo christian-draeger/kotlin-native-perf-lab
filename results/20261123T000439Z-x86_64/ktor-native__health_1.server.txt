@@ -1,0 +1,54 @@
+[INFO] (io.ktor.server.Application): Application started in 0.001 seconds.
+Uncaught Kotlin exception: kotlinx.coroutines.JobCancellationException: LazyStandaloneCoroutine is cancelling; job=LazyStandaloneCoroutine{Cancelling}@14abe3b8
+    at 0   ktor-baselines.kexe                 0x336259           kfun:kotlinx.coroutines.JobSupport#toCancellationException__at__kotlin.Throwable(kotlin.String?){}kotlin.coroutines.cancellation.CancellationException + 313 
+    at 1   ktor-baselines.kexe                 0x335fdf           kfun:kotlinx.coroutines.JobSupport#getCancellationException(){}kotlin.coroutines.cancellation.CancellationException + 319 
+    at 2   ktor-baselines.kexe                 0x33b133           kfun:kotlinx.coroutines.JobSupport.AwaitContinuation.getContinuationCancellationCause#internal + 227 
+    at 3   ktor-baselines.kexe                 0x32bbc0           kfun:kotlinx.coroutines.ChildContinuation.invoke#internal + 224 
+    at 4   ktor-baselines.kexe                 0x3357f5           kfun:kotlinx.coroutines.JobSupport.notifyCancelling#internal + 629 
+    at 5   ktor-baselines.kexe                 0x338153           kfun:kotlinx.coroutines.JobSupport#cancelImpl(kotlin.Any?){}kotlin.Boolean + 2019 
+    at 6   ktor-baselines.kexe                 0x337919           kfun:kotlinx.coroutines.JobSupport#childCancelled(kotlin.Throwable){}kotlin.Boolean-impl + 57 
+    at 7   ktor-baselines.kexe                 0x335bf0           kfun:kotlinx.coroutines.JobSupport.cancelParent#internal + 368 
+    at 8   ktor-baselines.kexe                 0x33570e           kfun:kotlinx.coroutines.JobSupport.notifyCancelling#internal + 398 
+    at 9   ktor-baselines.kexe                 0x338153           kfun:kotlinx.coroutines.JobSupport#cancelImpl(kotlin.Any?){}kotlin.Boolean + 2019 
+    at 10  ktor-baselines.kexe                 0x337919           kfun:kotlinx.coroutines.JobSupport#childCancelled(kotlin.Throwable){}kotlin.Boolean-impl + 57 
+    at 11  ktor-baselines.kexe                 0x335bf0           kfun:kotlinx.coroutines.JobSupport.cancelParent#internal + 368 
+    at 12  ktor-baselines.kexe                 0x33570e           kfun:kotlinx.coroutines.JobSupport.notifyCancelling#internal + 398 
+    at 13  ktor-baselines.kexe                 0x339160           kfun:kotlinx.coroutines.JobSupport.tryMakeCompleting#internal + 1072 
+    at 14  ktor-baselines.kexe                 0x338b93           kfun:kotlinx.coroutines.JobSupport#makeCompletingOnce(kotlin.Any?){}kotlin.Any? + 227 
+    at 15  ktor-baselines.kexe                 0x325c83           kfun:kotlinx.coroutines.AbstractCoroutine#resumeWith(kotlin.Result<1:0>){} + 147 
+    at 16  ktor-baselines.kexe                 0x2917e5           kfun:kotlin.coroutines.native.internal.BaseContinuationImpl#resumeWith(kotlin.Result<kotlin.Any?>){} + 517 
+    at 17  ktor-baselines.kexe                 0x354f90           kfun:kotlinx.coroutines.DispatchedTask#run(){} + 736 
+    at 18  ktor-baselines.kexe                 0x356768           kfun:kotlinx.coroutines.internal.LimitedDispatcher.Worker.run#internal + 200 
+    at 19  ktor-baselines.kexe                 0x36262b           kfun:kotlinx.coroutines.MultiWorkerDispatcher.MultiWorkerDispatcher$workerRunLoop$1.$invokeCOROUTINE$0.invokeSuspend#internal + 683 
+    at 20  ktor-baselines.kexe                 0x36293f           kfun:kotlinx.coroutines.MultiWorkerDispatcher.MultiWorkerDispatcher$workerRunLoop$1.invoke#internal + 271 
+    at 21  ktor-baselines.kexe                 0x292518           kfun:kotlin.coroutines.intrinsics.createCoroutineUnintercepted$$inlined$createCoroutineFromSuspendFunction$2.invokeSuspend#internal + 264 
+    at 22  ktor-baselines.kexe                 0x2916bf           kfun:kotlin.coroutines.native.internal.BaseContinuationImpl#resumeWith(kotlin.Result<kotlin.Any?>){} + 223 
+    at 23  ktor-baselines.kexe                 0x354f90           kfun:kotlinx.coroutines.DispatchedTask#run(){} + 736 
+    at 24  ktor-baselines.kexe                 0x33157d           kfun:kotlinx.coroutines.EventLoopImplBase#processNextEvent(){}kotlin.Long-impl + 989 
+    at 25  ktor-baselines.kexe                 0x35b35b           kfun:kotlinx.coroutines#runBlocking(kotlin.coroutines.CoroutineContext;kotlin.coroutines.SuspendFunction1<kotlinx.coroutines.CoroutineScope,0:0>){0§<kotlin.Any?>}0:0 + 1323 
+    at 26  ktor-baselines.kexe                 0x362222           kfun:kotlinx.coroutines.MultiWorkerDispatcher.MultiWorkerDispatcher$1.MultiWorkerDispatcher$1$invoke$$inlined$apply$1.$<bridge-DN>invoke(){}#internal + 226 
+    at 27  ktor-baselines.kexe                 0x4cb96c           _ZN6Worker19processQueueElementEb + 1452 
+    at 28  ktor-baselines.kexe                 0x4cb32c           _ZN12_GLOBAL__N_113workerRoutineEPv + 108 
+    at 29  libc.so.6                           0x7fe116c9cb63     0x0 + 140604726692707 
+    at 30  libc.so.6                           0x7fe116d29e8b     0x0 + 140604727271051 
+Caused by: io.ktor.utils.io.errors.PosixException.AddressAlreadyInUseException: EADDRINUSE (98): Address already in use
+    at 0   ktor-baselines.kexe                 0x387d19           kfun:io.ktor.utils.io.errors.PosixException.Companion#forErrno(kotlin.Int;kotlin.String?){}io.ktor.utils.io.errors.PosixException + 3769 
+    at 1   ktor-baselines.kexe                 0x49555b           kfun:io.ktor.network.util#forSocketError$default__at__io.ktor.utils.io.errors.PosixException.Companion(kotlin.Int;kotlin.String?;kotlin.Int){}io.ktor.utils.io.errors.PosixException + 219 
+    at 2   ktor-baselines.kexe                 0x492258           kfun:io.ktor.network.sockets.tcpBind$$inlined$buildOrCloseSocket$1.invoke#internal + 568 
+    at 3   ktor-baselines.kexe                 0x48c614           kfun:io.ktor.network.util.NativeIPv4SocketAddress#nativeAddress(kotlin.Function2<kotlinx.cinterop.CPointer<platform.posix.sockaddr>,kotlin.UInt,kotlin.Unit>){} + 468 
+    at 4   ktor-baselines.kexe                 0x484108           kfun:io.ktor.network.sockets.TcpSocketBuilder#bind#suspend(io.ktor.network.sockets.SocketAddress?;kotlin.Function1<io.ktor.network.sockets.SocketOptions.AcceptorOptions,kotlin.Unit>;kotlin.coroutines.Continuation<io.ktor.network.sockets.ServerSocket>){}kotlin.Any + 4440 
+    at 5   ktor-baselines.kexe                 0x4a51d9           kfun:io.ktor.server.cio.backend.httpServer$1.invoke#internal + 345 
+    at 6   ktor-baselines.kexe                 0x4a53fa           kfun:io.ktor.server.cio.backend.launchServer$acceptJob$1.$invokeCOROUTINE$0.invokeSuspend#internal + 298 
+    at 7   ktor-baselines.kexe                 0x4a736f           kfun:io.ktor.server.cio.backend.launchServer$acceptJob$1.invoke#internal + 271 
+    at 8   ktor-baselines.kexe                 0x292518           kfun:kotlin.coroutines.intrinsics.createCoroutineUnintercepted$$inlined$createCoroutineFromSuspendFunction$2.invokeSuspend#internal + 264 
+    at 9   ktor-baselines.kexe                 0x2916bf           kfun:kotlin.coroutines.native.internal.BaseContinuationImpl#resumeWith(kotlin.Result<kotlin.Any?>){} + 223 
+    ... and 14 more common stack frames skipped
+    Suppressed: kotlinx.coroutines.internal.DiagnosticCoroutineContextException: [LazyStandaloneCoroutine{Cancelling}@14abe3b8, Dispatchers.IO]
+        at 0   ktor-baselines.kexe                 0x32e0b9           kfun:kotlinx.coroutines#handleCoroutineException(kotlin.coroutines.CoroutineContext;kotlin.Throwable){} + 1321 
+        at 1   ktor-baselines.kexe                 0x326ae8           kfun:kotlinx.coroutines.StandaloneCoroutine.handleJobException#internal-impl + 24 
+        at 2   ktor-baselines.kexe                 0x334ab4           kfun:kotlinx.coroutines.JobSupport.finalizeFinishingState#internal + 2628 
+        at 3   ktor-baselines.kexe                 0x33b001           kfun:kotlinx.coroutines.JobSupport.ChildCompletion.invoke#internal + 241 
+        at 4   ktor-baselines.kexe                 0x33519d           kfun:kotlinx.coroutines.JobSupport.completeStateFinalization#internal + 1101 
+        at 5   ktor-baselines.kexe                 0x334b64           kfun:kotlinx.coroutines.JobSupport.finalizeFinishingState#internal + 2804 
+        at 6   ktor-baselines.kexe                 0x3391fc           kfun:kotlinx.coroutines.JobSupport.tryMakeCompleting#internal + 1228 
+        ... and 17 more common stack frames skipped
