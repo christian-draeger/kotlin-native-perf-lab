@@ -51,14 +51,24 @@ function fileLink(run, label, path, directory = false) {
   return link;
 }
 
+function sortComparison(groups, metric) {
+  const direction = metric === "rps" ? -1 : 1;
+  return [...groups].sort((left, right) => {
+    const leftIsReactor = left.variant === "kotlin-reactor";
+    const rightIsReactor = right.variant === "kotlin-reactor";
+    if (leftIsReactor !== rightIsReactor) return leftIsReactor ? -1 : 1;
+    if (!left.stats) return right.stats ? 1 : 0;
+    if (!right.stats) return -1;
+    return direction * (left.stats[metric].median - right.stats[metric].median);
+  });
+}
+
 function renderChart(groups, metric) {
   const info = metrics[metric];
   const scale = Math.max(1, ...groups.map((group) => group.stats?.[metric].max ?? 0)) * 1.06;
   element("metric-name").textContent = info.name;
   element("metric-direction").textContent = info.direction;
-  const reactor = groups.find((group) => group.variant === "kotlin-reactor");
-  const ordered = reactor ? [reactor, ...groups.filter((group) => group !== reactor)] : groups;
-  const rows = ordered.map((group) => {
+  const rows = groups.map((group) => {
     const variant = variantInfo(group.variant);
     const stats = group.stats?.[metric];
     const row = make("div", "", "chart-row " + variant.color);
@@ -339,7 +349,7 @@ function start() {
 
   function updateComparison() {
     const endpoint = endpointSelect.value;
-    const groups = run.groups.filter((group) => group.endpoint === endpoint);
+    const groups = sortComparison(run.groups.filter((group) => group.endpoint === endpoint), metric);
     renderChart(groups, metric);
     renderTable(groups, endpoint);
   }
