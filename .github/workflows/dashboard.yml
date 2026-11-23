@@ -2,7 +2,7 @@ name: Benchmark dashboard
 
 on:
   push:
-    branches: [main, feat/reactor-reference]
+    branches: [main]
     paths:
       - 'results/**'
       - 'dashboard/**'
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   arm_native:
-    if: (github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark) || (github.event_name == 'push' && github.ref_name == 'feat/reactor-reference')
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
     uses: ./.github/workflows/arm-native.yml
 
   benchmark:
@@ -196,7 +196,7 @@ jobs:
           path: dist
 
   deploy:
-    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'feat/reactor-reference') }}
+    if: ${{ !cancelled() && needs.build.result == 'success' && github.event_name != 'pull_request' && github.ref_name == 'main' }}
     needs: build
     runs-on: ubuntu-24.04
     permissions:
