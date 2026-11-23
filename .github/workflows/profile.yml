@@ -38,8 +38,11 @@ jobs:
       - name: Sample CPU stacks and JVM events
         id: sample
         run: |
-          export PERF_BIN="$(find /usr/lib/linux-tools -name perf -type f | sort -V | tail -1)"
-          test -x "$PERF_BIN"
+          export PERF_BIN="$(find -L /usr/lib/linux-tools -name perf -type f | sort -V | tail -1)"
+          if [[ ! -x "$PERF_BIN" ]]; then
+            echo 'The installed Linux tools did not provide an executable perf.' >&2
+            exit 1
+          fi
           PERF_SUDO=1 ./scripts/profile.sh "$RUNNER_TEMP/profiles"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ !cancelled() && steps.sample.outcome != 'skipped' }}
