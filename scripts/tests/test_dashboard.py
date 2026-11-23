@@ -1,4 +1,5 @@
 import csv
+from copy import deepcopy
 import importlib.util
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,37 @@ spec.loader.exec_module(dashboard)
 
 
 class DashboardTest(unittest.TestCase):
+    def test_history_uses_valid_reactor_trials_and_keeps_workloads_apart(self):
+        parameters = {name: [value] for name, value in zip(dashboard.PARAMETERS, (16, 2, 10, 5))}
+        reactor = {
+            "variant": "kotlin-reactor", "endpoint": "/health", "valid": 3, "total": 3,
+            "stats": {"rps": {"median": 100, "min": 90, "max": 110}},
+        }
+        common = {
+            "machine": "x86_64", "host": "AMD EPYC", "os": "Ubuntu 24.04",
+            "runner": "ubuntu-24.04", "load_generator": "local HTTP/1.1",
+            "note": {"kind": "Exploratory CI run"}, "dirty": False, "incomplete": False,
+            "parameters": parameters, "groups": [reactor],
+        }
+        runs = []
+        for day, overrides in enumerate((
+            {}, {}, {"machine": "aarch64"}, {"host": "Intel Xeon"},
+            {"parameters": {**parameters, "connections": [64]}},
+            {"incomplete": True}, {"dirty": True},
+            {"groups": [{**reactor, "valid": 2}]},
+            {"groups": [{**reactor, "variant": "rust-axum"}]},
+            {"parameters": {**parameters, "connections": [16, 64]}},
+        ), 1):
+            run = deepcopy({**common, **overrides})
+            runs.append({**run, "id": str(day), "date": f"2026-11-{day:02}"})
+        profiles = dashboard.reactor_history(runs[::-1])
+        self.assertEqual(len(profiles), 4)
+        self.assertEqual(
+            [[entry["id"] for entry in profile["runs"]] for profile in profiles],
+            [["5"], ["4"], ["3"], ["1", "2"]],
+        )
+        self.assertEqual(profiles[-1]["runs"][0]["endpoints"], ["/health"])
+
     def test_separates_groups_and_excludes_invalid_trials(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

@@ -37,17 +37,17 @@ jobs:
           INCLUDE_STRESS: ${{ inputs.stress_fixture }}
         run: |
           test "$(uname -m)" = x86_64
-          gradle -p ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
-          gradle -p kotlin-reactor -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+          gradle -p competitors/ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
+          gradle -p components/nativeserve -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           mkdir "$RUNNER_TEMP/arm-native"
-          for executable in ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe; do
+          for executable in competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe; do
             readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
             cp "$executable" "$RUNNER_TEMP/arm-native/"
           done
-          cp -R ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
+          cp -R competitors/ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
           if [[ "$INCLUDE_STRESS" == true ]]; then
-            gradle -p kotlin-reactor -Pbenchmark.targetArch=aarch64 linkStressReleaseExecutableNative
-            fixture=kotlin-reactor/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
+            gradle -p components/nativeserve -Pbenchmark.targetArch=aarch64 linkStressReleaseExecutableNative
+            fixture=components/nativeserve/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
             readelf -h "$fixture" | grep -E 'Machine:[[:space:]]+AArch64$'
             cp "$fixture" "$RUNNER_TEMP/arm-native/"
           fi

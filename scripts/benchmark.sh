@@ -2,6 +2,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/server-process.sh"
+source "$ROOT/scripts/benchmark-variants.sh"
 [[ "$(uname -s)" == Linux ]] || { echo 'This /proc benchmark runs on Linux.' >&2; exit 1; }
 for command in wrk curl python3 git; do
   command -v "$command" >/dev/null || { echo "Missing $command" >&2; exit 1; }
@@ -15,7 +16,6 @@ for value in "$RUNS" "$WARMUP" "$DURATION" "$THREADS" "$CONNECTIONS"; do
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || { echo 'Run parameters must be positive integers.' >&2; exit 2; }
 done
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
-variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
 endpoints=(/health /json /users/123)
 # Allocate distinct ports before any trial. After load, accepted connections can
 # remain in TIME_WAIT and prevent a different runtime from binding the same port.
@@ -43,15 +43,22 @@ mkdir -p "$results_root"
 mkdir "$OUT"
 echo "Recording runs in $OUT"
 GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
-{
+(
   echo "timestamp_utc=$STAMP"
   echo "git_sha=$GIT_SHA"
   if [[ "$GIT_SHA" != unavailable ]]; then
+    printf 'git_subject=%s\n' "$(git -C "$ROOT" show -s --format=%s "$GIT_SHA")"
     if [[ -z "$(git -C "$ROOT" status --porcelain)" ]]; then
       echo 'git_worktree=clean'
     else
       echo 'git_worktree=dirty'
     fi
+  fi
+  # Keep custom labels on one metadata line.
+  if [[ -n "${BENCHMARK_LABEL:-}" ]]; then
+    label="${BENCHMARK_LABEL//$'\n'/ }"
+    label="${label//$'\r'/ }"
+    printf 'benchmark_label=%s\n' "${label:0:120}"
   fi
   printf 'kernel=%s\n' "$(uname -sr)"
   printf 'machine=%s\n' "$(uname -m)"
@@ -64,23 +71,37 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     fi
   done
   java ${JAVA_OPTS:-} -XX:+PrintCommandLineFlags -version 2>&1
-  rustc -Vv
-  cargo --version
-  if [[ -x "$ROOT/ktor/gradlew" ]]; then
-    "$ROOT/ktor/gradlew" --version
-  else
-    gradle --version
-  fi
   wrk --version 2>&1 | sed -n '1p' || true
   python3 --version
-  sha256sum "$ROOT"/ktor/build/jvmDist/app.jar "$ROOT"/ktor/build/jvmDist/lib/*.jar \
-    "$ROOT"/ktor/build/bin/native/releaseExecutable/*.kexe "$ROOT"/rust-axum/target/release/axum-baseline \
-    "$ROOT"/kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe |
-    sed "s|  $ROOT/|  |"
+  cd "$ROOT"
+  if [[ "${BENCHMARK_SUITE:-core}" != competitors ]]; then
+    rustc -Vv
+    cargo --version
+    if [[ -x competitors/ktor/gradlew ]]; then
+      competitors/ktor/gradlew --version
+    else
+      gradle --version
+    fi
+    sha256sum competitors/ktor/build/jvmDist/app.jar competitors/ktor/build/jvmDist/lib/*.jar \
+      competitors/ktor/build/bin/native/releaseExecutable/*.kexe competitors/rust-axum/target/release/axum-baseline \
+      components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+  fi
+  if [[ "${BENCHMARK_SUITE:-core}" != core ]]; then
+    go version competitors/go-http/build/go-http
+    printf 'node=%s\nbun=%s\n' "$(node --version)" "$(bun --version)"
+    uv --version
+    uv pip freeze --python competitors/fastapi/.venv/bin/python
+    competitors/fastapi/.venv/bin/python --version
+    mvn -B --version
+    sha256sum competitors/go-http/build/go-http competitors/spring-boot/target/spring-boot.jar \
+      competitors/hono-node/{package-lock.json,server.js} competitors/elysia-bun/{bun.lock,server.js} \
+      competitors/fastapi/{uv.lock,server.py}
+  fi
+  printf 'variants=%s\n' "${variants[*]}"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
   echo 'port_strategy=distinct TCP port per trial'
   echo 'load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers'
-} > "$OUT/environment.txt"
+) > "$OUT/environment.txt"
 
 trap stop_server EXIT
 trap 'exit 130' INT
