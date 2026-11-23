@@ -15,8 +15,27 @@ for value in "$RUNS" "$WARMUP" "$DURATION" "$THREADS" "$CONNECTIONS"; do
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || { echo 'Run parameters must be positive integers.' >&2; exit 2; }
 done
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
-export PORT="${PORT:-8080}"
-base="http://127.0.0.1:$PORT"
+variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
+endpoints=(/health /json /users/123)
+# Allocate distinct ports before any trial. After load, accepted connections can
+# remain in TIME_WAIT and prevent a different runtime from binding the same port.
+ports="$(python3 - "$(( RUNS * ${#variants[@]} * ${#endpoints[@]} ))" "${PORT:-0}" <<'PY'
+import contextlib
+import socket
+import sys
+
+count, start = map(int, sys.argv[1:])
+if not 0 <= start <= 65535 or start and start + count - 1 > 65535:
+    sys.exit("PORT must leave enough room for one port per trial.")
+with contextlib.ExitStack() as sockets:
+    for index in range(count):
+        probe = sockets.enter_context(socket.socket())
+        probe.bind(("127.0.0.1", start + index if start else 0))
+        print(probe.getsockname()[1])
+PY
+)"
+mapfile -t trial_ports <<< "$ports"
+trial_index=0
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 results_root="${BENCHMARK_RESULTS_DIR:-$ROOT/results}"
 OUT="$results_root/$STAMP"
@@ -59,20 +78,24 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     "$ROOT"/kotlin-reactor/build/bin/native/releaseExecutable/kotlin-reactor.kexe |
     sed "s|  $ROOT/|  |"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
+  echo 'port_strategy=distinct TCP port per trial'
   echo 'load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers'
 } > "$OUT/environment.txt"
 
 trap stop_server EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
 wrk_args=(--latency -s "$ROOT/scripts/wrk-stats.lua" -t "$THREADS" -c "$CONNECTIONS" --timeout 2s)
 
 for ((run = 1; run <= RUNS; run++)); do
-  for endpoint in /health /json /users/123; do
+  for endpoint in "${endpoints[@]}"; do
     for ((offset = 0; offset < ${#variants[@]}; offset++)); do
       variant="${variants[(run - 1 + offset) % ${#variants[@]}]}"
       prefix="$OUT/${variant}_${endpoint//\//_}_$run"
+      export PORT="${trial_ports[trial_index]}"
+      trial_index=$((trial_index + 1))
+      base="http://127.0.0.1:$PORT"
+      printf '%s %s %s %s\n' "$run" "$endpoint" "$variant" "$PORT" >> "$OUT/ports.txt"
       start_server "$variant" "$prefix.server.txt"
       "$ROOT/scripts/smoke.sh" "$base" > "$prefix.smoke.txt"
       wrk "${wrk_args[@]}" -d "${WARMUP}s" "$base$endpoint" > "$prefix.warmup.wrk.txt" 2>&1
@@ -85,7 +108,6 @@ for ((run = 1; run <= RUNS; run++)); do
         --threads "$THREADS" --duration "$DURATION" --warmup "$WARMUP" --cpu-start "$cpu_start" \
         --cpu-end "$cpu_end" --peak-rss-kib "$peak_rss_kib" --rss-kib "$rss_kib" --git-sha "$GIT_SHA"
       stop_server
-      sleep 1
     done
   done
 done
