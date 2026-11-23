@@ -146,7 +146,11 @@ jobs:
           if [[ "$BENCHMARK_SUITE" == expanded ]]; then
             bash scripts/build-competitors.sh
           fi
-          ./scripts/smoke-all.sh
+          if [[ "$BENCHMARK_SUITE" == workers ]]; then
+            BENCHMARK_SUITE=core ./scripts/smoke-all.sh
+          else
+            ./scripts/smoke-all.sh
+          fi
       - name: Measure on the hosted Linux runner
         id: measure
         env:
