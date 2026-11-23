@@ -32,10 +32,15 @@ case "$variant" in
   elysia-bun)
     exec bun "$ROOT/competitors/elysia-bun/server.js"
     ;;
-  fastapi)
-    app="$ROOT/competitors/fastapi"
+  fastapi|django)
+    app="$ROOT/competitors/$variant"
     exec "$app/.venv/bin/python" -m uvicorn server:app --app-dir "$app" --host "${BIND_HOST:-127.0.0.1}" \
       --port "${PORT:-8080}" --workers 1 --loop uvloop --http httptools --no-access-log
+    ;;
+  flask)
+    app="$ROOT/competitors/flask"
+    cd "$app"
+    exec "$app/.venv/bin/waitress-serve" --listen="${BIND_HOST:-127.0.0.1}:${PORT:-8080}" --threads=4 server:app
     ;;
   spring-boot|spring-webflux)
     exec java ${JAVA_OPTS:-} -jar "$ROOT/competitors/$variant/target/$variant.jar" \

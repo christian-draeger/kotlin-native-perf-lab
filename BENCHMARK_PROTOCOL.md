@@ -4,7 +4,7 @@
 
 How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and **NativeServe** compare on equivalent HTTP handlers?
 
-The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, Spring Boot MVC/Tomcat, Spring Boot WebFlux/Reactor Netty, ASP.NET Core/Kestrel, Quarkus REST, Vert.x Web, Micronaut, http4k and Javalin. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
+The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, Flask/Waitress, Django/Uvicorn, Spring Boot MVC/Tomcat, Spring Boot WebFlux/Reactor Netty, ASP.NET Core/Kestrel, Quarkus REST, Vert.x Web, Micronaut, http4k and Javalin. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
 
 Hosted measurements use a separate VM for each architecture and endpoint. The frameworks for one endpoint run sequentially on that VM, and its results keep their own environment and raw logs. Compare frameworks within that endpoint and architecture. The VM's load generator and server still share resources, and hosted CPU models can vary across endpoints and runs. Run controlled measurements on the dedicated hosts below.
 
@@ -33,7 +33,7 @@ Hosted measurements use a separate VM for each architecture and endpoint. The fr
 
 Use two Linux machines on a private network and synchronize their clocks. Install `wrk` on the load machine and configure an OpenSSH host alias with a verified host key and noninteractive authentication. The load host must reach the server's chosen interface and TCP range. Use a distinct physical load machine for controlled results.
 
-Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. Per repetition, the core suite uses 12 ports, the expanded suite 48, and the additional competitors alone 36. With `BENCHMARK_ENDPOINT` set to one of `/health`, `/json` or `/users/123`, reserve one port per server per repetition.
+Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. Per repetition, the core suite uses 12 ports, the expanded suite 54, and the additional competitors alone 42. With `BENCHMARK_ENDPOINT` set to one of `/health`, `/json` or `/users/123`, reserve one port per server per repetition.
 
 ```bash
 ./scripts/build-all.sh

@@ -113,14 +113,18 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     go version competitors/go-http/build/go-http
     printf 'node=%s\nbun=%s\n' "$(node --version)" "$(bun --version)"
     uv --version
-    uv pip freeze --python competitors/fastapi/.venv/bin/python
-    competitors/fastapi/.venv/bin/python --version
+    for variant in fastapi flask django; do
+      printf 'python_environment=%s\n' "$variant"
+      "competitors/$variant/.venv/bin/python" --version
+      uv pip freeze --python "competitors/$variant/.venv/bin/python"
+    done
     mvn -B --version
     (cd competitors/aspnet-core && dotnet --info)
     sha256sum competitors/go-http/build/go-http competitors/spring-boot/target/spring-boot.jar \
       competitors/spring-webflux/target/spring-webflux.jar \
       competitors/hono-node/{package-lock.json,server.js} competitors/elysia-bun/{bun.lock,server.js} \
-      competitors/fastapi/{uv.lock,server.py} competitors/aspnet-core/target/publish/AspNetCore.dll
+      competitors/{fastapi,flask,django}/{uv.lock,server.py} competitors/django/settings.py \
+      competitors/aspnet-core/target/publish/AspNetCore.dll
     find competitors/kotlin-jvm/*/target -name '*.jar' -print0 | sort -z | xargs -0 sha256sum
   fi
   printf 'variants=%s\n' "${variants[*]}"
