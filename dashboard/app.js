@@ -11,15 +11,21 @@ const metrics = {
   rss: { name: "Peak RSS", unit: "MiB", decimals: 1, direction: "Lower is better" },
 };
 const variants = {
-  "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "jvm" },
-  "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "native" },
+  "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "kotlin" },
+  "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "kotlin" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
   "kotlin-reactor": { label: "NativeServe", detail: "Kotlin/Native · HTTP server", color: "reactor" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },
   fastapi: { label: "FastAPI", detail: "CPython · Uvicorn", color: "python" },
-  "spring-boot": { label: "Spring Boot", detail: "Java · MVC / Tomcat", color: "spring" },
+  "spring-boot": { label: "Spring Boot", detail: "Java · MVC / Tomcat", color: "kotlin" },
+  "aspnet-core": { label: "ASP.NET Core", detail: ".NET · Kestrel", color: "dotnet" },
+  quarkus: { label: "Quarkus", detail: "Kotlin · Quarkus REST", color: "kotlin" },
+  vertx: { label: "Vert.x", detail: "Kotlin · Vert.x Web", color: "kotlin" },
+  micronaut: { label: "Micronaut", detail: "Kotlin · Netty", color: "kotlin" },
+  http4k: { label: "http4k", detail: "Kotlin · Jetty", color: "kotlin" },
+  javalin: { label: "Javalin", detail: "Kotlin · Jetty", color: "kotlin" },
 };
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium", timeStyle: "short",
@@ -336,45 +342,61 @@ function start() {
   const runSelect = element("run-select");
   const endpointSelect = element("endpoint");
   const buttons = [...element("metrics").querySelectorAll("button")];
+  const series = new Map();
+  for (const run of runs) {
+    const key = run.scope && run.ci_run_id
+      ? [run.ci_run_id, run.ci_run_attempt, run.machine].join("/")
+      : run.id;
+    if (!series.has(key)) series.set(key, []);
+    series.get(key).push(run);
+  }
   let metric = "rps";
-  let run = runs[0];
+  let run;
 
   element("repository").href = data.repository;
-  runSelect.replaceChildren(...runs.map((entry) =>
-    new Option([entry.note.label, dateFormat.format(new Date(entry.date))].filter(Boolean).join(" · "), entry.id)
+  runSelect.replaceChildren(...Array.from(series, ([key, [latest]]) =>
+    new Option([latest.note.label, dateFormat.format(new Date(latest.date))].filter(Boolean).join(" · "), key)
   ));
 
-  function updateComparison() {
+  function showComparison() {
     const endpoint = endpointSelect.value;
     const groups = sortComparison(run.groups.filter((group) => group.endpoint === endpoint), metric);
     renderChart(groups, metric);
     renderTable(groups, endpoint);
   }
 
-  function updateRun() {
-    run = runs.find((entry) => entry.id === runSelect.value) ?? runs[0];
+  function updateEndpoint() {
+    const entries = series.get(runSelect.value);
+    run = entries.find((entry) => entry.scope === endpointSelect.value) ?? entries[0];
     element("run-kind").textContent = run.note.kind ?? (run.local ? "Local benchmark" : "Benchmark");
     element("run-context").textContent = [
       run.ci_run_id ? "GitHub-hosted Linux" : "",
+      run.scope && run.ci_run_id ? "Separate VM per endpoint" : "",
       run.local ? "Same-host load generator" : "",
     ].filter(Boolean).join(" · ");
     element("trial-count").textContent = run.valid + " / " + run.total + " valid trials" + (run.incomplete ? " · incomplete run" : "");
     element("trial-count").classList.toggle("incomplete", run.incomplete || run.valid < run.total);
-    const previous = endpointSelect.value;
-    const endpoints = [...new Set(run.groups.map((group) => group.endpoint))];
-    endpointSelect.replaceChildren(...endpoints.map((endpoint) => new Option(endpoint)));
-    if (endpoints.includes(previous)) endpointSelect.value = previous;
     renderMethod(run);
-    updateComparison();
+    showComparison();
+  }
+
+  function updateRun() {
+    const previous = endpointSelect.value;
+    const entries = series.get(runSelect.value);
+    const endpoints = [...new Set(entries.flatMap((entry) => entry.groups.map((group) => group.endpoint)))].sort();
+    endpointSelect.replaceChildren(...endpoints.map((endpoint) => new Option(endpoint)));
+    endpointSelect.disabled = endpoints.length < 2;
+    if (endpoints.includes(previous)) endpointSelect.value = previous;
+    updateEndpoint();
   }
 
   buttons.forEach((button) => button.addEventListener("click", () => {
     metric = button.dataset.metric;
     buttons.forEach((choice) => choice.setAttribute("aria-pressed", String(choice === button)));
-    updateComparison();
+    showComparison();
   }));
   runSelect.addEventListener("change", updateRun);
-  endpointSelect.addEventListener("change", updateComparison);
+  endpointSelect.addEventListener("change", updateEndpoint);
   updateRun();
   element("run-picker").hidden = false;
   element("dashboard").hidden = false;

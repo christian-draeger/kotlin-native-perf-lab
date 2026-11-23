@@ -4,7 +4,9 @@
 
 How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and **NativeServe** compare on equivalent HTTP handlers?
 
-The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, and Spring Boot MVC/Tomcat. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
+The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, Spring Boot MVC/Tomcat, ASP.NET Core/Kestrel, Quarkus REST, Vert.x Web, Micronaut, http4k and Javalin. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
+
+Hosted measurements use a separate VM for each architecture and endpoint. The frameworks for one endpoint run sequentially on that VM, and its results keep their own environment and raw logs. Compare frameworks within that endpoint and architecture. The VM's load generator and server still share resources, and hosted CPU models can vary across endpoints and runs. Run controlled measurements on the dedicated hosts below.
 
 ## Measurements
 
@@ -31,7 +33,7 @@ The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/B
 
 Use two Linux machines on a private network and synchronize their clocks. Install `wrk` on the load machine and configure an OpenSSH host alias with a verified host key and noninteractive authentication. The load host must reach the server's chosen interface and TCP range. Use a distinct physical load machine for controlled results.
 
-Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. The core suite uses 12 ports per repetition, the expanded suite 27, and the additional competitors alone 15.
+Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. Per repetition, the core suite uses 12 ports, the expanded suite 45, and the additional competitors alone 33. With `BENCHMARK_ENDPOINT` set to one of `/health`, `/json` or `/users/123`, reserve one port per server per repetition.
 
 ```bash
 ./scripts/build-all.sh
@@ -53,7 +55,7 @@ The harness opens an SSH control connection, compares machine IDs, estimates clo
 
 ## Pilot warm-up and concurrency
 
-Set `WARMUP_WINDOWS` to at least three to test steady state. Each wrk window uses the planned workload for `WARMUP` seconds. Three consecutive error-free windows must have at most 10% spread from minimum to maximum requests per second. For Ktor/JVM and Spring Boot, the increase in HotSpot compilation time must also be at most 1% of JVM elapsed time in each of those windows. The first qualifying window ends the warm-up. The cap is `WARMUP × WARMUP_WINDOWS` seconds of target load. The harness keeps every raw window, compiler snapshot and stability decision. It records measured trials that reach the cap as unstable and excludes them from the summary statistics. [HotSpot compiler counters](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jstat.html)
+Set `WARMUP_WINDOWS` to at least three to test steady state. Each wrk window uses the planned workload for `WARMUP` seconds. Three consecutive error-free windows must have at most 10% spread from minimum to maximum requests per second. For the JVM servers, the increase in HotSpot compilation time must also be at most 1% of JVM elapsed time in each of those windows. The first qualifying window ends the warm-up. The cap is `WARMUP × WARMUP_WINDOWS` seconds of target load. The harness keeps every raw window, compiler snapshot and stability decision. It records measured trials that reach the cap as unstable and excludes them from the summary statistics. [HotSpot compiler counters](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jstat.html)
 
 Start calibration with `WARMUP=10 WARMUP_WINDOWS=6`. In the exploratory SSH pilot, five three-second windows were too short for Ktor/JVM and one NativeServe trial at 16 connections. A longer Ktor/JVM `/users/123` pilot recorded gains of 1.06 and 0.23 seconds of compilation time in early ten-second windows, followed by 0.07, 0.07 and 0.04 seconds while throughput spread was 3.27%. Compilation tasks continued during that low-activity period. The 60-second cap and compiler-time threshold are starting values for the dedicated-host pilot.
 

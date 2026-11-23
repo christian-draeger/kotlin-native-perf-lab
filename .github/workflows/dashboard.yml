@@ -25,6 +25,11 @@ on:
         type: choice
         options: ['3', '5']
         default: '5'
+      suite:
+        description: Complete ranking or quicker NativeServe, Ktor and Axum feedback
+        type: choice
+        options: [expanded, core]
+        default: expanded
       benchmark_label:
         description: Optional feature or change label shown in the NativeServe history
         type: string
@@ -43,25 +48,31 @@ jobs:
   benchmark:
     needs: arm_native
     if: ${{ !cancelled() && needs.arm_native.result != 'skipped' }}
-    name: benchmark (${{ matrix.arch }})
+    name: benchmark (${{ matrix.arch }}, ${{ matrix.endpoint }})
     strategy:
       fail-fast: false
       matrix:
+        arch: [x86_64, aarch64]
+        route: [health, json, users]
         include:
           - arch: x86_64
             runner: ubuntu-24.04
           - arch: aarch64
             runner: ubuntu-24.04-arm
+          - route: health
+            endpoint: /health
+          - route: json
+            endpoint: /json
+          - route: users
+            endpoint: /users/123
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 55
-    outputs:
-      x86_artifact: ${{ matrix.arch == 'x86_64' && steps.upload.outputs.artifact-id || '' }}
-      arm_artifact: ${{ matrix.arch == 'aarch64' && steps.upload.outputs.artifact-id || '' }}
+    timeout-minutes: 35
     env:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
       EXPECTED_ARCH: ${{ matrix.arch }}
-      BENCHMARK_SUITE: expanded
+      BENCHMARK_SUITE: ${{ inputs.suite }}
+      BENCHMARK_ENDPOINT: ${{ matrix.endpoint }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -74,6 +85,7 @@ jobs:
         with:
           gradle-version: '9.7.0'
       - uses: ./.github/actions/setup-competitors
+        if: inputs.suite == 'expanded'
       - name: Install wrk and Rust
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
@@ -97,7 +109,9 @@ jobs:
             export PREBUILT_KOTLIN_DIR="$RUNNER_TEMP/arm-native"
           fi
           ./scripts/build-all.sh
-          bash scripts/build-competitors.sh
+          if [[ "$BENCHMARK_SUITE" == expanded ]]; then
+            bash scripts/build-competitors.sh
+          fi
           ./scripts/smoke-all.sh
       - name: Measure on the hosted Linux runner
         id: measure
@@ -117,6 +131,7 @@ jobs:
         env:
           BENCHMARK_OUTCOME: ${{ steps.measure.outcome }}
           RUNNER_LABEL: ${{ matrix.runner }}
+          ROUTE: ${{ matrix.route }}
         run: |
           shopt -s nullglob
           archive="$RUNNER_TEMP/benchmark-archive"
@@ -124,21 +139,20 @@ jobs:
             printf 'benchmark_source=github-hosted-actions\nci_run_id=%s\nci_run_attempt=%s\nbenchmark_outcome=%s\nrunner_image=%s\nrunner_image_version=%s\nrunner_label=%s\nnative_build_arch=x86_64\n' \
               "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$BENCHMARK_OUTCOME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$RUNNER_LABEL" >> "$directory/environment.txt"
             mkdir -p "$archive"
-            mv "$directory" "$archive/${directory##*/}-$EXPECTED_ARCH"
+            mv "$directory" "$archive/${directory##*/}-$EXPECTED_ARCH-$ROUTE"
             printf 'directory=%s\n' "$archive" >> "$GITHUB_OUTPUT"
           done
       - name: Upload raw benchmark results
-        id: upload
         if: ${{ !cancelled() && steps.capture.outputs.directory != '' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: linux-benchmark-${{ matrix.arch }}-${{ github.run_attempt }}
+          name: linux-benchmark-${{ matrix.arch }}-${{ matrix.route }}-${{ github.run_attempt }}
           path: ${{ steps.capture.outputs.directory }}
           if-no-files-found: error
 
   store:
     needs: benchmark
-    if: ${{ !cancelled() && (needs.benchmark.outputs.x86_artifact != '' || needs.benchmark.outputs.arm_artifact != '') }}
+    if: ${{ !cancelled() && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -146,10 +160,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          artifact-ids: >-
-            ${{ needs.benchmark.outputs.x86_artifact && needs.benchmark.outputs.arm_artifact
-                && format('{0},{1}', needs.benchmark.outputs.x86_artifact, needs.benchmark.outputs.arm_artifact)
-                || needs.benchmark.outputs.x86_artifact || needs.benchmark.outputs.arm_artifact }}
+          pattern: linux-benchmark-*-${{ github.run_attempt }}
           merge-multiple: true
           path: ${{ runner.temp }}/raw-benchmark
       - name: Commit the raw results to benchmark-data
@@ -164,7 +175,7 @@ jobs:
           mkdir -p results
           for directory in "$RUNNER_TEMP"/raw-benchmark/*; do
             series="${directory##*/}"
-            [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)$ ]]
+            [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users)$ ]]
             if [[ -e "results/$series" ]]; then
               diff -r -- "$directory" "results/$series"
               continue

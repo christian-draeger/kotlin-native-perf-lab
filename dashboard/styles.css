@@ -60,15 +60,14 @@ h2 { margin: 0; font-size: 1.35rem; letter-spacing: -.025em; line-height: 1.2; }
 .chart-caption { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; column-gap: .75rem; color: var(--muted); font-size: .875rem; }
 .chart-caption strong { color: var(--ink); }
 .chart { display: grid; gap: 1rem; margin-block: 1rem; }
-.jvm { --series: #3265dd; }
-.native { --series: #087f75; }
-.rust { --series: #7950b5; }
+.kotlin { --series: #7548c2; }
+.rust { --series: #455e80; }
 .reactor { --series: var(--reactor-accent); }
 .go { --series: #28788f; }
 .hono { --series: #6768ac; }
 .elysia { --series: #9c5484; }
 .python { --series: #3d7280; }
-.spring { --series: #5e7535; }
+.dotnet { --series: #3265a0; }
 .other { --series: #64748b; }
 .chart-row.reactor {
   padding: .75rem;
@@ -106,6 +105,7 @@ dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weig
 .details code { color: #254981; background: #ebf2ff; padding: .22rem .55rem; border-radius: .4rem; }
 .details tr.reactor { background: var(--reactor-tint); }
 .details tr.reactor th { color: var(--reactor-accent); }
+.details tr.kotlin th { color: #6037a6; }
 .reactor-history { margin-top: 1.25rem; scroll-margin-top: 1rem; }
 .history-controls { display: flex; gap: .65rem; flex-wrap: wrap; align-items: end; max-width: 100%; }
 .history-controls label { display: grid; gap: .25rem; color: var(--muted); font-size: .875rem; min-width: 0; }

@@ -23,6 +23,12 @@ if (( WARMUP_WINDOWS > 1 )); then
 fi
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
 endpoints=(/health /json /users/123)
+if [[ -n "${BENCHMARK_ENDPOINT:-}" ]]; then
+  case "$BENCHMARK_ENDPOINT" in
+    /health|/json|/users/123) endpoints=("$BENCHMARK_ENDPOINT") ;;
+    *) echo 'BENCHMARK_ENDPOINT must be /health, /json or /users/123.' >&2; exit 2 ;;
+  esac
+fi
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}},$BIND_HOST"
 export no_proxy="$NO_PROXY"
@@ -110,11 +116,15 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     uv pip freeze --python competitors/fastapi/.venv/bin/python
     competitors/fastapi/.venv/bin/python --version
     mvn -B --version
+    (cd competitors/aspnet-core && dotnet --info)
     sha256sum competitors/go-http/build/go-http competitors/spring-boot/target/spring-boot.jar \
       competitors/hono-node/{package-lock.json,server.js} competitors/elysia-bun/{bun.lock,server.js} \
-      competitors/fastapi/{uv.lock,server.py}
+      competitors/fastapi/{uv.lock,server.py} competitors/aspnet-core/target/publish/AspNetCore.dll
+    find competitors/kotlin-jvm/*/target -name '*.jar' -print0 | sort -z | xargs -0 sha256sum
   fi
   printf 'variants=%s\n' "${variants[*]}"
+  printf 'benchmark_suite=%s\n' "${BENCHMARK_SUITE:-core}"
+  printf 'benchmark_endpoint=%s\n' "${BENCHMARK_ENDPOINT:-}"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
   echo "max_warmup_windows=$WARMUP_WINDOWS"
   echo 'port_strategy=distinct TCP port per trial'
@@ -134,11 +144,13 @@ warm_server() {
   fi
 
   warmup_status=unstable
-  if [[ "$variant" == ktor-jvm || "$variant" == spring-boot ]]; then
-    local snapshot="$prefix.warmup.0.jstat.txt"
-    LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
-    compiler_logs+=("$snapshot")
-  fi
+  case "$variant" in
+    ktor-jvm|spring-boot|quarkus|vertx|micronaut|http4k|javalin)
+      local snapshot="$prefix.warmup.0.jstat.txt"
+      LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
+      compiler_logs+=("$snapshot")
+      ;;
+  esac
   for ((window = 1; window <= WARMUP_WINDOWS; window++)); do
     log="$prefix.warmup.$window.wrk.txt"
     run_load "${wrk_args[@]}" -d "${WARMUP}s" "$url" > "$log" 2>&1

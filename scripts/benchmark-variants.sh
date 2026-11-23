@@ -1,6 +1,6 @@
 # Shared server lists for the benchmark and smoke scripts.
 core_variants=(ktor-jvm ktor-native rust-axum kotlin-reactor)
-competitor_variants=(go-http hono-node elysia-bun fastapi spring-boot)
+competitor_variants=(go-http hono-node elysia-bun fastapi spring-boot aspnet-core quarkus vertx micronaut http4k javalin)
 case "${BENCHMARK_SUITE:-core}" in
   core) variants=("${core_variants[@]}") ;;
   expanded) variants=("${core_variants[@]}" "${competitor_variants[@]}") ;;
