@@ -1,8 +1,18 @@
 # Kotlin Native Performance Lab
 
-A reproducible performance lab comparing established HTTP stacks with [NativeServe](kotlin-reactor/README.md), an HTTP framework for Kotlin/Native.
+A reproducible performance lab comparing established HTTP stacks with [NativeServe](components/nativeserve/README.md), an HTTP framework for Kotlin/Native.
 
 **Phase 0 baselines and the NativeServe reference server.** See [results/](results/) for the exploratory measurements and profiling evidence.
+
+## Repository layout
+
+| Directory | Contents |
+| --- | --- |
+| `components/nativeserve/` | NativeServe and its public Kotlin API, platform implementation and component tests. |
+| `components/` | Project-owned components and their modules or standalone builds. |
+| `competitors/` | Reference implementations for Ktor, Rust/Axum, Go, Hono, Elysia, FastAPI and Spring Boot. |
+| `scripts/` | Shared build, validation, measurement and profiling commands. |
+| `dashboard/` | The benchmark dashboard published to GitHub Pages. |
 
 ## Benchmark dashboard
 

@@ -77,14 +77,14 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   if [[ "${BENCHMARK_SUITE:-core}" != competitors ]]; then
     rustc -Vv
     cargo --version
-    if [[ -x ktor/gradlew ]]; then
-      ktor/gradlew --version
+    if [[ -x competitors/ktor/gradlew ]]; then
+      competitors/ktor/gradlew --version
     else
       gradle --version
     fi
-    sha256sum ktor/build/jvmDist/app.jar ktor/build/jvmDist/lib/*.jar \
-      ktor/build/bin/native/releaseExecutable/*.kexe rust-axum/target/release/axum-baseline \
-      kotlin-reactor/build/bin/native/releaseExecutable/nativeserve.kexe
+    sha256sum competitors/ktor/build/jvmDist/app.jar competitors/ktor/build/jvmDist/lib/*.jar \
+      competitors/ktor/build/bin/native/releaseExecutable/*.kexe competitors/rust-axum/target/release/axum-baseline \
+      components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
   fi
   if [[ "${BENCHMARK_SUITE:-core}" != core ]]; then
     go version competitors/go-http/build/go-http

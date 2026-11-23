@@ -9,7 +9,7 @@ NativeServe provides a Kotlin routing API and runs on Linux x86_64 and ARM64. It
 On Linux x86_64 with JDK 21:
 
 ```sh
-cd kotlin-reactor
+cd components/nativeserve
 ./gradlew runReleaseExecutableNative
 ```
 
@@ -58,6 +58,6 @@ The first implementation accepts origin-form HTTP/1.0 and HTTP/1.1 requests and 
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
-[Project roadmap](../ROADMAP.md)
+[Project roadmap](../../ROADMAP.md)
 
-The source module lives in `kotlin-reactor/`. Benchmark records use the stable `kotlin-reactor` identifier, which the dashboard displays as NativeServe across existing and new series. The release executable is `nativeserve.kexe`, and the public Kotlin package is `dev.perflab.nativeserve`.
+The source module lives in `components/nativeserve/`. Benchmark records use the stable `kotlin-reactor` identifier, which the dashboard displays as NativeServe across existing and new series. The release executable is `nativeserve.kexe`, and the public Kotlin package is `dev.perflab.nativeserve`.
