@@ -43,6 +43,14 @@ BIND_HOST=192.0.2.10 PORT=20080 LOAD_SSH=perflab-load \
 
 The harness opens an SSH control connection, compares machine IDs, estimates clock offset and stages the same Lua reporting script on the load host. All HTTP traffic travels directly from the load host to the server. Server-side `/proc` samples bracket the measured SSH command, so the CPU window includes SSH command setup and teardown. The measured latency and throughput come from wrk's own elapsed interval. Results include the clock offset bounds, both CPU and affinity records, versions, hashes, trial ports and response error counts. Review host isolation and load-generator headroom before including a run in a controlled comparison.
 
+## Compare NativeServe workers
+
+The `workers` suite interleaves the prior NativeServe release, one and two candidate workers, Ktor/JVM, Ktor/Native, and Axum. Provide the executable and source SHA of the prior release. On dedicated hosts, use `LOAD_SSH` as above. For a same-host rehearsal, set disjoint `SERVER_CPUS` and `LOAD_CPUS` using taskset CPU lists. Both CPU sets and the reference binary checksum are recorded.
+
+In GitHub Actions, run the **Benchmark dashboard** workflow with suite `workers` and the run ID of a successful **Ubuntu smoke** workflow on `main` as `worker_reference_run`. The worker suite can run against a PR branch. Each Linux runner uses separate two-CPU affinity sets for server and load. It archives saturation measurements at 64 connections and fixed-rate `/json` results at 20,000 and 40,000 requests/s. These runs use one GitHub-hosted VM per cell and remain exploratory. Worker artifacts are available on the workflow run.
+
+Review the actual delivered rate and failures before comparing p99 at fixed load. Keep the one-worker result alongside the prior release to spot regressions in the default path. Use the two-host setup to decide on a new default.
+
 ## Local harness and limitations
 
 - The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.

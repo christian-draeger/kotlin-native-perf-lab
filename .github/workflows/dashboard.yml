@@ -28,8 +28,11 @@ on:
       suite:
         description: Complete ranking or quicker NativeServe, Ktor and Axum feedback
         type: choice
-        options: [expanded, core]
+        options: [expanded, core, workers]
         default: expanded
+      worker_reference_run:
+        description: Successful main Ubuntu smoke run ID supplying the workers suite reference
+        type: string
       benchmark_label:
         description: Optional feature or change label shown in the NativeServe history
         type: string
@@ -38,11 +41,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || 'benchmark-dashboard-publish' }}
+  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || 'benchmark-dashboard-publish' }}
 
 jobs:
   arm_native:
-    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.run_benchmark
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers')
     uses: ./.github/workflows/arm-native.yml
 
   benchmark:
@@ -67,6 +70,9 @@ jobs:
             endpoint: /users/123
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: read
     env:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
@@ -103,6 +109,34 @@ jobs:
           artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
           merge-multiple: true
           path: ${{ runner.temp }}/arm-native
+      - name: Prepare the worker reference and CPU affinity
+        if: inputs.suite == 'workers'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REFERENCE_RUN: ${{ inputs.worker_reference_run }}
+        run: |
+          [[ "$REFERENCE_RUN" =~ ^[0-9]+$ ]]
+          reference="$RUNNER_TEMP/worker-reference"
+          info="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REFERENCE_RUN")"
+          jq -e --arg repo "$GITHUB_REPOSITORY" '
+            .name == "Ubuntu smoke" and .conclusion == "success" and .head_branch == "main"
+            and .head_repository.full_name == $repo
+          ' <<<"$info" >/dev/null
+          sha="$(jq -er '.head_sha' <<<"$info")"
+          attempt="$(jq -er '.run_attempt' <<<"$info")"
+          gh run download "$REFERENCE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "nativeserve-linux-$EXPECTED_ARCH-$attempt" --dir "$reference"
+          archive="nativeserve-snapshot-${sha:0:12}-linux-$EXPECTED_ARCH.tar.gz"
+          (cd "$reference"; sha256sum --strict -c "$archive.sha256"; tar -xzf "$archive" nativeserve)
+          printf 'NATIVESERVE_REFERENCE_BINARY=%s/nativeserve\nNATIVESERVE_REFERENCE_SHA=%s\n' "$reference" "$sha" >> "$GITHUB_ENV"
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import os
+          cpus = sorted(os.sched_getaffinity(0))
+          if len(cpus) < 4:
+              raise SystemExit("The workers suite needs at least four available logical CPUs.")
+          print("SERVER_CPUS=" + ",".join(map(str, cpus[:2])))
+          print("LOAD_CPUS=" + ",".join(map(str, cpus[2:4])))
+          PY
       - name: Build and smoke-test all baselines
         run: |
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
@@ -112,7 +146,11 @@ jobs:
           if [[ "$BENCHMARK_SUITE" == expanded ]]; then
             bash scripts/build-competitors.sh
           fi
-          ./scripts/smoke-all.sh
+          if [[ "$BENCHMARK_SUITE" == workers ]]; then
+            BENCHMARK_SUITE=core ./scripts/smoke-all.sh
+          else
+            ./scripts/smoke-all.sh
+          fi
       - name: Measure on the hosted Linux runner
         id: measure
         env:
@@ -120,11 +158,30 @@ jobs:
           WARMUP: 10
           DURATION: 5
           THREADS: 2
-          CONNECTIONS: 16
+          CONNECTIONS: ${{ inputs.suite == 'workers' && '64' || '16' }}
           BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
         run: |
           export BENCHMARK_RESULTS_DIR="$RUNNER_TEMP/benchmark-results"
           ./scripts/benchmark.sh
+      - name: Measure worker tail latency at matched offered load
+        if: inputs.suite == 'workers' && matrix.route == 'json'
+        run: |
+          case "$EXPECTED_ARCH" in
+            x86_64) arch=amd64; checksum=e8759ce45c14e18374bdccd3ba6068197bc3a9f9b7e484db3837f701b9d12e61 ;;
+            aarch64) arch=arm64; checksum=950381173a5575e25e8e086f36fc03bf65d61a2433329b48e41e1cb5e4133bba ;;
+          esac
+          asset="vegeta_12.13.0_linux_$arch.tar.gz"
+          curl -fsSL --retry 3 "https://github.com/tsenart/vegeta/releases/download/v12.13.0/$asset" -o "$RUNNER_TEMP/$asset"
+          printf '%s  %s\n' "$checksum" "$RUNNER_TEMP/$asset" | sha256sum --strict -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" vegeta
+          PATH="$RUNNER_TEMP:$PATH" ./scripts/benchmark-worker-latency.sh "$RUNNER_TEMP/worker-latency"
+      - name: Upload matched-load raw results
+        if: ${{ !cancelled() && inputs.suite == 'workers' && matrix.route == 'json' }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: worker-latency-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/worker-latency
+          if-no-files-found: warn
       - name: Record CI provenance and retain available logs
         id: capture
         if: ${{ !cancelled() && steps.measure.outcome != 'skipped' }}
@@ -152,7 +209,7 @@ jobs:
 
   store:
     needs: benchmark
-    if: ${{ !cancelled() && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
+    if: ${{ !cancelled() && inputs.suite != 'workers' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
