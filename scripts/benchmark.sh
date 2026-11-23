@@ -22,6 +22,26 @@ if (( WARMUP_WINDOWS > 1 )); then
   command -v jstat >/dev/null || { echo 'Install JDK 21 jstat for JVM warm-up checks.' >&2; exit 1; }
 fi
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
+suite="${BENCHMARK_SUITE:-core}"
+if [[ "$suite" == workers ]]; then
+  [[ "${NATIVESERVE_REFERENCE_BINARY:-}" == /* && -x "$NATIVESERVE_REFERENCE_BINARY" ]] || {
+    echo 'NATIVESERVE_REFERENCE_BINARY must be an absolute path to an executable release binary.' >&2; exit 2;
+  }
+  [[ "${NATIVESERVE_REFERENCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || {
+    echo 'NATIVESERVE_REFERENCE_SHA must identify the reference source commit.' >&2; exit 2;
+  }
+  if [[ -z "${LOAD_SSH:-}" ]]; then
+    : "${SERVER_CPUS:?Specify server CPU affinity or use a separate LOAD_SSH host}"
+    : "${LOAD_CPUS:?Specify load CPU affinity or use a separate LOAD_SSH host}"
+    server_affinity="$(taskset -c "$SERVER_CPUS" python3 -c 'import os; print(" ".join(map(str, sorted(os.sched_getaffinity(0)))))')"
+    load_affinity="$(taskset -c "$LOAD_CPUS" python3 -c 'import os; print(" ".join(map(str, sorted(os.sched_getaffinity(0)))))')"
+    python3 - "$server_affinity" "$load_affinity" <<'PY'
+import sys
+if set(sys.argv[1].split()) & set(sys.argv[2].split()):
+    sys.exit("Server and load CPU affinity sets must be disjoint.")
+PY
+  fi
+fi
 endpoints=(/health /json /users/123)
 if [[ -n "${BENCHMARK_ENDPOINT:-}" ]]; then
   case "$BENCHMARK_ENDPOINT" in
@@ -97,7 +117,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   java ${JAVA_OPTS:-} -XX:+PrintCommandLineFlags -version 2>&1
   python3 --version
   cd "$ROOT"
-  if [[ "${BENCHMARK_SUITE:-core}" != competitors ]]; then
+  if [[ "$suite" != competitors ]]; then
     rustc -Vv
     cargo --version
     if [[ -x competitors/ktor/gradlew ]]; then
@@ -109,7 +129,12 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
       competitors/ktor/build/bin/native/releaseExecutable/*.kexe competitors/rust-axum/target/release/axum-baseline \
       components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
   fi
-  if [[ "${BENCHMARK_SUITE:-core}" != core ]]; then
+  if [[ "$suite" == workers ]]; then
+    printf 'nativeserve_reference_sha=%s\n' "$NATIVESERVE_REFERENCE_SHA"
+    sha256sum "$NATIVESERVE_REFERENCE_BINARY"
+    printf 'server_affinity=%s\nload_affinity=%s\n' "${server_affinity:-${SERVER_CPUS:-all}}" "${load_affinity:-remote}"
+  fi
+  if [[ "$suite" == expanded || "$suite" == competitors ]]; then
     go version competitors/go-http/build/go-http
     printf 'node=%s\nbun=%s\n' "$(node --version)" "$(bun --version)"
     uv --version
@@ -193,12 +218,14 @@ for ((run = 1; run <= RUNS; run++)); do
       read -r cpu_start _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
       run_load "${wrk_args[@]}" -d "${DURATION}s" "$base$endpoint" > "$prefix.wrk.txt" 2>&1
       read -r cpu_end peak_rss_kib rss_kib < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
+      variant_sha="$GIT_SHA"
+      if [[ "$variant" == nativeserve-reference ]]; then variant_sha="$NATIVESERVE_REFERENCE_SHA"; fi
       python3 "$ROOT/scripts/parse_wrk.py" \
         --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" --csv "$OUT/results.csv" \
         --variant "$variant" --endpoint "$endpoint" --run "$run" --connections "$CONNECTIONS" \
         --threads "$THREADS" --duration "$DURATION" --warmup "$warmup_seconds" \
         --warmup-stability "$warmup_status" --cpu-start "$cpu_start" \
-        --cpu-end "$cpu_end" --peak-rss-kib "$peak_rss_kib" --rss-kib "$rss_kib" --git-sha "$GIT_SHA"
+        --cpu-end "$cpu_end" --peak-rss-kib "$peak_rss_kib" --rss-kib "$rss_kib" --git-sha "$variant_sha"
       stop_server
     done
   done

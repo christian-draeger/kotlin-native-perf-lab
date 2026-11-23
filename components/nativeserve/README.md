@@ -4,6 +4,8 @@ HTTP framework for Kotlin/Native.
 
 NativeServe provides a Kotlin routing API and runs on Linux x86_64 and ARM64. Its I/O core uses the reactor pattern with nonblocking Linux sockets and epoll. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
 
+Set `NATIVESERVE_WORKERS=2` on the benchmark executable to try the experimental worker configuration. The process-wide connection limit is divided among workers. Each worker runs its own epoll loop on a shared listener. This option is available for evaluating the benchmark application.
+
 ## Run the example
 
 On Linux x86_64 with JDK 21:

@@ -37,7 +37,9 @@ prepare_load() {
 load_environment() {
   if [[ -z "${LOAD_SSH:-}" ]]; then
     wrk --version 2>&1 | sed -n '1p' || true
-    if [[ "$BIND_HOST" == 127.0.0.1 ]]; then
+    if [[ -n "${SERVER_CPUS:-}" && -n "${LOAD_CPUS:-}" ]]; then
+      echo 'load_generator=local HTTP/1.1; separate server and load CPU affinity sets on one host'
+    elif [[ "$BIND_HOST" == 127.0.0.1 ]]; then
       echo 'load_generator=local HTTP/1.1 loopback; same host and CPU pool as servers'
     else
       echo 'load_generator=local HTTP/1.1; same host and CPU pool as servers'
@@ -64,6 +66,8 @@ load_environment() {
 run_load() {
   if [[ -n "${LOAD_SSH:-}" ]]; then
     load_ssh wrk -s "$load_script" "$@" </dev/null
+  elif [[ -n "${LOAD_CPUS:-}" ]]; then
+    taskset -c "$LOAD_CPUS" wrk -s "$load_script" "$@"
   else
     wrk -s "$load_script" "$@"
   fi
