@@ -134,17 +134,23 @@ warm_server() {
   fi
 
   warmup_status=unstable
+  if [[ "$variant" == ktor-jvm || "$variant" == spring-boot ]]; then
+    local snapshot="$prefix.warmup.0.jstat.txt"
+    LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
+    compiler_logs+=("$snapshot")
+  fi
   for ((window = 1; window <= WARMUP_WINDOWS; window++)); do
     log="$prefix.warmup.$window.wrk.txt"
     run_load "${wrk_args[@]}" -d "${WARMUP}s" "$url" > "$log" 2>&1
     logs+=("$log")
     warmup_seconds=$((window * WARMUP))
-    if [[ "$variant" == ktor-jvm || "$variant" == spring-boot ]]; then
-      jstat -compiler "$server_pid" > "$prefix.warmup.$window.jstat.txt" 2>&1
-      compiler_logs+=("$prefix.warmup.$window.jstat.txt")
+    if (( ${#compiler_logs[@]} > 0 )); then
+      snapshot="$prefix.warmup.$window.jstat.txt"
+      LC_ALL=C jstat -compiler -t "$server_pid" > "$snapshot" 2>&1
+      compiler_logs+=("$snapshot")
     fi
     if (( window < 3 )); then continue; fi
-    if (( ${#compiler_logs[@]} > 0 )); then compiler_args=(--compiler "${compiler_logs[@]: -3}"); fi
+    if (( ${#compiler_logs[@]} > 0 )); then compiler_args=(--compiler "${compiler_logs[@]: -4}"); fi
     verdict="$(python3 "$ROOT/scripts/warmup.py" "${logs[@]: -3}" "${compiler_args[@]}")"
     printf 'window=%s %s\n' "$window" "$verdict" >> "$prefix.warmup.stability.txt"
     if [[ "${verdict%% *}" == stable ]]; then
