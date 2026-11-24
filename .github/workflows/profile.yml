@@ -6,6 +6,12 @@ on:
       - 'scripts/profile.sh'
       - '.github/workflows/profile.yml'
   workflow_dispatch:
+    inputs:
+      suite:
+        description: Sample the original path route or the dynamic catalog JSON workload
+        type: choice
+        options: [core, application]
+        default: core
 
 permissions:
   contents: read
@@ -17,6 +23,7 @@ jobs:
     env:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
+      BENCHMARK_SUITE: ${{ inputs.suite || 'core' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:

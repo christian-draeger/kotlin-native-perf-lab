@@ -25,8 +25,10 @@ trap 'exit 143' TERM
 perf=("${PERF_BIN:-perf}")
 if [[ "${PERF_SUDO:-0}" == 1 ]]; then perf=(sudo -n "${perf[@]}"); fi
 load=(wrk -t 2 -c 16 --timeout 2s -s "$ROOT/scripts/wrk-stats.lua")
+endpoint=/users/123
+if [[ "${BENCHMARK_SUITE:-core}" == application ]]; then endpoint=/catalog/123; fi
 {
-  echo 'Diagnostic CPU sampling: /users/123, local HTTP/1.1, 2 wrk threads, 16 connections.'
+  printf 'Diagnostic CPU sampling: %s, local HTTP/1.1, 2 wrk threads, 16 connections.\n' "$endpoint"
   echo 'Ten seconds of warm-up; about 15 seconds of profiling, one process per variant.'
   echo "git_sha=$(git -C "$ROOT" rev-parse HEAD)"
   echo "git_tree=$(git -C "$ROOT" rev-parse 'HEAD^{tree}')"
@@ -56,7 +58,7 @@ check_load() {
 }
 for variant in ktor-jvm ktor-native rust-axum kotlin-reactor; do
   base="http://$BIND_HOST:$PORT"
-  url="$base/users/123"
+  url="$base$endpoint"
   prefix="$out/$variant"
   printf '%s %s\n' "$variant" "$PORT" >> "$out/ports.txt"
   start_server "$variant" "$prefix.server.txt"
