@@ -60,6 +60,20 @@ class HttpConnectionTest {
     }
 
     @Test
+    fun partialStreamWriteRestartsTheIdleDeadline() {
+        val source = TestSource { _, limit -> limit }
+        val connection = HttpConnection(0, ServerLimits(idleMillis = 10))
+        connection.startStream(16 * 1024 + 1, source)
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+
+        assertTrue(connection.wrote(1, now = 11))
+        assertFalse(connection.expired(now = 20))
+        assertTrue(connection.expired(now = 21))
+        connection.close()
+        assertEquals(1, source.closes)
+    }
+
+    @Test
     fun pullsTheNextStreamChunkOnlyAfterTheCurrentWriteCompletes() {
         val source = TestSource { buffer, limit ->
             buffer.fill('s'.code.toByte(), toIndex = limit)

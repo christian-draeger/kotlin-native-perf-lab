@@ -150,16 +150,23 @@ def test_idle_stream(port):
         active, produced = progress()
         assert active == 1
         transitions = [(0.0, active, produced - initial_bytes)]
-
-        def source_closed():
-            active, produced = progress()
-            sample = (active, produced - initial_bytes)
-            if sample != transitions[-1][1:]:
-                transitions.append((round(time.monotonic() - started, 2), *sample))
-            return active == 0
-
+        last_progress = started
         try:
-            wait_until(source_closed, "Idle stream source still open after five seconds")
+            while True:
+                active, produced = progress()
+                now = time.monotonic()
+                produced_bytes = produced - initial_bytes
+                if produced_bytes != transitions[-1][2]:
+                    # The fixture pulls another chunk only after the preceding write completes.
+                    last_progress = now
+                if (active, produced_bytes) != transitions[-1][1:]:
+                    transitions.append((round(now - started, 2), active, produced_bytes))
+                if active == 0:
+                    assert produced_bytes < STREAM_BYTES, "Slow-reader fixture completed its entire response"
+                    return
+                assert now - last_progress < 5, "Stream source remained open five seconds after output stopped"
+                assert now - started < 10, "Slow-reader fixture never reached an idle timeout"
+                time.sleep(0.02)
         finally:
             print(f"Idle stream progress (elapsed seconds, open sources, bytes produced): {transitions}", flush=True)
 
