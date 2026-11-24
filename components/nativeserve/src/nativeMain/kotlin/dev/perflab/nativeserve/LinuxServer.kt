@@ -2,7 +2,7 @@
 
 package dev.perflab.nativeserve
 
-import dev.perflab.nativeserve.transport.openEpollTransport
+import dev.perflab.nativeserve.transport.openPlatformTransport
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.toKString
 import platform.posix.getenv
@@ -32,7 +32,7 @@ internal fun serveEpoll(
         runEpollWorkers(host, port, workers, limits, routes, stopRequested)
         return@memScoped
     }
-    val transport = openEpollTransport(host, port, limits.connections)
+    val transport = openPlatformTransport(host, port, limits.connections)
     try {
         println("NativeServe backend=$backend tcp=ipv4")
         HttpServer(transport, routes, limits).run(stopRequested)

@@ -4,14 +4,21 @@ plugins {
 
 repositories { mavenCentral() }
 
+val targetOs = providers.gradleProperty("benchmark.targetOs").getOrElse("linux")
+if (targetOs == "macos") layout.buildDirectory.set(layout.projectDirectory.dir("build/macos"))
+
 kotlin {
     val arch = providers.gradleProperty("benchmark.targetArch").getOrElse(System.getProperty("os.arch"))
-    val linux = when (arch) {
-        "amd64", "x86_64" -> linuxX64("native")
-        "aarch64", "arm64" -> linuxArm64("native")
-        else -> error("Unsupported Linux architecture $arch")
+    val native = when (targetOs) {
+        "linux" -> when (arch) {
+            "amd64", "x86_64" -> linuxX64("native")
+            "aarch64", "arm64" -> linuxArm64("native")
+            else -> error("Unsupported Linux architecture $arch")
+        }
+        "macos" -> macosArm64("native")
+        else -> error("Unsupported native target OS")
     }
-    linux.binaries.executable {
+    native.binaries.executable {
         baseName = "hello"
         entryPoint = "dev.perflab.examples.hello.main"
     }
