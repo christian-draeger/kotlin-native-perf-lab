@@ -62,7 +62,7 @@ jobs:
       - name: Install x86_64 SDK from Ubuntu
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y libnghttp2-dev
+          sudo apt-get install -y libnghttp2-dev python3-h2
           dpkg-query -W libnghttp2-dev
           cat "$RUNNER_TEMP/arm-sdk/package-version.txt"
           mkdir "$RUNNER_TEMP/x86-headers"
@@ -91,6 +91,7 @@ jobs:
           install -m 755 "$binary" "$RUNNER_TEMP/h2-arm/h2-probe"
           install -m 755 "$server" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
           cp "$project/smoke.sh" "$RUNNER_TEMP/h2-arm/"
+          cp "$project/multiplex_smoke.py" "$RUNNER_TEMP/h2-arm/"
           cp -R "$project/ingress" "$RUNNER_TEMP/h2-arm/"
           cp "$RUNNER_TEMP/arm-sdk/LICENSE.nghttp2" "$RUNNER_TEMP/h2-arm/"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
@@ -111,6 +112,8 @@ jobs:
           path: ${{ runner.temp }}/h2-arm
       - run: |
           test "$(uname -m)" = aarch64
+          sudo apt-get update -qq
+          sudo apt-get install -y python3-h2
           chmod +x "$RUNNER_TEMP/h2-arm/h2-probe" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
           "$RUNNER_TEMP/h2-arm/h2-probe"
           bash "$RUNNER_TEMP/h2-arm/smoke.sh" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
