@@ -51,6 +51,8 @@ In GitHub Actions, run the **Benchmark dashboard** workflow with suite `workers`
 
 The fixed-rate artifact includes Linux package, core and SMT sibling data for each visible CPU and the actual process masks. When the four x86_64 CPUs can form two sibling pairs, the same runner repeats the fixed-rate trials with the alternate placement. One placement keeps server and load on different cores with two siblings each. The other gives each process one sibling on each core. Both placements keep CPU IDs disjoint.
 
+An additional diagnostic run enables per-worker accept and parsed-request totals during a 3-second, 20,000 requests/s trial. The totals include the initial health request. The latency and throughput trials run with counters disabled.
+
 Dashboard benchmarks on `main` reuse the ARM64 release artifact when a successful Ubuntu smoke run produced it for the exact benchmark commit. The build falls back to cross-compilation when the verified artifact is unavailable. The raw environment record includes `native_build_run_id`.
 
 Review the actual delivered rate and failures before comparing p99 at fixed load. Keep the one-worker result alongside the prior release to spot regressions in the default path. Use the two-host setup to decide on a new default.

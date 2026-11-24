@@ -12,9 +12,11 @@ import dev.perflab.nativeserve.transport.openSharedEpollTransports
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicReference
 import kotlinx.cinterop.MemScope
+import kotlinx.cinterop.toKString
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.runBlocking
+import platform.posix.getenv
 
 internal fun MemScope.runEpollWorkers(
     host: String,
@@ -42,10 +44,13 @@ internal fun MemScope.runEpollWorkers(
         )
     }
     val transports = openSharedEpollTransports(host, port, partitions.map { it.connections })
+    val counters = if (getenv("NATIVESERVE_WORKER_DIAGNOSTICS")?.toKString() == "1") {
+        List(workers) { HttpServerCounters() }
+    } else null
 
     fun runWorker(index: Int, shouldStop: () -> Boolean) {
         try {
-            HttpServer(transports[index], routes, partitions[index]).run(shouldStop)
+            HttpServer(transports[index], routes, partitions[index], counters?.get(index)).run(shouldStop)
         } catch (cause: Throwable) {
             failure.compareAndSet(null, cause)
             stopping.store(true)
@@ -68,6 +73,9 @@ internal fun MemScope.runEpollWorkers(
                     stopping.store(true)
                 }
             }
+        }
+        counters?.forEachIndexed { index, values ->
+            println("NativeServe worker=$index accepted=${values.accepted} requests=${values.requests}")
         }
         failure.load()?.let { throw it }
     } finally {

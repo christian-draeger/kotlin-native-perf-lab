@@ -28,6 +28,7 @@ internal class HttpConnection(
     connectedAt: Long,
     private val limits: ServerLimits,
     private val dispatcher: (() -> CoroutineScope)? = null,
+    private val countRequest: (() -> Unit)? = null,
 ) {
     val input = RequestBuffer(limits.headerBytes)
     var output: ByteArray? = null
@@ -114,6 +115,7 @@ internal class HttpConnection(
                 queue(emptyResponse(head.status), "HTTP/1.1", keepAlive = false)
             }
             is ParsedHead.Complete -> {
+                countRequest?.invoke()
                 input.consume(head.consumed)
                 headStarted = null
                 if (application != null) return prepareApplication(head, now, checkNotNull(start), application)
