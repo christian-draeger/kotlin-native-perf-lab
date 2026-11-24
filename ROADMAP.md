@@ -2,6 +2,8 @@
 
 Build ktServe, an HTTP framework for Kotlin/Native and the JVM with a short, idiomatic setup path and a reproducible comparison against Rust/Axum. GitHub issues hold the acceptance criteria and prerequisites for each change. [Milestones](https://github.com/christian-draeger/kotlin-native-perf-lab/milestones) · [Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues)
 
+The [preview scorecard](results/preview-scorecard.md) records the decisions for the current preview, the measured evidence and the conditions for resuming deferred work. The milestones below retain their original research objectives.
+
 ## Developer experience
 
 The first complete example should look like a small application. A caller sets a port, registers handlers, and returns text or a serializable Kotlin value. Framework users work with Kotlin types and get the same setup on Linux x86_64 and ARM64.
@@ -118,4 +120,4 @@ The [performance research review](results/performance-research.md) audits curren
 
 Pick the workload before measuring the ratio to Axum. A working target to test is at least 90% of Axum throughput with p99 and CPU cost within 10% at comparable successful load. Report RSS and connection concurrency alongside those results. Assess confidence across runs, endpoints and architectures before using the scorecard in release documentation. Keep the metrics and raw evidence when a change is slower.
 
-Keep re-checking *time to the first actionable result* as the validation suite grows. Use exact CI job links and measured job timestamps in validation issues. A completed issue links to the implementation and checks that satisfy its acceptance criteria. Keep conditions that need new hardware or workload evidence open in GitHub.
+Keep re-checking *time to the first actionable result* as the validation suite grows. Use exact CI job links and measured job timestamps in validation issues. Link completed work to its implementation and checks. Record deferred work with its missing evidence and the condition for resuming it.

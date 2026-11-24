@@ -14,7 +14,7 @@ Add the standalone library to a Kotlin/JVM Gradle project on JDK 21. Kotlin Mult
 repositories { mavenCentral() }
 
 dependencies {
-    implementation("codes.draeger:ktserve:0.2.0-preview.2")
+    implementation("codes.draeger:ktserve:0.2.0-preview.3")
 }
 ```
 
@@ -48,6 +48,8 @@ ktServe replaces the NativeServe preview identifiers in packages, build coordina
 | `dashboard/` | The benchmark dashboard published to GitHub Pages. |
 
 ## Benchmark dashboard
+
+The [preview scorecard](results/preview-scorecard.md) documents the supported setup, measured trade-offs and the qualification required for a performance claim.
 
 Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate ktServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
