@@ -57,6 +57,20 @@ Starting a coroutine on the I/O owner until its first suspension is a different 
 
 ktServe reserves a receive array bounded by the request-head limit per connection. The plain response path allocates encoded headers and concatenates the body, and typed JSON runs through the current String-to-UTF-8 encoder. Kotlin/Native uses a shared heap, tracing GC and thread-local allocation pages. Per-request allocation and retention under many open connections can therefore have different costs. Profile release allocations and GC independently and compare RSS after idle, warm, and sustained-load phases. Use that evidence for a capped worker-owned receive pool or incremental allocation. Preserve ownership across close, partial writes and all backends. [Request buffer](../components/ktserve/src/commonMain/kotlin/codes/draeger/ktserve/RequestBuffer.kt) · [Wire encoding](../components/ktserve/src/commonMain/kotlin/codes/draeger/ktserve/Http.kt) · [Kotlin/Native memory manager](https://kotlinlang.org/docs/native-memory-manager.html) · [Buffer pool #18](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/18)
 
+Five fresh processes of the ARM64 release fixture held up to 512 additional idle HTTP/1.1 connections after one successful request on each. The local diagnostic ran on Ubuntu 24.04 in OrbStack on an Apple M3 Max with the standard epoll transport and Kotlin 2.4.21. Each sample forced a collection and recorded the allocator's reported heap and process RSS. One control connection stayed open throughout.
+
+| Additional idle connections | Median heap after GC, MiB | Median RSS, KiB |
+| --- | --- | --- |
+| 0 | 2.625 | 5,336 |
+| 64 | 4.875 | 7,640 |
+| 128 | 5.000 | 7,768 |
+| 256 | 7.125 | 9,944 |
+| 512 | 11.125 | 14,048 |
+| 0, one second after close | 3.125 | 5,848 |
+| 0, five seconds after close | 3.125 | 5,848 |
+
+The 512-connection change was 8.5 MiB, or 17 KiB per connection by this aggregate estimate. The current receive array alone has 16 KiB capacity. All added descriptors closed. The first post-close sample still reported 11.125 MiB and the next two reported 3.125 MiB. Allocation cost per request and long-run memory bounds require separate measurements. A smaller initial buffer with growth up to the existing header limit would address the idle footprint. Pooling the full-size arrays could address churn if allocation attribution justifies keeping spare arrays. [Raw samples and binary identity](connection-retention/arm64-orbstack.json) · [Diagnostic script](../scripts/diagnose-connection-retention.py)
+
 Profile response copies for dynamic or larger bodies before adding scatter/gather. A two-segment header/body response can reduce copying with `writev` but needs correct partial progress across segments and portable adapter behavior. More syscalls can offset savings on tiny responses. Parameterized route generation is most plausible for many routes, according to the shape of the current lookup. Require a route-cardinality profile before optimizing the sparse benchmark. [Linux writev](https://man7.org/linux/man-pages/man2/writev.2.html) · [Compiled routes #19](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/19)
 
 The level-triggered backend currently accepts a socket and calls `fcntl` to enable nonblocking and close-on-exec flags. `accept4` can set both at acceptance. It is a focused candidate for high connection churn. Batched delivery and io_uring submit/completion behavior are separate questions. Keep the app and kernel version fixed, verify actually supported kernel operations, and include scenarios where network I/O dominates. CPU and RX-queue affinity on real NICs are later tests because loopback lacks that path. [Linux accept4](https://man7.org/linux/man-pages/man2/accept.2.html) · [Linux networking scaling](https://www.kernel.org/doc/html/latest/networking/scaling.html)
