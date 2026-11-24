@@ -1,0 +1,5 @@
+2026-11-24T12:21:18.487Z  INFO 3697 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : Starting BenchmarkKt using Java 21.0.13 with PID 3697 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/components/nativeserve/benchmarks/spring-webflux/build/install/ktserve-benchmark-spring-webflux/lib/ktserve-benchmark-spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-24T12:21:18.492Z  INFO 3697 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : No active profile set, falling back to 1 default profile: "default"
+NativeServe backend=nio tcp=ipv4
+2026-11-24T12:21:19.422Z  INFO 3697 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : Started BenchmarkKt in 1.224 seconds (process running for 1.471)
+perflab engine=nativeserve

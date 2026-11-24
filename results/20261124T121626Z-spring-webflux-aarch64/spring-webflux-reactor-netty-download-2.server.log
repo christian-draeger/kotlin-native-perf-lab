@@ -1,0 +1,8 @@
+2026-11-24T12:21:35.732Z  INFO 3855 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : Starting BenchmarkKt using Java 21.0.13.1 with PID 3855 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/components/nativeserve/benchmarks/spring-webflux/build/install/ktserve-benchmark-spring-webflux/lib/ktserve-benchmark-spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-24T12:21:35.735Z  INFO 3855 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : No active profile set, falling back to 1 default profile: "default"
+2026-11-24T12:21:37.242Z  INFO 3855 --- [           main] o.s.boot.reactor.netty.NettyWebServer    : Netty started on port 40507 (http)
+2026-11-24T12:21:37.252Z  INFO 3855 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : Started BenchmarkKt in 1.905 seconds (process running for 2.23)
+perflab engine=reactor-netty
+2026-11-24T12:21:57.734Z  WARN 3855 --- [ctor-http-nio-3] reactor.netty.channel.FluxReceive        : [b452f67d-99, L:/127.0.0.1:40507 - R:/127.0.0.1:45006] An exception has been observed post termination, use DEBUG level to see the full stack: java.net.SocketException: Connection reset
+2026-11-24T12:21:57.807Z  INFO 3855 --- [ionShutdownHook] o.s.boot.reactor.netty.GracefulShutdown  : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-24T12:21:57.808Z  INFO 3855 --- [ netty-shutdown] o.s.boot.reactor.netty.GracefulShutdown  : Graceful shutdown complete
