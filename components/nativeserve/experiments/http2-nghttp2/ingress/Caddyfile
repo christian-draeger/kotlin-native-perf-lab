@@ -1,0 +1,14 @@
+{
+	admin off
+	auto_https disable_redirects
+	grace_period 3s
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$NATIVESERVE_TLS_HOST:localhost}:{$NATIVESERVE_TLS_PORT:8443} {
+	bind {$NATIVESERVE_TLS_BIND:127.0.0.1}
+	tls "{$NATIVESERVE_TLS_CERT}" "{$NATIVESERVE_TLS_KEY}"
+	reverse_proxy h2c://127.0.0.1:{$NATIVESERVE_H2C_PORT:8080}
+}

@@ -67,6 +67,10 @@ jobs:
           cat "$RUNNER_TEMP/arm-sdk/package-version.txt"
           mkdir "$RUNNER_TEMP/x86-headers"
           cp -R /usr/include/nghttp2 "$RUNNER_TEMP/x86-headers/"
+          cd "$RUNNER_TEMP"
+          apt-get download caddy
+          dpkg-deb -x caddy_*.deb proxy
+          "$RUNNER_TEMP/proxy/usr/bin/caddy" version
       - name: Build and exercise both architectures
         run: |
           project=components/nativeserve/experiments/http2-nghttp2
@@ -77,6 +81,7 @@ jobs:
             -Pnghttp2.archive=/usr/lib/x86_64-linux-gnu/libnghttp2.a linkReleaseExecutableNative linkH2cReleaseExecutableNative
           "$binary"
           bash "$project/smoke.sh" "$server"
+          bash "$project/ingress/smoke.sh" "$server" "$RUNNER_TEMP/proxy/usr/bin/caddy"
           gradle -p "$project" -Pbenchmark.targetArch=aarch64 -Pnghttp2.headers="$RUNNER_TEMP/arm-sdk/usr/include" \
             -Pnghttp2.archive="$RUNNER_TEMP/arm-sdk/usr/lib/aarch64-linux-gnu/libnghttp2.a" \
             linkReleaseExecutableNative linkH2cReleaseExecutableNative
@@ -86,6 +91,7 @@ jobs:
           install -m 755 "$binary" "$RUNNER_TEMP/h2-arm/h2-probe"
           install -m 755 "$server" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
           cp "$project/smoke.sh" "$RUNNER_TEMP/h2-arm/"
+          cp -R "$project/ingress" "$RUNNER_TEMP/h2-arm/"
           cp "$RUNNER_TEMP/arm-sdk/LICENSE.nghttp2" "$RUNNER_TEMP/h2-arm/"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -108,3 +114,11 @@ jobs:
           chmod +x "$RUNNER_TEMP/h2-arm/h2-probe" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
           "$RUNNER_TEMP/h2-arm/h2-probe"
           bash "$RUNNER_TEMP/h2-arm/smoke.sh" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
+      - name: Verify TLS ALPN through the ingress
+        run: |
+          sudo apt-get update -qq
+          cd "$RUNNER_TEMP"
+          apt-get download caddy
+          dpkg-deb -x caddy_*.deb proxy
+          "$RUNNER_TEMP/proxy/usr/bin/caddy" version
+          bash "$RUNNER_TEMP/h2-arm/ingress/smoke.sh" "$RUNNER_TEMP/h2-arm/nativeserve-h2c" "$RUNNER_TEMP/proxy/usr/bin/caddy"

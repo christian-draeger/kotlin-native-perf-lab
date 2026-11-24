@@ -23,6 +23,12 @@ curl --http2-prior-knowledge -fsS http://127.0.0.1:8080/users/123
 
 The h2c preview handles bodyless HTTP/2 requests and buffered text and JSON responses. It uses one read range and one write range per connection and admits at most eight streams. SIGTERM stops accepting and queues GOAWAY before draining existing streams to the configured deadline. The executable is a loopback test for prior knowledge. The production deployment milestone covers TLS with ALPN.
 
+## Serve HTTPS at the ingress
+
+The [Caddy configuration](ingress/Caddyfile) passes HTTPS requests to the experimental native server over loopback HTTP/2. It accepts HTTP/2 and HTTP/1.1 at the TLS listener. Start `nativeserve-h2c` on port 8080, set `NATIVESERVE_TLS_CERT` and `NATIVESERVE_TLS_KEY` to the paths of a matching certificate and private key, and start Caddy with `caddy run --config ingress/Caddyfile --adapter caddyfile` from this directory. Configure the certificate hostname with `NATIVESERVE_TLS_HOST` and the listener with `NATIVESERVE_TLS_BIND` and `NATIVESERVE_TLS_PORT`. Set `NATIVESERVE_H2C_PORT` when the native server uses a different port. [Caddy reverse proxy transport](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) · [TLS configuration](https://caddyserver.com/docs/caddyfile/directives/tls)
+
+The smoke test creates a short-lived localhost certificate, starts both processes and verifies TLS with the generated certificate. Run it with `bash ingress/smoke.sh build/bin/native/h2cReleaseExecutable/nativeserve-h2c.kexe`. The h2c server's stream and connection limits also apply behind Caddy. Stop the ingress first so it drains its downstream connections before the native process shuts down.
+
 ## Boundary and ownership
 
 | Operation | Ownership and progress |
