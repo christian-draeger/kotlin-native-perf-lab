@@ -25,7 +25,7 @@ import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.Submission
 import dev.perflab.nativeserve.transport.TransportCompletions
 import dev.perflab.nativeserve.transport.TransportFailure
-import dev.perflab.nativeserve.transport.openPlatformTransport
+import dev.perflab.nativeserve.transport.openEpollTransport
 import kotlinx.cinterop.memScoped
 import kotlin.time.TimeSource
 
@@ -33,11 +33,16 @@ private const val MAX_STREAMS = 8
 private const val SESSION_BUFFER_BYTES = 16 * 1024
 
 fun h2cMain(args: Array<String>) {
+    require(args.size <= 2 && (args.size < 2 || args[1] == "--tcp-nodelay")) {
+        "Usage: nativeserve-h2c [PORT [--tcp-nodelay]]"
+    }
     val port = args.firstOrNull()?.toInt() ?: 8080
     check(reactor_signals(REACTOR_INSTALL_SIGNALS) == 0) { "Could not install signal handlers" }
     try {
-        serveH2c(
+        serveH2cWithSocketOptions(
             port = port,
+            host = "127.0.0.1",
+            tcpNoDelay = args.size == 2,
             limits = ServerLimits(responseBodyBytes = 128 * 1024),
             stopRequested = { reactor_signals(REACTOR_READ_STOP) != 0 },
         ) {
@@ -55,13 +60,22 @@ fun serveH2c(
     limits: ServerLimits = ServerLimits(),
     stopRequested: () -> Boolean = { false },
     configure: Routes.() -> Unit,
+): Unit = serveH2cWithSocketOptions(port, host, limits, stopRequested, tcpNoDelay = false, configure = configure)
+
+private fun serveH2cWithSocketOptions(
+    port: Int,
+    host: String,
+    limits: ServerLimits,
+    stopRequested: () -> Boolean,
+    tcpNoDelay: Boolean,
+    configure: Routes.() -> Unit,
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     val routes = Routes().apply(configure)
     require(routes.applicationHandler == null) { "The h2c experiment does not support a standalone application handler" }
-    val transport = openPlatformTransport(host, port, limits.connections)
+    val transport = openEpollTransport(host, port, limits.connections, tcpNoDelay)
     try {
-        println("NativeServe backend=epoll protocol=h2c")
+        println("NativeServe backend=epoll protocol=h2c tcp_nodelay=${if (tcpNoDelay) "on" else "default"}")
         H2cServer(transport, routes, limits).run(stopRequested)
     } finally {
         transport.close()

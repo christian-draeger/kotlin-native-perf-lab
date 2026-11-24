@@ -36,6 +36,7 @@ import platform.posix.FD_CLOEXEC
 import platform.posix.F_DUPFD_CLOEXEC
 import platform.posix.F_SETFD
 import platform.posix.F_SETFL
+import platform.posix.IPPROTO_TCP
 import platform.posix.MSG_NOSIGNAL
 import platform.posix.O_NONBLOCK
 import platform.posix.SOCK_CLOEXEC
@@ -44,6 +45,7 @@ import platform.posix.SOCK_STREAM
 import platform.posix.SOL_SOCKET
 import platform.posix.SO_REUSEADDR
 import platform.posix.SO_REUSEPORT
+import platform.posix.TCP_NODELAY
 import platform.posix.accept
 import platform.posix.bind
 import platform.posix.close
@@ -68,7 +70,14 @@ internal fun MemScope.openPlatformTransport(
     host: String,
     port: Int,
     connectionLimit: Int,
-): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN) { openListener(host, port) }
+): StreamTransport = openEpollTransport(host, port, connectionLimit, tcpNoDelay = false)
+
+internal fun MemScope.openEpollTransport(
+    host: String,
+    port: Int,
+    connectionLimit: Int,
+    tcpNoDelay: Boolean,
+): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN, tcpNoDelay) { openListener(host, port) }
 
 internal fun MemScope.openWorkerEpollTransports(
     host: String,
@@ -98,10 +107,13 @@ internal fun MemScope.openWorkerEpollTransports(
 private fun MemScope.openEpollTransport(
     connectionLimit: Int,
     listenerEvents: UInt,
+    tcpNoDelay: Boolean = false,
     open: () -> Int,
 ): StreamTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
     val change = alloc<epoll_event>()
+    // The event loop owns this option value and the accepted sockets for the enclosing scope.
+    val noDelayValue = if (tcpNoDelay) alloc<IntVar> { value = 1 }.ptr else null
     memset(change.ptr, 0, sizeOf<epoll_event>().convert())
     val listener = open()
     val poller = epoll_create1(EPOLL_CLOEXEC)
@@ -110,7 +122,7 @@ private fun MemScope.openEpollTransport(
         close(listener)
         error("epoll_create1 failed (errno $cause)")
     }
-    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents)
+    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents, noDelayValue)
 }
 
 internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
@@ -166,6 +178,7 @@ private class EpollTransport(
     private val change: CPointer<epoll_event>,
     private val connectionLimit: Int,
     private val listenerEvents: UInt,
+    private val noDelayValue: CPointer<IntVar>?,
 ) : StreamTransport {
     private val peers = mutableMapOf<ConnectionId, Peer>()
     private val work = ArrayDeque<Peer>()
@@ -300,6 +313,14 @@ private class EpollTransport(
             ) {
                 close(fd)
                 return@repeat
+            }
+
+            if (noDelayValue != null &&
+                setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, noDelayValue, sizeOf<IntVar>().convert()) < 0
+            ) {
+                val cause = errno
+                close(fd)
+                error("Accepted socket TCP_NODELAY failed (errno $cause)")
             }
 
             val id = ConnectionId(nextConnection++)
