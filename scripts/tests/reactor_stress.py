@@ -61,6 +61,7 @@ def assert_closed(conn):
 
 def test_limits(port, pid):
     descriptors = Path(f"/proc/{pid}/fd")
+    windows = sys.platform == "win32"
 
     def open_fds():
         if sys.platform == "darwin":
@@ -82,7 +83,7 @@ def test_limits(port, pid):
         assert time.monotonic() - started < 2, "Partial head exceeded its deadline"
     with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
         assert_closed(conn)
-    initial_fds = open_fds()
+    initial_fds = None if windows else open_fds()
 
     with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
         conn.sendall(request("/large"))
@@ -108,22 +109,32 @@ def test_limits(port, pid):
 
     with ExitStack() as clients:
         for _ in range(CONNECTIONS):
-            clients.enter_context(socket.create_connection(("127.0.0.1", port), timeout=5))
-        wait_until(lambda: open_fds() == initial_fds + CONNECTIONS, "Fixture never reached its connection limit")
+            conn = clients.enter_context(socket.create_connection(("127.0.0.1", port), timeout=5))
+            if windows:
+                conn.sendall(request("/health"))
+                with conn.makefile("rb") as stream:
+                    assert response(stream)[2] == b"ok"
+        if initial_fds is not None:
+            wait_until(lambda: open_fds() == initial_fds + CONNECTIONS, "Fixture never reached its connection limit")
         with socket.create_connection(("127.0.0.1", port), timeout=1) as overflow:
             assert_closed(overflow)
-        assert open_fds() == initial_fds + CONNECTIONS
+        if initial_fds is not None:
+            assert open_fds() == initial_fds + CONNECTIONS
 
-    wait_until(lambda: open_fds() <= initial_fds, "Disconnected clients leaked file descriptors")
+    if initial_fds is not None:
+        wait_until(lambda: open_fds() <= initial_fds, "Disconnected clients leaked file descriptors")
     final_heap = None
 
     def heap_reclaimed():
         nonlocal final_heap
-        final_heap = read_counter("/heap")
+        try:
+            final_heap = read_counter("/heap")
+        except ConnectionResetError:
+            return False
         return final_heap <= initial_heap + MIB
 
     wait_until(heap_reclaimed, f"Live heap did not return within {MIB} bytes of {initial_heap}")
-    print(f"Reactor resource checks passed (fds={open_fds()}, live heap {initial_heap} -> {final_heap} bytes)")
+    print(f"Reactor resource checks passed (connection cap, live heap {initial_heap} -> {final_heap} bytes)")
 
 
 def test_streams(port, server):
@@ -209,11 +220,15 @@ def test_request_bodies(port):
     print("Request streaming checks passed (pipeline, disconnect, deadline)")
 
 
-def main(binary):
+def ephemeral_port():
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    subprocess.run([binary, "--transport", str(port)], check=True, timeout=10)
+        return probe.getsockname()[1]
+
+
+def main(binary):
+    subprocess.run([binary, "--transport", str(ephemeral_port())], check=True, timeout=10)
+    port = ephemeral_port()
     with subprocess.Popen([binary, str(port)]) as server:
         try:
             def ready():

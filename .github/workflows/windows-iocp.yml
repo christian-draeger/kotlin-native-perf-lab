@@ -1,11 +1,15 @@
-name: NativeServe Windows IOCP probe
+name: NativeServe Windows IOCP
 
 on:
   pull_request:
     paths:
       - 'components/nativeserve/experiments/windows-iocp/**'
+      - 'components/nativeserve/src/commonMain/**'
+      - 'components/nativeserve/src/nativeShared/**'
+      - 'components/nativeserve/src/nativeStress/**'
       - 'components/nativeserve/gradlew.bat'
       - 'components/nativeserve/gradle/wrapper/**'
+      - 'scripts/tests/reactor_*'
       - '.github/workflows/windows-iocp.yml'
   workflow_dispatch:
 
@@ -25,13 +29,22 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
-      - name: Compile and run the Kotlin/Native probe
+      - name: Build the Winsock probe, HTTP server and shared socket fixture
         shell: pwsh
         run: |
           $project = 'components/nativeserve/experiments/windows-iocp'
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
-          & ./components/nativeserve/gradlew.bat -p $project linkReleaseExecutableMingwX64
+          & ./components/nativeserve/gradlew.bat -p $project linkReleaseExecutableMingwX64 linkServerReleaseExecutableMingwX64 linkStressReleaseExecutableMingwX64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $binary = Join-Path $project 'build/bin/mingwX64/releaseExecutable/iocp-probe.exe'
           Get-FileHash -Algorithm SHA256 $binary
           & $binary
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-FileHash -Algorithm SHA256 (Join-Path $project 'build/bin/mingwX64/serverReleaseExecutable/nativeserve-iocp.exe')
+      - name: Exercise real IOCP sockets, limits and shutdown
+        shell: pwsh
+        run: |
+          $fixture = 'components/nativeserve/experiments/windows-iocp/build/bin/mingwX64/stressReleaseExecutable/nativeserve-iocp-stress.exe'
+          $env:NATIVESERVE_BACKEND = 'iocp'
+          python scripts/tests/reactor_stress.py $fixture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
