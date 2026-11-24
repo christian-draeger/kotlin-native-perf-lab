@@ -142,25 +142,25 @@ private fun parseHead(head: String, consumed: Int): ParsedHead {
     val path = head.substring(targetStart, queryStart)
     val query = if (queryStart == targetEnd) null else head.substring(queryStart + 1, targetEnd)
     return ParsedHead.Complete(
-        Request(head.substring(0, methodEnd), path, query, bodyLength = if (chunked) null else bodyLength),
+        Request(head.substring(0, methodEnd), path, query, bodyLength = if (chunked) null else bodyLength, rawHead = head),
         version,
         !close && (version == "HTTP/1.1" || keepAlive),
         consumed,
     )
 }
 
-private fun String.lineEnd(start: Int): Int = indexOf("\r\n", start).let { if (it < 0) length else it }
+internal fun String.lineEnd(start: Int): Int = indexOf("\r\n", start).let { if (it < 0) length else it }
 
 private fun String.matches(start: Int, end: Int, literal: String, ignoreCase: Boolean = false): Boolean =
     end - start == literal.length && regionMatches(start, literal, 0, literal.length, ignoreCase)
 
-private fun String.skipOws(start: Int, end: Int): Int {
+internal fun String.skipOws(start: Int, end: Int): Int {
     var index = start
     while (index < end && (this[index] == ' ' || this[index] == '\t')) index++
     return index
 }
 
-private fun String.trimmedEnd(start: Int, end: Int): Int {
+internal fun String.trimmedEnd(start: Int, end: Int): Int {
     var index = end
     while (index > start && (this[index - 1] == ' ' || this[index - 1] == '\t')) index--
     return index
@@ -169,7 +169,7 @@ private fun String.trimmedEnd(start: Int, end: Int): Int {
 private fun String.isToken(start: Int, end: Int): Boolean {
     for (index in start until end) {
         val char = this[index]
-        if (char !in 'A'..'Z' && char !in 'a'..'z' && char !in '0'..'9' && char !in "!#$%&'*+-.^`_|~") return false
+        if (!char.isHttpToken()) return false
     }
     return start < end
 }

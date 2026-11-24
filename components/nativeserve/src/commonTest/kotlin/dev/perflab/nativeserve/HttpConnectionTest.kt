@@ -121,6 +121,23 @@ class HttpConnectionTest {
     }
 
     @Test
+    fun aResponseOverTheHeaderLimitClosesItsSourceBeforeSending() {
+        val source = TestSource { _, _ -> error("Unexpected read") }
+        val routes = Routes().apply {
+            get("/health") {
+                streamResponse(1, "text/plain", source)
+                    .withHeaders(HttpField("X-Large", "x".repeat(64)))
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits(responseHeaderBytes = 64))
+        connection.receive(request, now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        assertTrue(assertNotNull(connection.output).decodeToString().startsWith("HTTP/1.1 500 "))
+        assertEquals(0, source.reads)
+        assertEquals(1, source.closes)
+    }
+
+    @Test
     fun theHttp10StreamKeepsItsDeclaredLengthAndClosesAfterWriting() {
         val routes = Routes().apply {
             get("/health") {

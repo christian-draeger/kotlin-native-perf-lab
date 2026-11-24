@@ -62,6 +62,9 @@ class HttpTest {
         assertEquals("HTTP/1.0", request.version)
         assertEquals(buffer.size, request.consumed)
         assertTrue(request.keepAlive)
+        assertEquals("localhost", request.request.header("HOST"))
+        assertEquals("Grüße", request.request.header("X-Description"))
+        assertEquals(null, request.request.header("missing"))
 
         val headerless = RequestBuffer(64)
         headerless.add("GET /? HTTP/1.0\r\n\r\n")
@@ -73,6 +76,52 @@ class HttpTest {
         val closes = RequestBuffer(128)
         closes.add("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive, CLOSE, keep-alive\r\n\r\n")
         assertFalse(assertIs<ParsedHead.Complete>(closes.parse()).keepAlive)
+    }
+
+    @Test
+    fun suppliesOrderedRepeatedFieldsToParameterizedRoutes() {
+        val buffer = RequestBuffer(512)
+        buffer.add("GET /users/123 HTTP/1.1\r\nHost: example\r\nX-Tag:\tfirst \t\r\nx-tag: second\r\n\r\n")
+        val request = assertIs<ParsedHead.Complete>(buffer.parse()).request
+        val routes = Routes().apply {
+            get("/users/{id}") { matched ->
+                assertEquals(123, matched.pathInt("id"))
+                assertEquals("first", matched.header("x-tag"))
+                assertEquals(
+                    listOf(HttpField("Host", "example"), HttpField("X-Tag", "first"), HttpField("x-tag", "second")),
+                    matched.headers(),
+                )
+                text("ok")
+            }
+        }
+        buffer.consume(buffer.size)
+        buffer.add("GET /new HTTP/1.1\r\nHost: elsewhere\r\n\r\n")
+        assertEquals(200, routes.respond(request).status)
+    }
+
+    @Test
+    fun serializesRepeatedApplicationFieldsAndRejectsFramingOverrides() {
+        val output = response(byteArrayOf(1, 2), status = 405, contentType = "application/octet-stream")
+            .withHeaders(
+                HttpField("Allow", "OPTIONS"),
+                HttpField("Set-Cookie", "foo=one"),
+                HttpField("Set-Cookie", "bar=two"),
+            )
+        assertContentEquals(
+            ("HTTP/1.1 405 Method Not Allowed\r\nContent-Type: application/octet-stream\r\n" +
+                "Allow: OPTIONS\r\nSet-Cookie: foo=one\r\nSet-Cookie: bar=two\r\nContent-Length: 2\r\n" +
+                "Connection: close\r\n\r\n").encodeToByteArray() + byteArrayOf(1, 2),
+            output.encode("HTTP/1.1", keepAlive = false),
+        )
+        for (field in listOf(
+            HttpField("Content-Length", "0"),
+            HttpField("tRaNsFeR-eNcOdInG", "chunked"),
+            HttpField("Connection", "close"),
+            HttpField("Bad Name", "value"),
+            HttpField("Valid", "value\r\nOther: unsafe"),
+        )) {
+            assertFailsWith<IllegalArgumentException> { text("ok").withHeaders(field) }
+        }
     }
 
     @Test

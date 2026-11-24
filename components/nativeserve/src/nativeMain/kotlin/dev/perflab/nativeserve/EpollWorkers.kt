@@ -38,6 +38,7 @@ internal fun MemScope.runEpollWorkers(
             requestBodyBytes = limits.requestBodyBytes,
             requestBodyMillis = limits.requestBodyMillis,
             handlerMillis = limits.handlerMillis,
+            responseHeaderBytes = limits.responseHeaderBytes,
         )
     }
     val transports = openSharedEpollTransports(host, port, partitions.map { it.connections })

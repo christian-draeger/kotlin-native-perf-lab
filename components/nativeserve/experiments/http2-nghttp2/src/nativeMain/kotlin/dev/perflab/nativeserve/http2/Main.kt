@@ -2,6 +2,7 @@
 
 package dev.perflab.nativeserve.http2
 
+import dev.perflab.nativeserve.HttpField
 import dev.perflab.nativeserve.http2.bridge.probe_version
 import kotlinx.cinterop.toKString
 
@@ -15,8 +16,8 @@ fun main() {
             val small = client.get("/health")
             link.settle()
             check(serverEvents.ended == setOf(large, small))
-            check(serverEvents.headers.getValue(large)[":method"] == "GET")
-            check(serverEvents.headers.getValue(small)[":path"] == "/health")
+            check(serverEvents.headers.getValue(large)[":method"] == listOf("GET"))
+            check(serverEvents.headers.getValue(small)[":path"] == listOf("/health"))
 
             val largeSize = 96 * 1024
             val smallBody = StringBuilder()
@@ -27,13 +28,17 @@ fun main() {
                     else -> error("Unexpected response data on stream $stream")
                 }
             }
-            server.respond(small, 200, "ok".encodeToByteArray())
+            server.respond(
+                small, 200, "ok".encodeToByteArray(),
+                fields = listOf(HttpField("Set-Cookie", "first=1"), HttpField("Set-Cookie", "second=2")),
+            )
             server.respond(large, 200, ByteArray(largeSize) { 'x'.code.toByte() })
             link.settle()
             val stalledBytes = clientEvents.counts.getValue(large)
             check(stalledBytes in 1 until largeSize && large !in clientEvents.ended)
             check(smallBody.toString() == "ok" && small in clientEvents.ended)
-            check(clientEvents.headers.getValue(small)[":status"] == "200")
+            check(clientEvents.headers.getValue(small)[":status"] == listOf("200"))
+            check(clientEvents.headers.getValue(small)["set-cookie"] == listOf("first=1", "second=2"))
             client.addCredit(large, stalledBytes)
             link.settle()
             check(clientEvents.counts.getValue(large) == largeSize && large in clientEvents.ended)
@@ -51,14 +56,14 @@ fun main() {
 }
 
 private class RecordingEvents : SessionEvents {
-    val headers = mutableMapOf<Int, MutableMap<String, String>>()
+    val headers = mutableMapOf<Int, MutableMap<String, MutableList<String>>>()
     val counts = mutableMapOf<Int, Int>()
     val ended = mutableSetOf<Int>()
     val closed = mutableMapOf<Int, UInt>()
     var checkData: (Int, ByteArray) -> Unit = { _, _ -> }
 
     override fun header(stream: Int, name: String, value: String): Boolean {
-        headers.getOrPut(stream) { mutableMapOf() }[name] = value
+        headers.getOrPut(stream) { mutableMapOf() }.getOrPut(name) { mutableListOf() }.add(value)
         return true
     }
 

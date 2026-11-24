@@ -14,11 +14,12 @@ class ServerLimits(
     val requestBodyBytes: Int = 64 * 1024,
     val requestBodyMillis: Long = 30_000,
     val handlerMillis: Long = 30_000,
+    val responseHeaderBytes: Int = 16 * 1024,
 ) {
     init {
         require(connections > 0 && headerBytes >= 64 && responseBodyBytes > 0)
         require(idleMillis > 0 && requestHeadMillis > 0 && drainMillis > 0)
-        require(requestBodyBytes >= 0 && requestBodyMillis > 0 && handlerMillis > 0)
+        require(requestBodyBytes >= 0 && requestBodyMillis > 0 && handlerMillis > 0 && responseHeaderBytes > 0)
     }
 }
 
@@ -226,7 +227,9 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     private fun queue(response: Response, version: String, keepAlive: Boolean) {
         val stream = response.stream
         val chunked = stream != null && stream.length == null
-        if ((stream?.length ?: response.body.size) > limits.responseBodyBytes || chunked && version != "HTTP/1.1") {
+        if ((stream?.length ?: response.body.size) > limits.responseBodyBytes ||
+            response.applicationHeaderBytes > limits.responseHeaderBytes || chunked && version != "HTTP/1.1"
+        ) {
             stream?.source?.release()
             closeAfterWrite = true
             setOutput(emptyResponse(500).encode(version, keepAlive = false))
