@@ -23,6 +23,10 @@ if (( WARMUP_WINDOWS > 1 )); then
 fi
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
 suite="${BENCHMARK_SUITE:-core}"
+if [[ "$suite" == application-mix ]]; then
+  echo 'The application-mix fixtures are available through scripts/smoke-all.sh. The single-endpoint wrk harness cannot drive this workload.' >&2
+  exit 2
+fi
 if [[ "$suite" == workers ]]; then
   [[ "${KTSERVE_REFERENCE_BINARY:-}" == /* && -x "$KTSERVE_REFERENCE_BINARY" ]] || {
     echo 'KTSERVE_REFERENCE_BINARY must be an absolute path to an executable release binary.' >&2; exit 2;

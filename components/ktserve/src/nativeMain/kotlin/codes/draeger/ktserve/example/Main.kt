@@ -15,11 +15,11 @@ fun main() {
     val port = getenv("PORT")?.toKString()?.toIntOrNull() ?: 8080
     val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
     val workers = getenv("KTSERVE_WORKERS")?.toKString()?.toInt() ?: 1
-    val catalogWorkload = getenv("BENCHMARK_SUITE")?.toKString() == "application"
+    val suite = getenv("BENCHMARK_SUITE")?.toKString()
     check(ktserve_signals(KTSERVE_INSTALL_SIGNALS) == 0) { "Install signal handlers failed (errno $errno)" }
     try {
         serveEpoll(port = port, host = host, workers = workers, stopRequested = { ktserve_signals(KTSERVE_READ_STOP) != 0 }) {
-            parityRoutes(catalogWorkload)
+            parityRoutes(suite)
         }
     } finally {
         ktserve_signals(KTSERVE_RESTORE_SIGNALS)
