@@ -62,7 +62,7 @@ def exercise(sock, shutdown_pid):
     receive_until(lambda: small in ended and len(bodies[slow]) >= WINDOW, slow)
     assert bodies[small] == b"ok"
     assert bodies[slow] == b"x" * WINDOW and slow not in ended
-    if shutdown_pid:
+    if not isinstance(sock, ssl.SSLSocket):
         assert session.remote_settings.max_frame_size == 16384
         assert session.remote_settings.max_concurrent_streams == 8
     session.reset_stream(slow, error_code=ErrorCodes.CANCEL)
