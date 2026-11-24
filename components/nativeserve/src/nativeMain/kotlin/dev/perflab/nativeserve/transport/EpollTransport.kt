@@ -14,6 +14,7 @@ import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.sizeOf
+import kotlinx.cinterop.toKString
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.linux.EPOLLERR
@@ -24,6 +25,7 @@ import platform.linux.EPOLL_CLOEXEC
 import platform.linux.EPOLL_CTL_ADD
 import platform.linux.EPOLL_CTL_DEL
 import platform.linux.EPOLL_CTL_MOD
+import platform.linux.EPOLLET
 import platform.linux.epoll_create1
 import platform.linux.epoll_ctl
 import platform.linux.epoll_event
@@ -51,6 +53,7 @@ import platform.posix.bind
 import platform.posix.close
 import platform.posix.errno
 import platform.posix.fcntl
+import platform.posix.getenv
 import platform.posix.htonl
 import platform.posix.htons
 import platform.posix.listen
@@ -70,7 +73,9 @@ internal fun MemScope.openPlatformTransport(
     host: String,
     port: Int,
     connectionLimit: Int,
-): StreamTransport = openEpollTransport(host, port, connectionLimit, tcpNoDelay = false)
+): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN, edgeTriggered = configuredEdgeTrigger()) {
+    openListener(host, port)
+}
 
 internal fun MemScope.openEpollTransport(
     host: String,
@@ -85,12 +90,13 @@ internal fun MemScope.openWorkerEpollTransports(
     connectionLimits: List<Int>,
     reusePort: Boolean,
 ): List<StreamTransport> {
+    val edgeTriggered = configuredEdgeTrigger()
     val transports = ArrayList<StreamTransport>(connectionLimits.size)
     val sharedListener = if (reusePort) -1 else openListener(host, port)
     try {
         for (limit in connectionLimits) {
             val events = if (reusePort) EPOLLIN else EPOLLIN or EPOLL_EXCLUSIVE
-            transports += openEpollTransport(limit, events) {
+            transports += openEpollTransport(limit, events, edgeTriggered = edgeTriggered) {
                 if (reusePort) openListener(host, port, reusePort = true)
                 else checked(fcntl(sharedListener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
             }
@@ -104,10 +110,18 @@ internal fun MemScope.openWorkerEpollTransports(
     }
 }
 
+private fun configuredEdgeTrigger(): Boolean {
+    val mode = getenv("KTSERVE_EPOLL_TRIGGER")?.toKString() ?: return false
+    require(mode == "level" || mode == "edge") { "KTSERVE_EPOLL_TRIGGER must be level or edge" }
+    println("ktServe epoll peer_trigger=$mode")
+    return mode == "edge"
+}
+
 private fun MemScope.openEpollTransport(
     connectionLimit: Int,
     listenerEvents: UInt,
     tcpNoDelay: Boolean = false,
+    edgeTriggered: Boolean = false,
     open: () -> Int,
 ): StreamTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
@@ -122,7 +136,7 @@ private fun MemScope.openEpollTransport(
         close(listener)
         error("epoll_create1 failed (errno $cause)")
     }
-    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents, noDelayValue)
+    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents, noDelayValue, edgeTriggered)
 }
 
 internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
@@ -179,6 +193,7 @@ private class EpollTransport(
     private val connectionLimit: Int,
     private val listenerEvents: UInt,
     private val noDelayValue: CPointer<IntVar>?,
+    private val edgeTriggered: Boolean,
 ) : StreamTransport {
     private val peers = mutableMapOf<ConnectionId, Peer>()
     private val work = ArrayDeque<Peer>()
@@ -287,6 +302,7 @@ private class EpollTransport(
                 acceptReady(completions)
             } else {
                 val peer = peers[ConnectionId(token.toLong())] ?: continue
+                if (edgeTriggered) peer.edgeReadiness = peer.edgeReadiness or event.events
                 if (!peer.queued) process(peer, event.events, completions)
             }
         }
@@ -333,10 +349,11 @@ private class EpollTransport(
     private fun process(peer: Peer, ready: UInt, completions: TransportCompletions) {
         processing = peer
         try {
-            if (ready and (EPOLLERR or EPOLLHUP) != 0U) stop(peer, TransportFailure.CONNECTION_LOST)
-            if (peer.read.failure != null || ready and EPOLLIN != 0U) complete(peer, peer.read, completions)
+            val available = if (edgeTriggered) peer.edgeReadiness else ready
+            if (available and (EPOLLERR or EPOLLHUP) != 0U) stop(peer, TransportFailure.CONNECTION_LOST)
+            if (peer.read.failure != null || available and EPOLLIN != 0U) complete(peer, peer.read, completions)
 
-            var writable = ready and EPOLLOUT != 0U
+            var writable = available and EPOLLOUT != 0U
             for (attempt in 0 until BATCH_SIZE) {
                 val slot = peer.write
                 if (slot.buffer == null || !(slot.failure != null || slot.firstAttempt || writable)) break
@@ -350,7 +367,10 @@ private class EpollTransport(
         if (peer.fd >= 0) updateInterest(peer)
         if (peer.fd < 0 && !peer.pending) {
             peers.remove(peer.id)
-        } else if (peer.read.failure != null || peer.write.failure != null || peer.write.firstAttempt) {
+        } else if (peer.read.failure != null || peer.write.failure != null || peer.write.firstAttempt ||
+            edgeTriggered && peer.interest and peer.edgeReadiness != 0U
+        ) {
+            // Preserve observed readiness across bounded batches without spinning on empty transfer slots.
             queue(peer)
         }
     }
@@ -367,7 +387,17 @@ private class EpollTransport(
                     recv(peer.fd, pinned.addressOf(slot.offset), slot.length.convert(), 0)
                 }
             }
-            if (transferred < 0 && (errno == EAGAIN || errno == EINTR)) return false
+            if (transferred < 0) {
+                val cause = errno
+                if (cause == EAGAIN || cause == EINTR) {
+                    if (edgeTriggered) {
+                        val direction = if (slot.writing) EPOLLOUT else EPOLLIN
+                        peer.edgeReadiness = if (cause == EAGAIN) peer.edgeReadiness and direction.inv()
+                        else peer.edgeReadiness or direction
+                    }
+                    return false
+                }
+            }
             if (transferred < 0 || slot.writing && transferred == 0L) {
                 stop(peer, TransportFailure.CONNECTION_LOST)
             } else {
@@ -397,7 +427,8 @@ private class EpollTransport(
             peer.interest == 0U -> EPOLL_CTL_ADD
             else -> EPOLL_CTL_MOD
         }
-        if (watch(action, peer.fd, peer.id.value.toULong(), interest) == 0) {
+        val events = if (edgeTriggered && interest != 0U) interest or EPOLLET else interest
+        if (watch(action, peer.fd, peer.id.value.toULong(), events) == 0) {
             peer.interest = interest
         } else {
             stop(peer, TransportFailure.IO_FAILURE)
@@ -455,6 +486,7 @@ private class EpollTransport(
         val read = Transfer(writing = false)
         val write = Transfer(writing = true)
         var interest = 0U
+        var edgeReadiness = 0U
         var queued = false
 
         val pending: Boolean
