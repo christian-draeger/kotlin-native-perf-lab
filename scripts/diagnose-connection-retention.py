@@ -70,7 +70,11 @@ def samples(fixture, run):
                 if time.monotonic() >= deadline:
                     raise RuntimeError("Fixture did not release the disconnected sockets")
                 time.sleep(0.02)
-            yield {"run": run, "idle_connections": 0, "after_disconnect": True, **sample(control, server.pid)}
+            disconnected_at = time.monotonic()
+            for seconds in (0, 1, 5):
+                time.sleep(max(0, disconnected_at + seconds - time.monotonic()))
+                yield {"run": run, "idle_connections": 0, "seconds_after_disconnect": seconds,
+                       **sample(control, server.pid)}
             if request(control, "/stop") != b"ok" or server.wait(timeout=4) != 0:
                 raise RuntimeError("Fixture did not shut down cleanly")
         finally:
