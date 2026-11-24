@@ -43,8 +43,8 @@ base="https://localhost:$NATIVESERVE_TLS_PORT"
 test "$(curl "${options[@]}" --http2 "$base/health")" = $'ok\n2'
 test "$(curl "${options[@]}" --http1.1 "$base/health")" = $'ok\n1.1'
 test "$(curl "${options[@]}" --http2 "$base/users/123")" = $'{"id":123,"name":"benchmark-user","active":true}\n2'
+/usr/bin/python3 "$directory/../multiplex_smoke.py" "$NATIVESERVE_TLS_PORT" --ca "$NATIVESERVE_TLS_CERT" --shutdown-pid "$proxy_pid"
 
-kill -TERM "$proxy_pid"
 wait "$proxy_pid"
 proxy_pid=''
 kill -TERM "$server_pid"

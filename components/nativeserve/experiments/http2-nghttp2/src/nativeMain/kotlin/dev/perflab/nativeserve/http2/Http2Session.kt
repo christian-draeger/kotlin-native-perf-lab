@@ -2,10 +2,12 @@
 
 package dev.perflab.nativeserve.http2
 
+import dev.perflab.nativeserve.ResponseSource
 import dev.perflab.nativeserve.http2.bridge.PROBE_CLOSED
 import dev.perflab.nativeserve.http2.bridge.PROBE_DATA
 import dev.perflab.nativeserve.http2.bridge.PROBE_END
 import dev.perflab.nativeserve.http2.bridge.PROBE_HEADER
+import dev.perflab.nativeserve.http2.bridge.PROBE_HEADERS_END
 import dev.perflab.nativeserve.http2.bridge.probe_cancel
 import dev.perflab.nativeserve.http2.bridge.probe_close
 import dev.perflab.nativeserve.http2.bridge.probe_consume
@@ -35,6 +37,7 @@ import platform.posix.memcpy
 
 internal interface SessionEvents {
     fun header(stream: Int, name: String, value: String): Boolean = true
+    fun headersEnd(stream: Int) {}
     fun data(stream: Int, bytes: ByteArray) {}
     fun end(stream: Int) {}
     fun closed(stream: Int, code: UInt) {}
@@ -53,11 +56,20 @@ internal class Http2Session(server: Boolean, events: SessionEvents) : AutoClosea
     fun get(path: String): Int = probe_get(active(), path).also { check(it > 0) }
 
     fun respond(stream: Int, status: Int, body: ByteArray, contentType: String? = "text/plain") {
+        respond(stream, status, contentType, BufferedBody(body))
+    }
+
+    fun respond(stream: Int, status: Int, contentType: String?, source: ResponseSource, length: Int?, limit: Int) {
+        respond(stream, status, contentType, StreamingBody(source, length, limit))
+    }
+
+    private fun respond(stream: Int, status: Int, contentType: String?, body: OutboundBody) {
         require(status in 200..599)
         check(!state.responses.containsKey(stream))
-        state.responses[stream] = OutboundBody(body)
-        if (probe_respond(active(), stream, status, contentType, body.size.convert()) != 0) {
-            state.responses.remove(stream)
+        state.responses[stream] = body
+        val length = body.length?.toLong() ?: -1L
+        if (probe_respond(active(), stream, status, contentType, length, if (length == 0L) 0 else 1) != 0) {
+            state.closeResponse(stream)
             error("Could not submit nghttp2 response")
         }
     }
@@ -94,18 +106,67 @@ internal class Http2Session(server: Boolean, events: SessionEvents) : AutoClosea
         val current = handle ?: return
         handle = null
         probe_close(current)
-        state.responses.clear()
+        state.responses.keys.toList().forEach(state::closeResponse)
         stable.dispose()
     }
 
     private fun active() = checkNotNull(handle)
 }
 
-private class OutboundBody(val bytes: ByteArray, var offset: Int = 0)
+private interface OutboundBody : AutoCloseable {
+    val length: Int?
+    val done: Boolean
+    fun read(output: CPointer<UByteVar>?, limit: Int): Int
+    override fun close() {}
+}
+
+private class BufferedBody(private val bytes: ByteArray) : OutboundBody {
+    private var offset = 0
+    override val length get() = bytes.size
+    override val done get() = offset == bytes.size
+
+    override fun read(output: CPointer<UByteVar>?, limit: Int): Int {
+        val count = minOf(limit, bytes.size - offset)
+        if (count > 0) bytes.usePinned { memcpy(output, it.addressOf(offset), count.convert()) }
+        offset += count
+        return count
+    }
+}
+
+private class StreamingBody(private val source: ResponseSource, override val length: Int?, limit: Int) : OutboundBody {
+    private var remaining = length ?: limit
+    private val buffer = ByteArray(minOf(16 * 1024, remaining))
+    override var done = length == 0
+        private set
+
+    override fun read(output: CPointer<UByteVar>?, limit: Int): Int {
+        val offered = minOf(limit, buffer.size, remaining).coerceAtLeast(1)
+        val count = source.read(buffer, offered)
+        if (length == null && count == -1) {
+            done = true
+            return 0
+        }
+        check(count in 1..offered && count <= remaining) { "Response source exceeded its framing or byte limit" }
+        buffer.usePinned { memcpy(output, it.addressOf(0), count.convert()) }
+        remaining -= count
+        done = length != null && remaining == 0
+        return count
+    }
+
+    override fun close() = source.close()
+}
 
 private class CallbackState(val events: SessionEvents) {
     val responses = mutableMapOf<Int, OutboundBody>()
     var callbackFailure: Throwable? = null
+
+    fun closeResponse(stream: Int) {
+        try {
+            responses.remove(stream)?.close()
+        } catch (_: Exception) {
+            // The source is already detached from the protocol state.
+        }
+    }
 
     fun checkCallback() {
         callbackFailure?.let { throw IllegalStateException("HTTP/2 callback failed", it) }
@@ -124,10 +185,11 @@ private fun onEvent(
             PROBE_HEADER -> if (!state.events.header(
                     stream, first.copy(firstLength).decodeToString(), second.copy(secondLength).decodeToString(),
                 )) return -1
+            PROBE_HEADERS_END -> state.events.headersEnd(stream)
             PROBE_DATA -> state.events.data(stream, first.copy(firstLength))
             PROBE_END -> state.events.end(stream)
             PROBE_CLOSED -> {
-                state.responses.remove(stream)
+                state.closeResponse(stream)
                 state.events.closed(stream, error)
             }
         }
@@ -144,15 +206,11 @@ private fun onRead(
     val state = context?.asStableRef<CallbackState>()?.get() ?: return -1L
     return try {
         val body = state.responses.getValue(stream)
-        val count = minOf(length.toInt(), body.bytes.size - body.offset)
-        if (count > 0) {
-            body.bytes.usePinned { memcpy(output, it.addressOf(body.offset), count.convert()) }
-            body.offset += count
-        }
-        checkNotNull(done).pointed.value = if (body.offset == body.bytes.size) 1 else 0
+        val count = body.read(output, length.toInt())
+        checkNotNull(done).pointed.value = if (body.done) 1 else 0
         count.toLong()
-    } catch (failure: Throwable) {
-        state.callbackFailure = failure
+    } catch (_: Throwable) {
+        // nghttp2 converts the read failure into a reset for this stream.
         -1L
     }
 }

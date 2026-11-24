@@ -7,6 +7,7 @@
 #define PROBE_DATA 2
 #define PROBE_END 3
 #define PROBE_CLOSED 4
+#define PROBE_HEADERS_END 5
 
 typedef int (*probe_event_fn)(void *, int, int32_t, const uint8_t *, size_t, const uint8_t *, size_t, uint32_t);
 typedef ssize_t (*probe_read_fn)(void *, int32_t, uint8_t *, size_t, int *);
@@ -43,6 +44,10 @@ static inline int probe_data_cb(nghttp2_session *session, uint8_t flags, int32_t
 static inline int probe_frame_cb(nghttp2_session *session, const nghttp2_frame *frame, void *user) {
     (void)session;
     struct probe_session *probe = user;
+    if (frame->hd.type == NGHTTP2_HEADERS) {
+        int result = probe->event(probe->context, PROBE_HEADERS_END, frame->hd.stream_id, 0, 0, 0, 0, 0);
+        if (result != 0) return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
     if ((frame->hd.type == NGHTTP2_HEADERS || frame->hd.type == NGHTTP2_DATA) &&
         (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
         int result = probe->event(probe->context, PROBE_END, frame->hd.stream_id, 0, 0, 0, 0, 0);
@@ -114,18 +119,18 @@ static inline int32_t probe_get(struct probe_session *probe, const char *path) {
 }
 
 static inline int probe_respond(struct probe_session *probe, int32_t stream, int status,
-                                const char *content_type, size_t length) {
+                                const char *content_type, int64_t length, int has_body) {
     char code[4], length_text[21];
     snprintf(code, sizeof(code), "%d", status);
-    snprintf(length_text, sizeof(length_text), "%zu", length);
+    snprintf(length_text, sizeof(length_text), "%lld", (long long)length);
     nghttp2_nv fields[3];
     size_t count = 0;
     fields[count++] = probe_field(":status", code);
     if (content_type) fields[count++] = probe_field("content-type", content_type);
-    if (status != 204 && status != 304) fields[count++] = probe_field("content-length", length_text);
+    if (length >= 0 && status != 204 && status != 304) fields[count++] = probe_field("content-length", length_text);
     nghttp2_data_provider provider = {0};
     provider.read_callback = probe_read_cb;
-    return nghttp2_submit_response(probe->session, stream, fields, count, length ? &provider : 0);
+    return nghttp2_submit_response(probe->session, stream, fields, count, has_body ? &provider : 0);
 }
 
 static inline int probe_goaway(struct probe_session *probe) {

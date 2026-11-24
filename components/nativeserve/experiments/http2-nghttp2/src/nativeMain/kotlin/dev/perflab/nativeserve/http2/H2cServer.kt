@@ -2,7 +2,11 @@
 
 package dev.perflab.nativeserve.http2
 
+import dev.perflab.nativeserve.PostBody
 import dev.perflab.nativeserve.Request
+import dev.perflab.nativeserve.RequestBodySink
+import dev.perflab.nativeserve.Response
+import dev.perflab.nativeserve.ResponseSource
 import dev.perflab.nativeserve.Routes
 import dev.perflab.nativeserve.ServerLimits
 import dev.perflab.nativeserve.emptyResponse
@@ -11,6 +15,8 @@ import dev.perflab.nativeserve.signals.REACTOR_INSTALL_SIGNALS
 import dev.perflab.nativeserve.signals.REACTOR_READ_STOP
 import dev.perflab.nativeserve.signals.REACTOR_RESTORE_SIGNALS
 import dev.perflab.nativeserve.signals.reactor_signals
+import dev.perflab.nativeserve.streamResponse
+import dev.perflab.nativeserve.text
 import dev.perflab.nativeserve.transport.ConnectionId
 import dev.perflab.nativeserve.transport.OperationId
 import dev.perflab.nativeserve.transport.StreamTransport
@@ -26,21 +32,59 @@ private const val SESSION_BUFFER_BYTES = 16 * 1024
 
 fun h2cMain(args: Array<String>) {
     val port = args.firstOrNull()?.toInt() ?: 8080
-    require(port in 1..65535) { "Port must be between 1 and 65535" }
     check(reactor_signals(REACTOR_INSTALL_SIGNALS) == 0) { "Could not install signal handlers" }
     try {
-        memScoped {
-            val limits = ServerLimits()
-            val transport = openPlatformTransport("127.0.0.1", port, limits.connections)
-            try {
-                println("NativeServe backend=epoll protocol=h2c")
-                H2cServer(transport, Routes().apply { parityRoutes() }, limits).run()
-            } finally {
-                transport.close()
-            }
+        serveH2c(
+            port = port,
+            limits = ServerLimits(responseBodyBytes = 128 * 1024),
+            stopRequested = { reactor_signals(REACTOR_READ_STOP) != 0 },
+        ) {
+            parityRoutes()
+            streamingFixtures()
         }
     } finally {
         reactor_signals(REACTOR_RESTORE_SIGNALS)
+    }
+}
+
+fun serveH2c(
+    port: Int = 8080,
+    host: String = "127.0.0.1",
+    limits: ServerLimits = ServerLimits(),
+    stopRequested: () -> Boolean = { false },
+    configure: Routes.() -> Unit,
+): Unit = memScoped {
+    require(port in 1..65535) { "Port must be between 1 and 65535" }
+    val routes = Routes().apply(configure)
+    val transport = openPlatformTransport(host, port, limits.connections)
+    try {
+        println("NativeServe backend=epoll protocol=h2c")
+        H2cServer(transport, routes, limits).run(stopRequested)
+    } finally {
+        transport.close()
+    }
+}
+
+private fun Routes.streamingFixtures() {
+    postStreaming("/upload") {
+        object : RequestBodySink {
+            private var received = 0
+            override fun accept(buffer: ByteArray, length: Int) { received += length }
+            override fun complete(): Response = text(received.toString())
+        }
+    }
+    get("/stream") {
+        streamResponse("application/octet-stream", object : ResponseSource {
+            private var remaining = 80 * 1024
+
+            override fun read(buffer: ByteArray, limit: Int): Int {
+                if (remaining == 0) return -1
+                val count = minOf(remaining, limit)
+                buffer.fill('x'.code.toByte(), toIndex = count)
+                remaining -= count
+                return count
+            }
+        })
     }
 }
 
@@ -54,13 +98,13 @@ private class H2cServer(
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
 
-    fun run() {
+    fun run(stopRequested: () -> Boolean) {
         try {
             acceptNext()
             var sweepAt = 0L
             while (true) {
                 val now = now()
-                if (drainDeadline == null && reactor_signals(REACTOR_READ_STOP) != 0) {
+                if (drainDeadline == null && stopRequested()) {
                     drainDeadline = now + limits.drainMillis
                     transport.closeListener()
                     for ((id, client) in connections.toList()) {
@@ -74,11 +118,18 @@ private class H2cServer(
                 if (afterPoll >= sweepAt) {
                     val expired = connections.filterValues { afterPoll - it.lastActive >= limits.idleMillis }.keys
                     expired.forEach(::disconnect)
+                    for ((id, client) in connections.toList()) {
+                        try {
+                            if (client.expireBodies(afterPoll)) progress(id, client)
+                        } catch (_: Exception) {
+                            disconnect(id)
+                        }
+                    }
                     sweepAt = afterPoll + 250
                 }
             }
         } finally {
-            connections.values.forEach { it.session.close() }
+            connections.values.forEach { it.close() }
             connections.clear()
         }
     }
@@ -153,7 +204,7 @@ private class H2cServer(
     }
 
     private fun disconnect(id: ConnectionId) {
-        connections.remove(id)?.session?.close()
+        connections.remove(id)?.close()
         transport.closeConnection(id)
     }
 
@@ -177,40 +228,91 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
     override fun header(stream: Int, name: String, value: String): Boolean {
         val head = streams[stream] ?: run {
             if (streams.size >= MAX_STREAMS) return false
-            RequestHead().also { streams[stream] = it }
+            RequestHead(lastActive).also { streams[stream] = it }
         }
         head.headerBytes += name.encodeToByteArray().size + value.encodeToByteArray().size + 32
         if (head.headerBytes > limits.headerBytes) return false
+        if (head.request != null) return true
         if (name == ":method") head.method = value
         if (name == ":path") head.target = value
+        if (name == "content-length") head.length = value.toIntOrNull()?.takeIf { it >= 0 } ?: Int.MAX_VALUE
         return true
+    }
+
+    override fun headersEnd(stream: Int) {
+        val head = streams[stream] ?: return
+        if (head.request != null || head.responded) return
+        val target = head.target
+        val method = head.method
+        if (method == null || target == null || !target.startsWith('/') || target.any { it !in '!'..'~' || it == '#' }) {
+            respond(stream, head, emptyResponse(400))
+            return
+        }
+        val query = target.indexOf('?')
+        val path = if (query < 0) target else target.substring(0, query)
+        val request = Request(method, path, if (query < 0) null else target.substring(query + 1), bodyLength = head.length)
+        head.request = request
+        if (method != "POST") return
+        if (head.length?.let { it > limits.requestBodyBytes } == true) {
+            respond(stream, head, emptyResponse(413))
+            return
+        }
+        when (val body = routes.openPost(request)) {
+            is PostBody.Open -> head.sink = body.sink
+            is PostBody.Rejected -> respond(stream, head, body.response)
+        }
     }
 
     override fun data(stream: Int, bytes: ByteArray) {
         val head = streams[stream] ?: return
-        head.hasBody = true
-        // The preview rejects request payloads. Reset promptly and return consumed connection credit.
-        if (bytes.isNotEmpty()) session.addCredit(stream, bytes.size)
-        session.cancel(stream)
+        if (bytes.isEmpty()) return
+        val sink = head.sink
+        val accepted = if (sink != null && bytes.size <= limits.requestBodyBytes - head.bodyBytes) {
+            try {
+                sink.accept(bytes, bytes.size)
+                head.bodyBytes += bytes.size
+                true
+            } catch (_: Exception) {
+                false
+            }
+        } else {
+            false
+        }
+        session.addCredit(stream, bytes.size)
+        if (!accepted && !head.responded) abort(stream, head)
     }
 
     override fun end(stream: Int) {
         val head = streams[stream] ?: return
-        if (head.hasBody) return
-        val target = head.target
-        val method = head.method
-        val response = if (method != null && target != null && target.startsWith('/') && target.all { it in '!'..'~' && it != '#' }) {
-            val query = target.indexOf('?')
-            val path = if (query < 0) target else target.substring(0, query)
-            routes.respond(Request(method, path, if (query < 0) null else target.substring(query + 1)))
-        } else {
-            emptyResponse(400)
+        if (head.responded) return
+        val request = head.request ?: return
+        val declared = head.length
+        if (head.sink != null && declared != null && declared != head.bodyBytes) {
+            head.closeSink()
+            respond(stream, head, emptyResponse(400))
+            return
         }
+        val response = try {
+            head.sink?.complete() ?: routes.respond(request)
+        } catch (_: Exception) {
+            emptyResponse(500)
+        }
+        head.closeSink()
+        respond(stream, head, response)
+    }
 
-        val source = response.stream?.source
-        if (source != null || response.body.size > limits.responseBodyBytes) {
-            source?.close()
+    private fun respond(stream: Int, head: RequestHead, response: Response) {
+        head.responded = true
+        val source = response.stream
+        if ((source?.length ?: response.body.size) > limits.responseBodyBytes) {
+            try {
+                source?.source?.close()
+            } catch (_: Exception) {
+                // A rejected source has no pending writes.
+            }
             session.respond(stream, 500, ByteArray(0), contentType = null)
+        } else if (source != null) {
+            session.respond(stream, response.status, response.contentType, source.source, source.length, limits.responseBodyBytes)
         } else {
             val body = if (response.status == 204 || response.status == 304) ByteArray(0) else response.body
             session.respond(stream, response.status, body, response.contentType)
@@ -218,13 +320,45 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
     }
 
     override fun closed(stream: Int, code: UInt) {
-        streams.remove(stream)
+        streams.remove(stream)?.closeSink()
     }
 
-    private class RequestHead {
+    fun expireBodies(now: Long): Boolean {
+        val expired = streams.filterValues { it.sink != null && now - it.started >= limits.requestBodyMillis }
+        for ((stream, head) in expired) abort(stream, head)
+        return expired.isNotEmpty()
+    }
+
+    private fun abort(stream: Int, head: RequestHead) {
+        head.responded = true
+        head.closeSink()
+        session.cancel(stream)
+    }
+
+    fun close() {
+        streams.values.forEach(RequestHead::closeSink)
+        session.close()
+        streams.clear()
+    }
+
+    private class RequestHead(val started: Long) {
         var method: String? = null
         var target: String? = null
+        var length: Int? = null
+        var request: Request? = null
+        var sink: RequestBodySink? = null
         var headerBytes = 0
-        var hasBody = false
+        var bodyBytes = 0
+        var responded = false
+
+        fun closeSink() {
+            val current = sink ?: return
+            sink = null
+            try {
+                current.close()
+            } catch (_: Exception) {
+                // The sink is already detached from this stream.
+            }
+        }
     }
 }
