@@ -8,6 +8,26 @@ struct UserResponse {
     active: bool,
 }
 
+#[derive(Serialize)]
+struct Catalog {
+    id: i32,
+    items: Vec<CatalogItem>,
+}
+
+#[derive(Serialize)]
+struct CatalogItem {
+    sku: String,
+    name: String,
+    description: &'static str,
+    stock: Stock,
+}
+
+#[derive(Serialize)]
+struct Stock {
+    available: bool,
+    units: i32,
+}
+
 fn user(id: i32) -> UserResponse {
     UserResponse {
         id,
@@ -28,6 +48,21 @@ async fn user_by_id(Path(id): Path<i32>) -> Json<UserResponse> {
     Json(user(id))
 }
 
+async fn catalog(Path(id): Path<i32>) -> Json<Catalog> {
+    let items = (0..32)
+        .map(|index| CatalogItem {
+            sku: format!("{id}-{index}"),
+            name: format!("Café item {index}"),
+            description: "Roasted in München and packed for delivery.",
+            stock: Stock {
+                available: index > 0,
+                units: index * 3,
+            },
+        })
+        .collect();
+    Json(Catalog { id, items })
+}
+
 #[tokio::main]
 async fn main() {
     let port = std::env::var("PORT")
@@ -40,6 +75,11 @@ async fn main() {
         .route("/health", get(health))
         .route("/json", get(json))
         .route("/users/{id}", get(user_by_id));
+    let app = if std::env::var("BENCHMARK_SUITE").as_deref() == Ok("application") {
+        app.route("/catalog/{id}", get(catalog))
+    } else {
+        app
+    };
 
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
         .await

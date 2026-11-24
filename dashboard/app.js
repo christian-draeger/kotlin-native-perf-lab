@@ -596,7 +596,10 @@ function start() {
   let run;
 
   element("repository").href = data.repository;
-  const suites = { expanded: "Expanded comparisons", core: "Core comparisons", other: "Other measurements" };
+  const suites = {
+    expanded: "Expanded comparisons", core: "Core comparisons",
+    application: "Application workloads", other: "Other measurements",
+  };
   const options = Object.fromEntries(Object.entries(suites).map(([key, label]) => {
     const group = make("optgroup");
     group.label = label;

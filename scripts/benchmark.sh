@@ -50,11 +50,13 @@ PY
   fi
 fi
 endpoints=(/health /json /users/123)
+if [[ "$suite" == application ]]; then endpoints=(/catalog/123); fi
 if [[ -n "${BENCHMARK_ENDPOINT:-}" ]]; then
-  case "$BENCHMARK_ENDPOINT" in
-    /health|/json|/users/123) endpoints=("$BENCHMARK_ENDPOINT") ;;
-    *) echo 'BENCHMARK_ENDPOINT must be /health, /json or /users/123.' >&2; exit 2 ;;
-  esac
+  if ! printf '%s\n' "${endpoints[@]}" | grep -Fxq -- "$BENCHMARK_ENDPOINT"; then
+    printf 'Invalid BENCHMARK_ENDPOINT for %s. Allowed: %s\n' "$suite" "${endpoints[*]}" >&2
+    exit 2
+  fi
+  endpoints=("$BENCHMARK_ENDPOINT")
 fi
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}},$BIND_HOST"

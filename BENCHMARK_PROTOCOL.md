@@ -85,6 +85,12 @@ python3 scripts/benchmark-integrations.py --family ktor-jvm \
   --output "$(mktemp -d)" --smoke-only
 ```
 
+## Compare a larger JSON response
+
+The `application` suite runs the four core variants on `GET /catalog/123`. Each handler builds and serializes 32 records with nested stock data, a request-derived identifier and UTF-8 text. The smoke check verifies exact bytes on a reused HTTP/1.1 connection for two IDs and verifies HTTP 400 for a malformed ID. The endpoint is registered only for this suite.
+
+Use **Actions → Benchmark dashboard → application** for the Linux x86_64 and ARM64 rehearsal. Pages lists the runs under **Application workloads**. Use `BENCHMARK_SUITE=application` with the two-host Linux command for a controlled rerun. This is a single application workload in the [workload ladder](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/114).
+
 ## Local harness and limitations
 
 - The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.

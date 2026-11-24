@@ -16,7 +16,16 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class UserResponse(val id: Int, val name: String, val active: Boolean)
 
-fun Application.configureApi() {
+@Serializable
+private data class Catalog(val id: Int, val items: List<CatalogItem>)
+
+@Serializable
+private data class CatalogItem(val sku: String, val name: String, val description: String, val stock: Stock)
+
+@Serializable
+private data class Stock(val available: Boolean, val units: Int)
+
+fun Application.configureApi(catalogWorkload: Boolean) {
     install(ContentNegotiation) {
         json(Json { encodeDefaults = true })
     }
@@ -33,6 +42,21 @@ fun Application.configureApi() {
                 call.respond(HttpStatusCode.BadRequest)
             } else {
                 call.respond(UserResponse(id, "benchmark-user", true))
+            }
+        }
+        if (catalogWorkload) {
+            get("/catalog/{id}") {
+                val id = call.parameters["id"]?.toIntOrNull()
+                if (id == null) {
+                    call.respond(HttpStatusCode.BadRequest)
+                } else {
+                    call.respond(Catalog(id, List(32) { index ->
+                        CatalogItem(
+                            "$id-$index", "Café item $index",
+                            "Roasted in München and packed for delivery.", Stock(index > 0, index * 3),
+                        )
+                    }))
+                }
             }
         }
     }
