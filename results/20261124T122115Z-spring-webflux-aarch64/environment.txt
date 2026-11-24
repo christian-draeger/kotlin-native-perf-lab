@@ -1,0 +1,73 @@
+benchmark_source=github-hosted-actions
+runner_label=ubuntu-24.04-arm
+ci_run_id=45392314276
+ci_run_attempt=1
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+kotlin_version=2.4.21
+machine=aarch64
+kernel=7.0.0-1017-azure
+git_sha=d50e07d2c5dad7cf914c1aae381947fc7d7bef1d
+git_worktree=clean
+integration_family=spring-webflux
+benchmark_suite=integration
+load_generator=local k6 on loopback with disjoint CPU affinity
+load_tool=k6
+load_tool_version=k6 v2.4.0 (commit/dd9395906d, go1.26.11, linux/arm64)
+server_cpus=0,1
+load_cpus=2,3
+request_protocol=HTTP/1.1
+workload_model=constant HTTP arrival rate, one request per iteration
+workloads=json:40%,catalog:25%,upload-1k:10%,upload-24k:5%,upload-64k:10%,download:10%
+upload_sizes_bytes=1024,24576,65536
+offered_rates=200,800
+max_vus_per_scenario=16
+download_size_bytes=32771
+download_inter_chunk_delay_ms=50
+repetitions=3
+warmup_seconds=15
+target_duration_seconds=15
+engine_reactor-netty=reactor-netty
+engine_ktserve=nativeserve
+openjdk version "21.0.13.1" 2026-11-17 LTS
+OpenJDK Runtime Environment Temurin-21.0.13.1+2 (build 21.0.13.1+2-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13.1+2 (build 21.0.13.1+2-LTS, mixed mode, sharing)
+Architecture:                            aarch64
+CPU op-mode(s):                          32-bit, 64-bit
+Byte Order:                              Little Endian
+CPU(s):                                  4
+On-line CPU(s) list:                     0-3
+Vendor ID:                               ARM
+Model name:                              Neoverse-N2
+Model:                                   0
+Thread(s) per core:                      1
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                r0p0
+BogoMIPS:                                2000.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm uscat ilrcpc flagm sb paca pacg dcpodp sve2 sveaes svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16
+L1d cache:                               256 KiB (4 instances)
+L1i cache:                               256 KiB (4 instances)
+L2 cache:                                4 MiB (4 instances)
+L3 cache:                                128 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-3
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; CSV2, BHB
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+benchmark_outcome=failure
