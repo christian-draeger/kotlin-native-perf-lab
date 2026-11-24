@@ -1,0 +1,368 @@
+{
+  "source_sha": "72877f848b438e75830e4fc33e417683eb938777",
+  "fixture_sha256": "d0b3ef885fe9dd24b7d87225b591fc1b858606aad9b16538b3766e0bac3a36e0",
+  "arch": "aarch64",
+  "kernel": "7.2.12-orbstack-00394-gbecdd6130068",
+  "host_cpus": [
+    "Architecture:                            aarch64",
+    "CPU op-mode(s):                          64-bit",
+    "Byte Order:                              Little Endian",
+    "CPU(s):                                  16",
+    "On-line CPU(s) list:                     0-15",
+    "Vendor ID:                               Apple",
+    "Model name:                              -",
+    "Model:                                   0",
+    "Thread(s) per core:                      1",
+    "Core(s) per cluster:                     16",
+    "Socket(s):                               -",
+    "Cluster(s):                              1",
+    "Stepping:                                0x0",
+    "CPU(s) scaling MHz:                      100%",
+    "CPU max MHz:                             2000.0000",
+    "CPU min MHz:                             2000.0000",
+    "BogoMIPS:                                48.00",
+    "Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb dcpodp flagm2 frint i8mm bf16 ecv afp rpres",
+    "L1d cache:                               2 MiB (16 instances)",
+    "L1i cache:                               3 MiB (16 instances)",
+    "L2 cache:                                48 MiB (3 instances)",
+    "L3 cache:                                64 MiB (1 instance)",
+    "Vulnerability Gather data sampling:      Not affected",
+    "Vulnerability Ghostwrite:                Not affected",
+    "Vulnerability Indirect target selection: Not affected",
+    "Vulnerability Itlb multihit:             Not affected",
+    "Vulnerability L1tf:                      Not affected",
+    "Vulnerability Mds:                       Not affected",
+    "Vulnerability Meltdown:                  Not affected",
+    "Vulnerability Mmio stale data:           Not affected",
+    "Vulnerability Old microcode:             Not affected",
+    "Vulnerability Reg file data sampling:    Not affected",
+    "Vulnerability Retbleed:                  Not affected",
+    "Vulnerability Spec rstack overflow:      Not affected",
+    "Vulnerability Spec store bypass:         Vulnerable",
+    "Vulnerability Spectre v1:                Mitigation; __user pointer sanitization",
+    "Vulnerability Spectre v2:                Mitigation; CSV2, but not BHB",
+    "Vulnerability Srbds:                     Not affected",
+    "Vulnerability Tsa:                       Not affected",
+    "Vulnerability Tsx async abort:           Not affected",
+    "Vulnerability Vmscape:                   Not affected"
+  ],
+  "os_release": [
+    "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"",
+    "NAME=\"Ubuntu\"",
+    "VERSION_ID=\"24.04\"",
+    "VERSION=\"24.04.5 LTS (Noble Numbat)\"",
+    "VERSION_CODENAME=noble",
+    "ID=ubuntu",
+    "ID_LIKE=debian",
+    "HOME_URL=\"https://www.ubuntu.com/\"",
+    "SUPPORT_URL=\"https://help.ubuntu.com/\"",
+    "BUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"",
+    "PRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"",
+    "UBUNTU_CODENAME=noble",
+    "LOGO=ubuntu-logo"
+  ],
+  "measurements": [
+    {
+      "run": 1,
+      "idle_connections": 0,
+      "heap_bytes": 2752512,
+      "rss_kib": 5328,
+      "peak_rss_kib": 5328
+    },
+    {
+      "run": 1,
+      "idle_connections": 64,
+      "heap_bytes": 5111808,
+      "rss_kib": 7632,
+      "peak_rss_kib": 7632
+    },
+    {
+      "run": 1,
+      "idle_connections": 128,
+      "heap_bytes": 5242880,
+      "rss_kib": 7760,
+      "peak_rss_kib": 8540
+    },
+    {
+      "run": 1,
+      "idle_connections": 256,
+      "heap_bytes": 7471104,
+      "rss_kib": 9936,
+      "peak_rss_kib": 9952
+    },
+    {
+      "run": 1,
+      "idle_connections": 512,
+      "heap_bytes": 11665408,
+      "rss_kib": 14032,
+      "peak_rss_kib": 14032
+    },
+    {
+      "run": 1,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 0,
+      "heap_bytes": 11665408,
+      "rss_kib": 14032,
+      "peak_rss_kib": 14032
+    },
+    {
+      "run": 1,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 1,
+      "heap_bytes": 3276800,
+      "rss_kib": 5840,
+      "peak_rss_kib": 13792
+    },
+    {
+      "run": 1,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 5,
+      "heap_bytes": 3276800,
+      "rss_kib": 5840,
+      "peak_rss_kib": 13792
+    },
+    {
+      "run": 2,
+      "idle_connections": 0,
+      "heap_bytes": 2752512,
+      "rss_kib": 5344,
+      "peak_rss_kib": 5344
+    },
+    {
+      "run": 2,
+      "idle_connections": 64,
+      "heap_bytes": 5111808,
+      "rss_kib": 7648,
+      "peak_rss_kib": 7648
+    },
+    {
+      "run": 2,
+      "idle_connections": 128,
+      "heap_bytes": 5242880,
+      "rss_kib": 7776,
+      "peak_rss_kib": 8516
+    },
+    {
+      "run": 2,
+      "idle_connections": 256,
+      "heap_bytes": 7471104,
+      "rss_kib": 9952,
+      "peak_rss_kib": 9952
+    },
+    {
+      "run": 2,
+      "idle_connections": 512,
+      "heap_bytes": 11665408,
+      "rss_kib": 14048,
+      "peak_rss_kib": 14048
+    },
+    {
+      "run": 2,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 0,
+      "heap_bytes": 11665408,
+      "rss_kib": 14048,
+      "peak_rss_kib": 14048
+    },
+    {
+      "run": 2,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 1,
+      "heap_bytes": 3276800,
+      "rss_kib": 5856,
+      "peak_rss_kib": 13764
+    },
+    {
+      "run": 2,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 5,
+      "heap_bytes": 3276800,
+      "rss_kib": 5856,
+      "peak_rss_kib": 13764
+    },
+    {
+      "run": 3,
+      "idle_connections": 0,
+      "heap_bytes": 2752512,
+      "rss_kib": 5344,
+      "peak_rss_kib": 5344
+    },
+    {
+      "run": 3,
+      "idle_connections": 64,
+      "heap_bytes": 5111808,
+      "rss_kib": 7648,
+      "peak_rss_kib": 7648
+    },
+    {
+      "run": 3,
+      "idle_connections": 128,
+      "heap_bytes": 5242880,
+      "rss_kib": 7776,
+      "peak_rss_kib": 8516
+    },
+    {
+      "run": 3,
+      "idle_connections": 256,
+      "heap_bytes": 7471104,
+      "rss_kib": 9952,
+      "peak_rss_kib": 9952
+    },
+    {
+      "run": 3,
+      "idle_connections": 512,
+      "heap_bytes": 11665408,
+      "rss_kib": 14048,
+      "peak_rss_kib": 14048
+    },
+    {
+      "run": 3,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 0,
+      "heap_bytes": 11665408,
+      "rss_kib": 14048,
+      "peak_rss_kib": 14048
+    },
+    {
+      "run": 3,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 1,
+      "heap_bytes": 3276800,
+      "rss_kib": 5856,
+      "peak_rss_kib": 13764
+    },
+    {
+      "run": 3,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 5,
+      "heap_bytes": 3276800,
+      "rss_kib": 5856,
+      "peak_rss_kib": 13764
+    },
+    {
+      "run": 4,
+      "idle_connections": 0,
+      "heap_bytes": 2752512,
+      "rss_kib": 5336,
+      "peak_rss_kib": 5336
+    },
+    {
+      "run": 4,
+      "idle_connections": 64,
+      "heap_bytes": 5111808,
+      "rss_kib": 7640,
+      "peak_rss_kib": 7640
+    },
+    {
+      "run": 4,
+      "idle_connections": 128,
+      "heap_bytes": 5242880,
+      "rss_kib": 7768,
+      "peak_rss_kib": 8504
+    },
+    {
+      "run": 4,
+      "idle_connections": 256,
+      "heap_bytes": 7471104,
+      "rss_kib": 9944,
+      "peak_rss_kib": 9944
+    },
+    {
+      "run": 4,
+      "idle_connections": 512,
+      "heap_bytes": 11796480,
+      "rss_kib": 14168,
+      "peak_rss_kib": 14168
+    },
+    {
+      "run": 4,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 0,
+      "heap_bytes": 11665408,
+      "rss_kib": 14040,
+      "peak_rss_kib": 14040
+    },
+    {
+      "run": 4,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 1,
+      "heap_bytes": 3276800,
+      "rss_kib": 5848,
+      "peak_rss_kib": 13884
+    },
+    {
+      "run": 4,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 5,
+      "heap_bytes": 3276800,
+      "rss_kib": 5848,
+      "peak_rss_kib": 13884
+    },
+    {
+      "run": 5,
+      "idle_connections": 0,
+      "heap_bytes": 2752512,
+      "rss_kib": 5336,
+      "peak_rss_kib": 5336
+    },
+    {
+      "run": 5,
+      "idle_connections": 64,
+      "heap_bytes": 5111808,
+      "rss_kib": 7640,
+      "peak_rss_kib": 7640
+    },
+    {
+      "run": 5,
+      "idle_connections": 128,
+      "heap_bytes": 5242880,
+      "rss_kib": 7768,
+      "peak_rss_kib": 8504
+    },
+    {
+      "run": 5,
+      "idle_connections": 256,
+      "heap_bytes": 7471104,
+      "rss_kib": 9944,
+      "peak_rss_kib": 9944
+    },
+    {
+      "run": 5,
+      "idle_connections": 512,
+      "heap_bytes": 11665408,
+      "rss_kib": 14040,
+      "peak_rss_kib": 14040
+    },
+    {
+      "run": 5,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 0,
+      "heap_bytes": 11665408,
+      "rss_kib": 14040,
+      "peak_rss_kib": 14040
+    },
+    {
+      "run": 5,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 1,
+      "heap_bytes": 3276800,
+      "rss_kib": 5848,
+      "peak_rss_kib": 13756
+    },
+    {
+      "run": 5,
+      "idle_connections": 0,
+      "seconds_after_disconnect": 5,
+      "heap_bytes": 3276800,
+      "rss_kib": 5848,
+      "peak_rss_kib": 13756
+    }
+  ],
+  "diagnostic_sha": "b1a5931",
+  "host_cpu_model": "Apple M3 Max",
+  "toolchains": {
+    "kotlin_native": "2.4.21",
+    "gradle": "9.7.0",
+    "client": "Python 3.12 (Ubuntu 24.04)"
+  }
+}

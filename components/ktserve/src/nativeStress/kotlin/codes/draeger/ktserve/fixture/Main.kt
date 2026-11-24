@@ -32,6 +32,10 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
         runApplication(args[1].toInt())
         return
     }
+    if (args.firstOrNull() == "--connection-retention") {
+        measureConnectionRetention(args[1].toInt())
+        return
+    }
     val limits = ServerLimits(
         connections = 8,
         responseBodyBytes = BODY_BYTES,
@@ -115,14 +119,28 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
             stop = true
             text("ok")
         }
-        get("/heap") {
-            GC.collect()
-            val bytes = requireNotNull(GC.lastGCInfo?.memoryUsageAfter?.get("heap"))
-            text(bytes.totalObjectsSizeBytes.toString())
-        }
+        get("/heap") { text(retainedHeapBytes().toString()) }
     }
     check(openStreams == 0) { "Shutdown left $openStreams response sources open" }
     check(openRequests == 0) { "Shutdown left $openRequests request sinks open" }
+}
+
+private fun measureConnectionRetention(port: Int) {
+    var stop = false
+    serve(port = port, stopRequested = { stop }) {
+        get("/health") { text("ok") }
+        get("/heap") { text(retainedHeapBytes().toString()) }
+        get("/stop") {
+            stop = true
+            text("ok")
+        }
+    }
+}
+
+@OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class)
+private fun retainedHeapBytes(): Long {
+    GC.collect()
+    return requireNotNull(GC.lastGCInfo?.memoryUsageAfter?.get("heap")).totalObjectsSizeBytes
 }
 
 @OptIn(ExperimentalAtomicApi::class)
