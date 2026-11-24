@@ -171,7 +171,7 @@ jobs:
         run: |
           chmod +x "$RUNNER_TEMP/ktserve-h2c/nativeserve-h2c"
           sudo apt-get update -qq
-          sudo apt-get install -y nghttp2-client time
+          sudo apt-get install -y nghttp2-client strace time
           rustup toolchain install 1.100.0 --profile minimal
           cargo +1.100.0 build --manifest-path competitors/rust-axum/Cargo.toml \
             --release --locked --features http2 --target-dir "$RUNNER_TEMP/axum-h2c"
