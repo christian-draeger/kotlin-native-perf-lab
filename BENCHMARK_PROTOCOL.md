@@ -86,6 +86,8 @@ The HTTP/1.1 preflight checks payloads and streamed framing. k6 checks HTTP vers
 
 Select `wrk` in the workflow to repeat the historical fixed-concurrency runs for `/json`, the 24 KiB upload and `/download`. The default core and expanded rankings still use wrk. Worker fixed-rate probes use Vegeta and the experimental HTTP/2 comparison uses h2load. Compare only runs with matching workload and load-tool settings.
 
+Select `native-wakeup` to compare timed polling, eventfd and CIO in the same Ktor Native release binary. Choose `upload` or `download` as the experiment endpoint. Each mode uses the same connection count, CPU affinity and `wrk` preconditioning. The raw logs record the wake-up mode, and the HTTP preflight checks both the response bytes and the chunked download framing.
+
 The GitHub-hosted comparison runs each engine in an independent server process and records raw workload logs, the measured revision and host information. The server and load generator share the VM with separate CPU affinity sets. Treat these results as exploratory. Controlled conclusions still require two physical hosts, validated JVM warm-up and at least five valid repetitions per cell.
 
 To check the Ktor JVM fixture locally with JDK 21, build its distribution and run the HTTP smoke checks across its engines.

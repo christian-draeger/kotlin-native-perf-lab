@@ -24,6 +24,11 @@ on:
         type: choice
         options: [k6, wrk]
         default: k6
+      native_wakeup_workload:
+        description: Endpoint for the native-wakeup experiment
+        type: choice
+        options: [upload, download]
+        default: upload
 
 permissions:
   contents: read
@@ -90,6 +95,7 @@ jobs:
       RUNNER_LABEL: ${{ matrix.runner }}
       LOAD_TOOL: ${{ inputs.application == 'native-wakeup' && 'wrk' || inputs.load_tool || 'k6' }}
       APP_SELECTION: ${{ inputs.application }}
+      WAKEUP_WORKLOAD: ${{ inputs.native_wakeup_workload }}
       LC_ALL: C
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -171,7 +177,7 @@ jobs:
           duration=5
           extra=()
           if [[ "$LOAD_TOOL" == k6 ]]; then duration=15; fi
-          if [[ "$APP_SELECTION" == native-wakeup ]]; then extra+=(--compare-native-wakeup --warmup 10); fi
+          if [[ "$APP_SELECTION" == native-wakeup ]]; then extra+=(--compare-native-wakeup "/$WAKEUP_WORKLOAD" --warmup 10); fi
           python3 scripts/benchmark-integrations.py --family "$FAMILY" --executable "$EXECUTABLE" \
             --output "$RESULT_DIR" --load-tool "$LOAD_TOOL" --duration "$duration" "${extra[@]}"
       - name: Record outcome

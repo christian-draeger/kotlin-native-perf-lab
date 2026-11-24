@@ -172,7 +172,7 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
         workload = [f"workloads={','.join(WORKLOADS)}", f"upload_size_bytes={UPLOAD_SIZE}",
                     f"connections={args.connections}", f"load_threads={args.threads}"]
         if args.compare_native_wakeup:
-            workload[0] = "workloads=/upload"
+            workload[0] = f"workloads={args.compare_native_wakeup}"
             workload += ["integration_experiment=epoll-application-wakeup", "epoll_peer_trigger=level"]
     dependencies = sorted((args.executable.parent.parent / "lib").glob("*.jar"))
     with (args.output / "application.sha256").open("w") as manifest:
@@ -351,7 +351,7 @@ def benchmark(args):
 
     engines = list(ENGINES[args.family])
     if args.compare_native_wakeup:
-        workloads = ("/upload",)
+        workloads = (args.compare_native_wakeup,)
         engines.append("ktserve-eventfd")
     for run in range(1, args.repeats + 1):
         for index, workload in enumerate(workloads):
@@ -372,7 +372,8 @@ def main():
     parser.add_argument("--output", type=lambda path: Path(path).resolve(), required=True)
     parser.add_argument("--smoke-only", action="store_true")
     parser.add_argument("--load-tool", choices=("k6", "wrk"), default="k6")
-    parser.add_argument("--compare-native-wakeup", action="store_true")
+    parser.add_argument("--compare-native-wakeup", nargs="?", const="/upload", choices=("/upload", "/download"),
+                        help="Compare polling, eventfd and CIO on one Native streaming workload")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800], help="Mixed requests per second for k6")
     parser.add_argument("--vus", type=int, default=16, help="k6 virtual users per scenario")
     parser.add_argument("--precondition", type=int, default=15, help="k6 cold load before steady-state validation")
