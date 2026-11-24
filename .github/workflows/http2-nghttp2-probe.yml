@@ -9,6 +9,11 @@ on:
   pull_request:
     paths: *paths
   workflow_dispatch:
+    inputs:
+      run_pilot:
+        description: Run the exploratory ktServe and Axum h2c comparison on both Linux architectures
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -82,6 +87,11 @@ jobs:
           "$binary"
           bash "$project/smoke.sh" "$server"
           bash "$project/ingress/smoke.sh" "$server" "$RUNNER_TEMP/proxy/usr/bin/caddy"
+          if [[ "$RUN_PILOT" == true ]]; then
+            mkdir "$RUNNER_TEMP/h2-x86"
+            install -m 755 "$server" "$RUNNER_TEMP/h2-x86/nativeserve-h2c"
+            dpkg-query -W -f='${Version}\n' libnghttp2-dev > "$RUNNER_TEMP/h2-x86/package-version.txt"
+          fi
           gradle -p "$project" -Pbenchmark.targetArch=aarch64 -Pnghttp2.headers="$RUNNER_TEMP/arm-sdk/usr/include" \
             -Pnghttp2.archive="$RUNNER_TEMP/arm-sdk/usr/lib/aarch64-linux-gnu/libnghttp2.a" \
             linkReleaseExecutableNative linkH2cReleaseExecutableNative
@@ -94,6 +104,15 @@ jobs:
           cp "$project/multiplex_smoke.py" "$RUNNER_TEMP/h2-arm/"
           cp -R "$project/ingress" "$RUNNER_TEMP/h2-arm/"
           cp "$RUNNER_TEMP/arm-sdk/LICENSE.nghttp2" "$RUNNER_TEMP/h2-arm/"
+          cp "$RUNNER_TEMP/arm-sdk/package-version.txt" "$RUNNER_TEMP/h2-arm/"
+        env:
+          RUN_PILOT: ${{ inputs.run_pilot || false }}
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: inputs.run_pilot
+        with:
+          name: nghttp2-probe-x86_64
+          path: ${{ runner.temp }}/h2-x86
+          if-no-files-found: error
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: nghttp2-probe-arm64
@@ -125,3 +144,55 @@ jobs:
           dpkg-deb -x caddy_*.deb proxy
           "$RUNNER_TEMP/proxy/usr/bin/caddy" version
           bash "$RUNNER_TEMP/h2-arm/ingress/smoke.sh" "$RUNNER_TEMP/h2-arm/nativeserve-h2c" "$RUNNER_TEMP/proxy/usr/bin/caddy"
+
+  h2c_pilot:
+    name: Exploratory h2c pilot (${{ matrix.arch }})
+    if: github.event_name == 'workflow_dispatch' && inputs.run_pilot
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: nghttp2-probe-${{ matrix.arch }}
+          path: ${{ runner.temp }}/ktserve-h2c
+      - name: Build the protocol-enabled Axum release and install h2load
+        run: |
+          chmod +x "$RUNNER_TEMP/ktserve-h2c/nativeserve-h2c"
+          sudo apt-get update -qq
+          sudo apt-get install -y nghttp2-client time
+          rustup toolchain install 1.100.0 --profile minimal
+          cargo +1.100.0 build --manifest-path competitors/rust-axum/Cargo.toml \
+            --release --locked --features http2 --target-dir "$RUNNER_TEMP/axum-h2c"
+      - name: Compare the same HTTP/2 JSON workload
+        run: |
+          python3 components/nativeserve/experiments/http2-nghttp2/benchmark.py \
+            --ktserve "$RUNNER_TEMP/ktserve-h2c/nativeserve-h2c" \
+            --axum "$RUNNER_TEMP/axum-h2c/release/axum-baseline" \
+            --output "$RUNNER_TEMP/h2c-results"
+      - name: Record toolchain versions
+        if: ${{ always() && !cancelled() }}
+        run: |
+          test -d "$RUNNER_TEMP/h2c-results" || exit 0
+          {
+            printf 'kotlin_native=2.4.21\naxum=0.8.9\nnghttp2_sdk='
+            cat "$RUNNER_TEMP/ktserve-h2c/package-version.txt"
+            rustc +1.100.0 -Vv
+          } >> "$RUNNER_TEMP/h2c-results/environment.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ always() && !cancelled() }}
+        with:
+          name: h2c-pilot-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/h2c-results
+          if-no-files-found: warn

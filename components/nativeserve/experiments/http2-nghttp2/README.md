@@ -23,6 +23,14 @@ curl --http2-prior-knowledge -fsS http://127.0.0.1:8080/users/123
 
 The experimental `serveH2c` entry point uses the same routing block, limits and shutdown callback as `serve`. It supports buffered text and JSON handlers, POST body sinks and response sources. The `/upload` and `/stream` fixtures exercise these APIs over HTTP/2. Each connection uses one read range and one write range and admits up to eight streams. Body sinks have byte and time limits, and the adapter returns receive credit after consuming each slice. SIGTERM stops accepting and queues GOAWAY before draining existing streams to the configured deadline. The executable is a loopback test for prior knowledge.
 
+## Compare ktServe and Axum over HTTP/2
+
+Run **Actions → HTTP/2 session probe → Run workflow** with `run_pilot` enabled for exploratory Linux x86_64 and ARM64 measurements. The pilot builds Axum with its optional HTTP/2 feature in a separate target directory. It uses the existing typed `/json` handler in both release executables and verifies the exact response and HTTP version before every trial. [Workflow](../../../../.github/workflows/http2-nghttp2-probe.yml)
+
+Each engine runs on the same two-logical-CPU allowance. Two separate logical CPUs run `h2load` over h2c on loopback. The pilot holds 16 connections constant and tests up to one and eight streams per connection. It warms each server for five seconds and then measures a fresh client run for three seconds. Three repetitions alternate engine order. Both processes use the same VM, and raw request logging consumes load generator resources. Use the recorded load CPU time to interpret the throughput. [h2load options](https://nghttp2.org/documentation/h2load.1.html)
+
+Each architecture produces a workflow artifact with trial throughput, p50/p95/p99, error counts, server CPU and peak RSS, load generator usage, build metadata, the raw console logs and compressed request timings. The broader matched streaming, TLS and independent load-host comparison remains part of [#81](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81).
+
 ## Serve HTTPS at the ingress
 
 The [Caddy configuration](ingress/Caddyfile) passes HTTPS requests to the experimental native server over loopback HTTP/2. It accepts HTTP/2 and HTTP/1.1 at the TLS listener. Start `nativeserve-h2c` on port 8080, set `NATIVESERVE_TLS_CERT` and `NATIVESERVE_TLS_KEY` to the paths of a matching certificate and private key, and start Caddy with `caddy run --config ingress/Caddyfile --adapter caddyfile` from this directory. Configure the certificate hostname with `NATIVESERVE_TLS_HOST` and the listener with `NATIVESERVE_TLS_BIND` and `NATIVESERVE_TLS_PORT`. Set `NATIVESERVE_H2C_PORT` when the native server uses a different port. [Caddy reverse proxy transport](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy) · [TLS configuration](https://caddyserver.com/docs/caddyfile/directives/tls)

@@ -3,6 +3,9 @@ name = "axum-baseline"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+http2 = ["axum/http2"]
+
 [dependencies]
 axum = { version = "=0.8.9", features = ["json"] }
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "net"] }
