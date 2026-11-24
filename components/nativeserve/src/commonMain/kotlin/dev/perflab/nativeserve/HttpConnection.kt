@@ -76,7 +76,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
 
     private fun preparePost(routes: Routes, head: ParsedHead.Complete, now: Long): Boolean {
         val length = head.request.bodyLength
-        if (length > limits.requestBodyBytes) {
+        if (length != null && length > limits.requestBodyBytes) {
             queue(emptyResponse(413), head.version, keepAlive = false)
             return true
         }
@@ -86,7 +86,9 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
                 true
             }
             is PostBody.Open -> {
-                val body = IncomingBody(post.sink, head.version, head.keepAlive, now, length)
+                val decoder = if (length == null) ChunkedBody(limits.requestBodyBytes, limits.headerBytes)
+                else FixedLengthBody(length)
+                val body = IncomingBody(post.sink, decoder, head.version, head.keepAlive, now)
                 incoming = body
                 consumeBody(body)
             }
@@ -94,17 +96,19 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     }
 
     private fun consumeBody(body: IncomingBody): Boolean {
-        val count = minOf(body.remaining, input.size)
         try {
-            if (count > 0) {
-                body.sink.accept(input.bytes, count)
-                input.consume(count)
-                body.remaining -= count
+            when (val progress = body.decoder.consume(input, body.sink)) {
+                BodyProgress.INCOMPLETE -> return false
+                BodyProgress.COMPLETE -> {
+                    val response = body.sink.complete()
+                    closeRequest()
+                    queue(response, body.version, body.keepAlive)
+                }
+                else -> {
+                    closeRequest()
+                    queue(emptyResponse(progress.status), body.version, keepAlive = false)
+                }
             }
-            if (body.remaining > 0) return false
-            val response = body.sink.complete()
-            closeRequest()
-            queue(response, body.version, body.keepAlive)
         } catch (_: Exception) {
             closeRequest()
             queue(emptyResponse(500), body.version, keepAlive = false)
@@ -199,10 +203,10 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
 
     private class IncomingBody(
         val sink: RequestBodySink,
+        val decoder: RequestBodyDecoder,
         val version: String,
         val keepAlive: Boolean,
         val started: Long,
-        var remaining: Int,
     )
 
     private fun setOutput(bytes: ByteArray, length: Int = bytes.size) {

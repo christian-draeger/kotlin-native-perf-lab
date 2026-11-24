@@ -336,6 +336,66 @@ class HttpConnectionTest {
         assertEquals(1, closes)
     }
 
+    @Test
+    fun decodesFragmentedChunkedRequestsBeforeDispatchingTheNextHead() {
+        var size = 0
+        var closes = 0
+        val routes = Routes().apply {
+            postStreaming("/upload") { request ->
+                assertNull(request.bodyLength)
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) { size += length }
+                    override fun complete(): Response = text(size.toString())
+                    override fun close() { closes++ }
+                }
+            }
+            get("/health") { text("ok") }
+        }
+        val connection = HttpConnection(0, ServerLimits(requestBodyBytes = 5))
+        val partial = listOf(
+            "POST /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n3;name=value\r",
+            "\nab", "c\r", "\n2\r\nde\r\n0\r\nX-Trailer: yes\r\n\r",
+        )
+        for (fragment in partial) {
+            connection.receive(fragment, now = 1)
+            assertFalse(connection.prepareResponse(routes, now = 1))
+        }
+        assertEquals(5, size)
+        assertEquals(0, closes)
+        connection.receive("\n$request", now = 2)
+        assertTrue(connection.prepareResponse(routes, now = 2))
+        assertTrue(connection.pendingOutput().endsWith("\r\n\r\n5"))
+        assertEquals(1, closes)
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+        assertTrue(connection.prepareResponse(routes, now = 3))
+        assertTrue(connection.pendingOutput().endsWith("\r\n\r\nok"))
+    }
+
+    @Test
+    fun invalidChunkedFramingRetiresTheSinkWithoutCompletingIt() {
+        var closed = 0
+        val routes = Routes().apply {
+            postStreaming("/upload") {
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) {}
+                    override fun complete(): Response = error("Rejected requests cannot complete")
+                    override fun close() { closed++ }
+                }
+            }
+        }
+        val malformed = mapOf("1\r\nx\n\r" to 400, "0\r\nContent-Length: 1\r\n\r\n" to 400, "4\r\n" to 413)
+        for ((body, status) in malformed) {
+            val connection = HttpConnection(0, ServerLimits(requestBodyBytes = 3))
+            val header = "POST /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+            connection.receive(header + body, now = 1)
+            assertTrue(connection.prepareResponse(routes, now = 1))
+            assertTrue(connection.pendingOutput().startsWith("HTTP/1.1 $status "))
+            assertFalse(connection.wrote(connection.outputLength, now = 2))
+            connection.close()
+        }
+        assertEquals(malformed.size, closed)
+    }
+
     private fun HttpConnection.pendingOutput(): String =
         assertNotNull(output).decodeToString(endIndex = outputLength)
 

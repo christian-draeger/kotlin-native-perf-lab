@@ -8,7 +8,7 @@ class Routes {
         gets.add(path, handler)
     }
 
-    /** Open one body sink per POST with an optional Content-Length. */
+    /** Open one body sink per POST. HTTP/1.1 accepts chunked bodies. */
     fun postStreaming(path: String, handler: (Request) -> RequestBodySink) {
         posts.add(path, handler)
     }

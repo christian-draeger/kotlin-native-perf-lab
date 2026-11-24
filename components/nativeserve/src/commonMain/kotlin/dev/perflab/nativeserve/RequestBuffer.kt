@@ -68,6 +68,7 @@ private fun parseHead(head: String, consumed: Int): ParsedHead {
     var hasLength = false
     var bodyLength = 0
     var bodyLengthOverflow = false
+    var chunked = false
     var close = false
     var keepAlive = false
     var fieldStart = requestLineEnd + 2
@@ -125,17 +126,23 @@ private fun parseHead(head: String, consumed: Int): ParsedHead {
                 }
                 hasLength = true
             }
-            head.matches(fieldStart, colon, "transfer-encoding", ignoreCase = true) -> return ParsedHead.Rejected(400)
+            head.matches(fieldStart, colon, "transfer-encoding", ignoreCase = true) -> {
+                if (chunked || version != "HTTP/1.1" || !head.matches(0, methodEnd, "POST") ||
+                    !head.matches(valueStart, valueEnd, "chunked", ignoreCase = true)
+                ) return ParsedHead.Rejected(400)
+                chunked = true
+            }
             head.matches(fieldStart, colon, "expect", ignoreCase = true) -> return ParsedHead.Rejected(417)
         }
         fieldStart = fieldEnd + 2
     }
     if (version == "HTTP/1.1" && !hasHost) return ParsedHead.Rejected(400)
+    if (hasLength && chunked) return ParsedHead.Rejected(400)
     if (bodyLengthOverflow || bodyLength > 0 && !head.matches(0, methodEnd, "POST")) return ParsedHead.Rejected(413)
     val path = head.substring(targetStart, queryStart)
     val query = if (queryStart == targetEnd) null else head.substring(queryStart + 1, targetEnd)
     return ParsedHead.Complete(
-        Request(head.substring(0, methodEnd), path, query, bodyLength = bodyLength),
+        Request(head.substring(0, methodEnd), path, query, bodyLength = if (chunked) null else bodyLength),
         version,
         !close && (version == "HTTP/1.1" || keepAlive),
         consumed,
