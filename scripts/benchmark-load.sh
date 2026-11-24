@@ -2,6 +2,8 @@
 load_scratch=''
 remote_load_dir=''
 load_script="$ROOT/scripts/wrk-stats.lua"
+load_timing_format='perflab_load elapsed_s=%e user_s=%U system_s=%S peak_rss_kib=%M'
+load_has_time=false
 
 load_ssh() {
   local command
@@ -12,6 +14,7 @@ load_ssh() {
 prepare_load() {
   if [[ -z "${LOAD_SSH:-}" ]]; then
     command -v wrk >/dev/null || { echo 'Missing wrk.' >&2; return 1; }
+    if /usr/bin/time -f '' true >/dev/null 2>&1; then load_has_time=true; fi
     return
   fi
 
@@ -32,9 +35,11 @@ prepare_load() {
   [[ "$remote_load_dir" =~ ^/tmp/perflab-load\.[a-zA-Z0-9]+$ ]] || return 1
   load_ssh tee "$remote_load_dir/wrk-stats.lua" < "$load_script" >/dev/null
   load_script="$remote_load_dir/wrk-stats.lua"
+  if load_ssh /usr/bin/time -f '' true </dev/null >/dev/null 2>&1; then load_has_time=true; fi
 }
 
 load_environment() {
+  if "$load_has_time"; then echo 'load_process_timing=gnu-time'; else echo 'load_process_timing=unavailable'; fi
   if [[ -z "${LOAD_SSH:-}" ]]; then
     wrk --version 2>&1 | sed -n '1p' || true
     if [[ -n "${SERVER_CPUS:-}" && -n "${LOAD_CPUS:-}" ]]; then
@@ -64,12 +69,16 @@ load_environment() {
 }
 
 run_load() {
+  local -a command=(wrk -s "$load_script" "$@")
+  if "$load_has_time"; then
+    command=(env LC_ALL=C /usr/bin/time -f "$load_timing_format" "${command[@]}")
+  fi
   if [[ -n "${LOAD_SSH:-}" ]]; then
-    load_ssh wrk -s "$load_script" "$@" </dev/null
+    load_ssh "${command[@]}" </dev/null
   elif [[ -n "${LOAD_CPUS:-}" ]]; then
-    taskset -c "$LOAD_CPUS" wrk -s "$load_script" "$@"
+    taskset -c "$LOAD_CPUS" "${command[@]}"
   else
-    wrk -s "$load_script" "$@"
+    "${command[@]}"
   fi
 }
 
