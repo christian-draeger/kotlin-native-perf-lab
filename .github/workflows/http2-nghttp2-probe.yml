@@ -11,7 +11,11 @@ on:
   workflow_dispatch:
     inputs:
       run_pilot:
-        description: Run the exploratory ktServe and Axum h2c comparison on both Linux architectures
+        description: Run the exploratory ktServe and Axum HTTP/2 comparison on both Linux architectures
+        type: boolean
+        default: false
+      tls_ingress:
+        description: Put each origin behind the same Caddy TLS configuration when running the pilot
         type: boolean
         default: false
 
@@ -146,7 +150,7 @@ jobs:
           bash "$RUNNER_TEMP/h2-arm/ingress/smoke.sh" "$RUNNER_TEMP/h2-arm/ktserve-h2c" "$RUNNER_TEMP/proxy/usr/bin/caddy"
 
   h2c_pilot:
-    name: Exploratory h2c pilot (${{ matrix.arch }})
+    name: Exploratory HTTP/2 pilot (${{ matrix.arch }})
     if: github.event_name == 'workflow_dispatch' && inputs.run_pilot
     needs: build
     strategy:
@@ -175,24 +179,54 @@ jobs:
           rustup toolchain install 1.100.0 --profile minimal
           cargo +1.100.0 build --manifest-path competitors/rust-axum/Cargo.toml \
             --release --locked --features http2 --target-dir "$RUNNER_TEMP/axum-h2c"
-      - name: Compare the same HTTP/2 JSON workload
+      - name: Build the pinned TLS load client
+        if: inputs.tls_ingress
         run: |
+          sudo apt-get install -y cmake g++-14 libev-dev libssl-dev ninja-build pkg-config zlib1g-dev
+          stage="$(mktemp -d "$RUNNER_TEMP/h2load.XXXXXX")"
+          cd "$stage"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/nghttp2/nghttp2/releases/download/v1.71.0/nghttp2-1.71.0.tar.xz \
+            --output nghttp2-1.71.0.tar.xz
+          printf '%s  %s\n' c0f55121d88650e4b9227aec28cebaf664d2417ca60fe70be0f8d38829f52116 \
+            nghttp2-1.71.0.tar.xz | sha256sum --check
+          tar -xf nghttp2-1.71.0.tar.xz
+          cmake -S nghttp2-1.71.0 -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DENABLE_APP=ON \
+            -DENABLE_EXAMPLES=OFF -DENABLE_HPACK_TOOLS=OFF -DENABLE_DOC=OFF -DBUILD_TESTING=OFF
+          cmake --build build --target h2load --parallel 2
+          build/src/h2load --version
+          printf '%s\n' "$stage/build/src" >> "$GITHUB_PATH"
+      - name: Compare the same HTTP/2 JSON workload
+        env:
+          TLS_INGRESS: ${{ inputs.tls_ingress }}
+        run: |
+          args=()
+          if [[ "$TLS_INGRESS" == true ]]; then
+            stage="$(mktemp -d "$RUNNER_TEMP/caddy-bench.XXXXXX")"
+            (
+              cd "$stage"
+              apt-get download caddy
+              dpkg-deb -x caddy_*.deb unpacked
+            )
+            args+=(--caddy "$stage/unpacked/usr/bin/caddy")
+          fi
           python3 components/ktserve/experiments/http2-nghttp2/benchmark.py \
             --ktserve "$RUNNER_TEMP/ktserve-h2c/ktserve-h2c" \
             --axum "$RUNNER_TEMP/axum-h2c/release/axum-baseline" \
-            --output "$RUNNER_TEMP/h2c-results"
+            --output "$RUNNER_TEMP/h2-results" "${args[@]}"
       - name: Record toolchain versions
         if: ${{ always() && !cancelled() }}
         run: |
-          test -d "$RUNNER_TEMP/h2c-results" || exit 0
+          test -d "$RUNNER_TEMP/h2-results" || exit 0
           {
             printf 'kotlin_native=2.4.21\naxum=0.8.9\nnghttp2_sdk='
             cat "$RUNNER_TEMP/ktserve-h2c/package-version.txt"
             rustc +1.100.0 -Vv
-          } >> "$RUNNER_TEMP/h2c-results/environment.txt"
+          } >> "$RUNNER_TEMP/h2-results/environment.txt"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ always() && !cancelled() }}
         with:
-          name: h2c-pilot-${{ matrix.arch }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/h2c-results
+          name: ${{ inputs.tls_ingress && 'h2-tls' || 'h2c' }}-pilot-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/h2-results
           if-no-files-found: warn
