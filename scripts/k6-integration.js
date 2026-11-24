@@ -11,6 +11,8 @@ const standalone = __ENV.PERFLAB_APPLICATION_MIX === "true";
 const profile = __ENV.PERFLAB_APPLICATION_PROFILE ?? "persistent";
 const churn = profile === "churn";
 const overload = profile === "overload";
+const capacity = profile === "capacity";
+const budgets = capacity ? JSON.parse(__ENV.PERFLAB_TRAFFIC_BUDGETS) : {};
 if (!target || !summary || !Number.isInteger(rate) || rate < 20 || rate % 20 !== 0
     || !Number.isInteger(duration) || duration < 1 || !Number.isInteger(vus) || vus < 1) {
   throw new Error("Set PERFLAB_TARGET, PERFLAB_RATE (multiple of 20), PERFLAB_DURATION, PERFLAB_VUS and PERFLAB_SUMMARY.");
@@ -35,6 +37,7 @@ const failure = new Counter("perflab_failed_responses");
 const newConnections = new Counter("perflab_new_connections");
 const timeouts = new Counter("perflab_timeouts");
 const onTime = new Counter("perflab_success_within_100ms");
+const onTimePerOperation = capacity ? new Counter("perflab_success_within_operation_budget") : null;
 const operationLatency = {};
 const operationFailures = {};
 const scenarios = {};
@@ -60,11 +63,22 @@ function upload(weight, size) {
 }
 
 function user(response) {
+  if (capacity) return response.body === '{"id":42,"name":"benchmark-user","active":true}';
   const data = response.json();
   return Object.keys(data).length === 3 && data.id === 42 && data.name === "benchmark-user" && data.active === true;
 }
 
+// Check every response while avoiding per-request JSON decoding in the capacity generator.
+const expectedCatalog = capacity ? Object.fromEntries([123, 987].map((id) => [
+  id, JSON.stringify({ id, items: Array.from({ length: 32 }, (_, index) => ({
+    sku: `${id}-${index}`, name: `Café item ${index}`,
+    description: "Roasted in München and packed for delivery.",
+    stock: { available: index > 0, units: index * 3 },
+  })) }),
+])) : {};
+
 function catalog(response, id) {
+  if (capacity) return response.body === expectedCatalog[id];
   const data = response.json();
   return Object.keys(data).length === 2 && data.id === id && Array.isArray(data.items)
     && data.items.length === 32 && data.items.every((item, index) => (
@@ -96,13 +110,14 @@ export default function () {
   }
   failure.add(valid ? 0 : 1);
   operationFailures[name].add(valid ? 0 : 1);
-  if (churn) newConnections.add(response.timings.connecting > 0 ? 1 : 0);
-  if (overload) timeouts.add(response.error_code === 1050 || response.error_code === 1211 ? 1 : 0);
+  if (churn || capacity) newConnections.add(response.timings.connecting > 0 ? 1 : 0);
+  if (overload || capacity) timeouts.add(response.error_code === 1050 || response.error_code === 1211 ? 1 : 0);
   if (valid) {
     const duration = response.timings.duration + (churn ? response.timings.connecting : 0);
     successfulLatency.add(duration);
     operationLatency[name].add(duration);
     if (overload) onTime.add(duration <= 100 ? 1 : 0);
+    if (capacity) onTimePerOperation.add(duration <= budgets[name] ? 1 : 0);
   }
 }
 
