@@ -8,13 +8,92 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlin.concurrent.thread
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class JvmServerTest {
+    @Test
+    fun resumesSuspendedHandlerAndPreservesRequestOrder() {
+        val entered = CompletableFuture<Unit>()
+        val ready = CompletableDeferred<Unit>()
+        withServer(ServerLimits(), routes = {
+            getSuspending("/async/{id}") { request ->
+                entered.complete(Unit)
+                ready.await()
+                text(checkNotNull(request.pathParameter("id")))
+            }
+        }) { port, _ ->
+            client(port).use { first ->
+                first.send("GET /async/123 HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                entered.get(5, TimeUnit.SECONDS)
+                first.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                client(port).use { second ->
+                    second.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    assertEquals("ok", second.getInputStream().buffered().response())
+                }
+                ready.complete(Unit)
+                val input = first.getInputStream().buffered()
+                assertEquals("123", input.response())
+                assertEquals("ok", input.response())
+                assertEquals(-1, input.read())
+            }
+        }
+    }
+
+    @Test
+    fun cancelsOnDisconnectAndDeadlineAndReleasesLateResponse() {
+        val entered = CompletableFuture<Unit>()
+        val cancelled = CompletableFuture<Unit>()
+        val sourceEntered = CompletableFuture<Unit>()
+        val sourceClosed = CompletableFuture<Unit>()
+        val ready = CompletableFuture<Unit>()
+        withServer(ServerLimits(handlerMillis = 1_000), routes = {
+            getSuspending("/disconnect") {
+                try {
+                    entered.complete(Unit)
+                    awaitCancellation()
+                } finally {
+                    cancelled.complete(Unit)
+                }
+            }
+            getSuspending("/source") {
+                suspendCoroutine<Unit> { resume ->
+                    ready.thenRun { resume.resume(Unit) }
+                    sourceEntered.complete(Unit)
+                }
+                streamResponse(1, "text/plain", object : ResponseSource {
+                    override fun read(buffer: ByteArray, limit: Int): Int = error("source was never written")
+                    override fun close() {
+                        sourceClosed.complete(Unit)
+                    }
+                })
+            }
+        }) { port, _ ->
+            client(port).use { socket ->
+                socket.send("GET /disconnect HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                entered.get(5, TimeUnit.SECONDS)
+            }
+            cancelled.get(5, TimeUnit.SECONDS)
+            client(port).use { socket ->
+                socket.send("GET /source HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                try {
+                    sourceEntered.get(5, TimeUnit.SECONDS)
+                    assertEquals(-1, socket.getInputStream().read())
+                } finally {
+                    ready.complete(Unit)
+                }
+                sourceClosed.get(5, TimeUnit.SECONDS)
+            }
+        }
+    }
+
     @Test
     fun streamsAResponseAndProcessesThePipelinedRequest() {
         val closed = AtomicInteger()

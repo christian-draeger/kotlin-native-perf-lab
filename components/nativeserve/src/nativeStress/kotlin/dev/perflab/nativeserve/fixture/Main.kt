@@ -7,13 +7,17 @@ import dev.perflab.nativeserve.ServerLimits
 import dev.perflab.nativeserve.serve
 import dev.perflab.nativeserve.streamResponse
 import dev.perflab.nativeserve.text
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
+import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
 
 private const val BODY_BYTES = 8 * 1024 * 1024
 private const val STREAM_BYTES = BODY_BYTES - 3
 
-@OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class)
+@OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class, ExperimentalAtomicApi::class)
 fun main(args: Array<String>) {
     if (args.firstOrNull() == "--transport") {
         probeTransport(args[1].toInt())
@@ -31,6 +35,8 @@ fun main(args: Array<String>) {
     var openStreams = 0
     var openRequests = 0
     var stop = false
+    val openHandlers = AtomicInt(0)
+    val ready = CompletableDeferred<Unit>()
     fun source(bytes: Int): ResponseSource {
         openStreams++
         return object : ResponseSource {
@@ -51,6 +57,21 @@ fun main(args: Array<String>) {
     }
     serve(port = args.single().toInt(), limits = limits, stopRequested = { stop }) {
         get("/health") { text("ok") }
+        get("/open-handlers") { text(openHandlers.load().toString()) }
+        get("/complete-handler") {
+            ready.complete(Unit)
+            text("ok")
+        }
+        getSuspending("/suspend/{kind}") { request ->
+            openHandlers.addAndFetch(1)
+            try {
+                if (request.pathParameter("kind") == "cancel") awaitCancellation()
+                ready.await()
+                text("resumed")
+            } finally {
+                openHandlers.addAndFetch(-1)
+            }
+        }
         get("/large") {
             largeRequests++
             text(largeBody)
