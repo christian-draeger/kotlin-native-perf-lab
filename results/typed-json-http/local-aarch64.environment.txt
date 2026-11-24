@@ -1,0 +1,75 @@
+source_sha=93bb106fdb258eaf9ce5a9ecd59c330ce7b6921e
+release_sha256=f9fbb8443bdd021c3315f5fd67d7def2e708f2f4543f86728587d07cbbb7e325
+server_cpus=0
+load_cpus=1,2
+protocol=HTTP/1.1
+connections=16
+backend=epoll
+tcp_nodelay=on
+benchmark_source=exploratory same-host loopback
+warmup_seconds=3
+measure_seconds=3
+repetitions=1
+Linux 7.2.12-orbstack-00394-gbecdd6130068 #1 SMP PREEMPT Thu Oct 22 22:17:17 UTC 2026 aarch64 aarch64 aarch64 GNU/Linux
+Architecture:                            aarch64
+CPU op-mode(s):                          64-bit
+Byte Order:                              Little Endian
+CPU(s):                                  16
+On-line CPU(s) list:                     0-15
+Vendor ID:                               Apple
+Model name:                              -
+Model:                                   0
+Thread(s) per core:                      1
+Core(s) per cluster:                     16
+Socket(s):                               -
+Cluster(s):                              1
+Stepping:                                0x0
+CPU(s) scaling MHz:                      100%
+CPU max MHz:                             2000.0000
+CPU min MHz:                             2000.0000
+BogoMIPS:                                48.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb dcpodp flagm2 frint i8mm bf16 ecv afp rpres
+L1d cache:                               2 MiB (16 instances)
+L1i cache:                               3 MiB (16 instances)
+L2 cache:                                48 MiB (3 instances)
+L3 cache:                                64 MiB (1 instance)
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Vulnerable
+Vulnerability Spectre v1:                Mitigation; __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; CSV2, but not BHB
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+Version: v12.13.0
+Commit: 507c4f028fbad80168f3b734dab9530d3aabfefa
+Runtime: go1.22.12 linux/arm64
+Date: 2025-10-31T11:31:51Z+0000
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.5 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+physical_host_cpu=Apple M3 Max
+kotlin=2.4.21
+kotlinx.serialization=1.11.0
+gradle=9.7.0
