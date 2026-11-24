@@ -106,6 +106,8 @@ The `application` suite runs the four core variants on `GET /catalog/123`. Each 
 
 Use **Actions → Benchmark dashboard → application** for the Linux x86_64 and ARM64 rehearsal. Pages lists the runs under **Application workloads**. Use `BENCHMARK_SUITE=application` with the two-host Linux command for a controlled rerun. This is a single application workload in the [workload ladder](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/114).
 
+Use **Actions → Linux diagnostic profiles → json-phases** to measure DTO construction, JSON string encoding, UTF-8 conversion and the combined path for the same small and catalog payloads. The release probes check exact bytes and measure one logical CPU per runner over five repetitions. Timing samples use the default garbage collector. A separate binary uses manual collection and per-object allocation for bounded managed-heap samples, and the GC epoch check rejects any sample interrupted by a collection. These diagnostics describe the serialization stages outside the HTTP path. [Kotlin/Native GC statistics](https://kotlinlang.org/api/core/kotlin-stdlib/kotlin.native.runtime/-g-c-info/)
+
 ## Local harness and limitations
 
 - The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.
