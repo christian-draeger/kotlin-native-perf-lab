@@ -5,12 +5,16 @@ edition = "2021"
 
 [features]
 http2 = ["axum/http2"]
+upstream = ["dep:http-body-util", "dep:hyper", "dep:hyper-util"]
 
 [dependencies]
 axum = { version = "=0.8.9", features = ["json"] }
 futures-util = { version = "0.3", default-features = false }
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "net", "time"] }
 serde = { version = "1", features = ["derive"] }
+http-body-util = { version = "0.1", optional = true }
+hyper = { version = "1", features = ["client", "http1"], optional = true }
+hyper-util = { version = "0.1", features = ["tokio"], optional = true }
 
 [profile.release]
 opt-level = 3

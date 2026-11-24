@@ -11,6 +11,8 @@ use serde::Serialize;
 use std::convert::Infallible;
 
 mod application_mix;
+#[cfg(feature = "upstream")]
+mod upstream;
 
 #[derive(Serialize)]
 struct UserResponse {
@@ -99,6 +101,16 @@ async fn main() {
         Ok("application") => app.route("/catalog/{id}", get(catalog)),
         Ok("http2-stream") => app.route("/stream", get(stream_response)),
         _ => app,
+    };
+    #[cfg(feature = "upstream")]
+    let app = if std::env::var("BENCHMARK_SUITE").as_deref() == Ok("application-upstream") {
+        let origin = std::env::var("BENCHMARK_UPSTREAM_PORT")
+            .expect("Missing upstream port")
+            .parse::<u16>()
+            .expect("Invalid upstream port");
+        upstream::routes(app, origin)
+    } else {
+        app
     };
 
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))

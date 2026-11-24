@@ -1,0 +1,68 @@
+name: ktServe upstream traffic pilot
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/traffic-upstream.yml'
+      - 'components/ktserve/benchmarks/upstream/**'
+      - 'components/ktserve/src/nativeUpstreamProbe/**'
+      - 'components/ktserve/build.gradle.kts'
+      - 'competitors/ktor/**'
+      - 'competitors/rust-axum/**'
+      - 'scripts/benchmark-upstream.py'
+      - 'scripts/k6-upstream.js'
+      - 'scripts/upstream-origin.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  loopback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LC_ALL: C
+      RUSTUP_TOOLCHAIN: '1.100.0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Build the release fixtures and install k6
+        run: |
+          test "$(uname -m)" = x86_64
+          if [[ ! -x /usr/bin/time ]]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y time
+          fi
+          bash scripts/ci-gradle.sh -p competitors/ktor jvmDist linkReleaseExecutableNative
+          bash scripts/ci-gradle.sh -p components/ktserve linkUpstreamProbeReleaseExecutableNative
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          cargo build --release --locked --features upstream --manifest-path competitors/rust-axum/Cargo.toml
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          echo "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
+      - name: Verify endpoint parity and measure
+        run: |
+          output="$RUNNER_TEMP/upstream-traffic"
+          mkdir -p "$output"
+          printf 'ci_run_id=%s\nci_run_attempt=%s\nci_event=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" > "$output/runner.txt"
+          printf 'source_sha=%s\nrunner_image=%s\n' "$GITHUB_SHA" "${ImageVersion:-unknown}" >> "$output/runner.txt"
+          python3 scripts/benchmark-upstream.py "$output/parity" --smoke-only
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            python3 scripts/benchmark-upstream.py "$output" --rates 800
+          else
+            python3 scripts/benchmark-upstream.py "$output"
+          fi
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: always()
+        with:
+          name: upstream-traffic-x86_64-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/upstream-traffic
+          if-no-files-found: ignore
