@@ -59,6 +59,8 @@ The initial Linux reference implementation uses the following ownership and prot
 | [8 · Spring WebFlux integration and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/9) | Implement the reactive HTTP adapter and Boot starter, compare engines, then assess Servlet compatibility. | Backpressure and lifecycle tests, a one-dependency consumer, a controlled Reactor Netty versus NativeServe comparison and a documented Spring MVC feasibility decision. |
 | [9 · Measured I/O backend experiments](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/12) | Prototype io_uring on Linux and verify Windows tooling before an IOCP prototype. | Shared contract and platform socket tests plus independent, same-platform measurement reports and an evidence-backed decision for each backend. |
 | [10 · HTTP/2 support](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/13) | Reuse a maintained HTTP/2 implementation where it meets the session contract, then integrate bounded streams and TLS negotiation. | Existing handler API, protocol and resource tests on both Linux architectures, secure ALPN deployment and a distinct HTTP/2 comparison. |
+| [11 · Multi-core scheduling and async handoff](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/15) | Isolate connection distribution, CPU budgets and coroutine completion costs. | Paired listener, event-loop and handler comparisons with correctness checks, resource costs and recorded negative results. |
+| [12 · Production workload performance](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/14) | Add equivalent application workloads and validate the offered load under sustained and overload conditions. | A workload-level scorecard with successful throughput, matched-load p99, CPU and memory. Promotion uses independently driven controlled runs. |
 
 The critical path starts with [baseline integration](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/2), [quick CI feedback](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/3), [resource ownership](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/4), then [parsing](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/5), [transport](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/6), [parity](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/7) and [four-way measurement](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/8). The controlled host work can proceed alongside API, docs and packaging preparation.
 
@@ -97,6 +99,8 @@ The [nghttp2 session experiment](components/nativeserve/experiments/http2-nghttp
 Report protocol, TLS mode, connections, and concurrent streams in the [matched HTTP/2 comparisons](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81). HTTP/2 gets a separate workload series. [HTTP/2 specification](https://www.rfc-editor.org/rfc/rfc9113.html)
 
 ## Validation and performance decisions
+
+The [performance research review](results/performance-research.md) audits current Linux results, prior negative experiments and the next scheduling and workload hypotheses. It records the evidence needed for each optimization decision.
 
 | Layer | When to run | Signal |
 | --- | --- | --- |
