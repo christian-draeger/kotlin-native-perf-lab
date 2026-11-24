@@ -6,6 +6,7 @@ on:
     paths: &competitor_paths
       - 'competitors/**'
       - 'scripts/build-competitors.sh'
+      - 'scripts/ci-maven-central-mirror.xml'
       - 'scripts/benchmark-variants.sh'
       - 'scripts/run-server.sh'
       - 'scripts/server-process.sh'
