@@ -218,7 +218,9 @@ internal class HttpConnection(
         if (outputOffset < outputLength) return true
         output = null
         val pending = stream ?: return !closeAfterWrite
-        if (pending.phase == ChunkPhase.END || !pending.chunked && pending.remaining == 0) {
+        if (pending.phase == ChunkPhase.END ||
+            !pending.chunked && pending.remaining == 0 && pending.source !is AsyncResponseSource
+        ) {
             closeResponse()
             return !closeAfterWrite
         }
@@ -244,6 +246,10 @@ internal class HttpConnection(
             pending.phase = ChunkPhase.END
             setOutput(if (pending.wroteChunk) CHUNKED_END else EMPTY_CHUNKED_END)
             return true
+        }
+        if (read == -1 && pending.remaining == 0) {
+            closeResponse()
+            return !closeAfterWrite
         }
         if (read !in 1..limit || read > pending.remaining) {
             closeResponse()
@@ -312,7 +318,7 @@ internal class HttpConnection(
             val length = stream.length
             val source = when (stream) {
                 is ResponseStream.Pull -> stream.source
-                is ResponseStream.Produce -> AsyncResponseSource(checkNotNull(dispatcher).invoke(), stream.producer)
+                is ResponseStream.Produce -> AsyncResponseSource(checkNotNull(dispatcher).invoke(), stream)
             }
             this.stream = PendingStream(source, length ?: limits.responseBodyBytes, chunked)
             setOutput(response.encodeHead(version, persistent, length ?: CHUNKED_RESPONSE_LENGTH))

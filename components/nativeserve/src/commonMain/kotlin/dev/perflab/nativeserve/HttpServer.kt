@@ -141,7 +141,7 @@ internal class HttpServer(
         for (id in suspended.toList()) {
             val client = clients[id] ?: continue
             if (client.awaitingProducer) {
-                if (!client.resumeProducer()) disconnect(id) else if (client.output != null) advance(id, client, time)
+                if (!client.resumeProducer()) disconnect(id) else if (!client.awaitingProducer) advance(id, client, time)
             } else if (client.finishHandler(time) || client.bodyBlocked) {
                 advance(id, client, time)
             }

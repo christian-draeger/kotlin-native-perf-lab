@@ -312,6 +312,7 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
         head.responded = true
         val source = response.stream
         if (source is ResponseStream.Produce) {
+            source.discard()
             session.respond(stream, 501, ByteArray(0), contentType = null)
             return
         }
