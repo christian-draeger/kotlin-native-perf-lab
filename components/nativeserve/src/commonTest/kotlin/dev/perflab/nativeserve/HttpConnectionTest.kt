@@ -187,6 +187,80 @@ class HttpConnectionTest {
         assertEquals(0, source.closes)
     }
 
+    @Test
+    fun chunkedOutputHonorsPartialFramesAndKeepsTheNextRequestQueued() {
+        val parts = ArrayDeque(listOf("abc", "de"))
+        val source = TestSource { buffer, _ ->
+            val part = parts.removeFirstOrNull()?.encodeToByteArray()
+            if (part == null) -1 else {
+                part.copyInto(buffer)
+                part.size
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits(responseBodyBytes = 5))
+        val routes = Routes().apply { get("/health") { streamResponse("text/plain", source) } }
+        connection.receive(request.repeat(2), now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        val head = connection.pendingOutput()
+        assertTrue(head.contains("Transfer-Encoding: chunked\r\n"))
+        assertFalse(head.contains("Content-Length:"))
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+        assertEquals("3\r\n", connection.pendingOutput())
+        assertTrue(connection.wrote(1, now = 2))
+        assertEquals(1, source.reads)
+        assertTrue(connection.wrote(2, now = 2))
+        for (frame in listOf("abc", "\r\n2\r\n", "de", "\r\n0\r\n\r\n")) {
+            assertEquals(frame, connection.pendingOutput())
+            assertEquals(0, source.closes)
+            assertTrue(connection.wrote(connection.outputLength, now = 2))
+        }
+        assertNull(connection.output)
+        assertEquals(request.length, connection.input.size)
+        assertEquals(3, source.reads)
+        assertEquals(1, source.closes)
+    }
+
+    @Test
+    fun emptyChunkedBodySendsATerminatorAndOverflowClosesTheConnection() {
+        val empty = TestSource { _, _ -> -1 }
+        val connection = HttpConnection(0, ServerLimits(responseBodyBytes = 4))
+        val emptyRoutes = Routes().apply { get("/health") { streamResponse("text/plain", empty) } }
+        connection.receive(request, now = 1)
+        assertTrue(connection.prepareResponse(emptyRoutes, now = 1))
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+        assertEquals("0\r\n\r\n", connection.pendingOutput())
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+        assertEquals(1, empty.closes)
+
+        val overflow = TestSource { _, limit -> limit }
+        val overflowRoutes = Routes().apply { get("/health") { streamResponse("text/plain", overflow) } }
+        connection.receive(request, now = 4)
+        assertTrue(connection.prepareResponse(overflowRoutes, now = 4))
+        assertTrue(connection.wrote(connection.outputLength, now = 5))
+        assertEquals("4\r\n", connection.pendingOutput())
+        assertTrue(connection.wrote(connection.outputLength, now = 5))
+        assertEquals(4, connection.outputLength)
+        assertFalse(connection.wrote(4, now = 6))
+        assertNull(connection.output)
+        assertEquals(1, overflow.closes)
+    }
+
+    @Test
+    fun rejectsAnUnknownLengthStreamOnHttp10BeforeReadingIt() {
+        val source = TestSource { _, _ -> error("Unexpected read") }
+        val routes = Routes().apply { get("/health") { streamResponse("text/plain", source) } }
+        val connection = HttpConnection(0, ServerLimits())
+        connection.receive("GET /health HTTP/1.0\r\n\r\n", now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        assertTrue(connection.pendingOutput().startsWith("HTTP/1.0 500 "))
+        assertEquals(0, source.reads)
+        assertEquals(1, source.closes)
+        assertFalse(connection.wrote(connection.outputLength, now = 2))
+    }
+
+    private fun HttpConnection.pendingOutput(): String =
+        assertNotNull(output).decodeToString(endIndex = outputLength)
+
     private fun HttpConnection.startStream(length: Int, source: ResponseSource) {
         val routes = Routes().apply { get("/health") { streamResponse(length, "text/plain", source) } }
         receive(request, now = 1)

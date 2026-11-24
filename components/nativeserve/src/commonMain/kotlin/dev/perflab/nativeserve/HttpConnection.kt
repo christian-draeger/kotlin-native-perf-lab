@@ -1,6 +1,8 @@
 package dev.perflab.nativeserve
 
 private const val RESPONSE_CHUNK_BYTES = 16 * 1024
+private val EMPTY_CHUNKED_END = "0\r\n\r\n".encodeToByteArray()
+private val CHUNKED_END = "\r\n0\r\n\r\n".encodeToByteArray()
 
 class ServerLimits(
     val connections: Int = 1024,
@@ -61,7 +63,10 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
                 headStarted = null
                 val response = routes.respond(head.request)
                 val responseStream = response.stream
-                if ((responseStream?.length ?: response.body.size) > limits.responseBodyBytes) {
+                val chunked = responseStream != null && responseStream.length == null
+                if ((responseStream?.length ?: response.body.size) > limits.responseBodyBytes ||
+                    chunked && head.version != "HTTP/1.1"
+                ) {
                     responseStream?.source?.release()
                     queue(emptyResponse(500), head.version, keepAlive = false)
                 } else {
@@ -79,22 +84,45 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         if (outputOffset < outputLength) return true
         output = null
         val pending = stream ?: return !closeAfterWrite
-        if (pending.remaining == 0) {
+        if (pending.phase == ChunkPhase.END || !pending.chunked && pending.remaining == 0) {
             closeResponse()
             return !closeAfterWrite
         }
-        val limit = minOf(pending.remaining, pending.buffer.size)
+        if (pending.phase == ChunkPhase.PAYLOAD) {
+            pending.phase = ChunkPhase.SOURCE
+            setOutput(pending.buffer, pending.chunkLength)
+            return true
+        }
+        return pull(pending)
+    }
+
+    private fun pull(pending: PendingStream): Boolean {
+        // At the cap, probe for EOF once so a response ending exactly at the limit can finish.
+        val limit = minOf(pending.remaining, pending.buffer.size).coerceAtLeast(1)
         val read = try {
             pending.source.read(pending.buffer, limit)
         } catch (_: Exception) {
             0
         }
-        if (read !in 1..limit) {
+        if (pending.chunked && read == -1) {
+            pending.phase = ChunkPhase.END
+            setOutput(if (pending.wroteChunk) CHUNKED_END else EMPTY_CHUNKED_END)
+            return true
+        }
+        if (read !in 1..limit || read > pending.remaining) {
             closeResponse()
             return false
         }
         pending.remaining -= read
-        setOutput(pending.buffer, read)
+        if (pending.chunked) {
+            val prefix = if (pending.wroteChunk) "\r\n" else ""
+            pending.wroteChunk = true
+            pending.chunkLength = read
+            pending.phase = ChunkPhase.PAYLOAD
+            setOutput("$prefix${read.toString(16)}\r\n".encodeToByteArray())
+        } else {
+            setOutput(pending.buffer, read)
+        }
         return true
     }
 
@@ -110,8 +138,9 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         if (responseStream == null) {
             setOutput(response.encode(version, keepAlive))
         } else {
-            stream = PendingStream(responseStream.source, responseStream.length)
-            setOutput(response.encodeHead(version, keepAlive, responseStream.length))
+            val length = responseStream.length
+            stream = PendingStream(responseStream.source, length ?: limits.responseBodyBytes, chunked = length == null)
+            setOutput(response.encodeHead(version, keepAlive, length ?: -1))
         }
     }
 
@@ -121,8 +150,13 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         outputLength = length
     }
 
-    private class PendingStream(val source: ResponseSource, var remaining: Int) {
+    private enum class ChunkPhase { SOURCE, PAYLOAD, END }
+
+    private class PendingStream(val source: ResponseSource, var remaining: Int, val chunked: Boolean) {
         val buffer = ByteArray(minOf(remaining, RESPONSE_CHUNK_BYTES))
+        var phase = ChunkPhase.SOURCE
+        var wroteChunk = false
+        var chunkLength = 0
     }
 }
 
