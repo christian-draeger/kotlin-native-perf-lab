@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || 'benchmark-dashboard-publish' }}
@@ -47,6 +48,8 @@ jobs:
   arm_native:
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers')
     uses: ./.github/workflows/arm-native.yml
+    with:
+      reuse_smoke: true
 
   benchmark:
     needs: arm_native
@@ -107,6 +110,8 @@ jobs:
         if: matrix.arch == 'aarch64'
         with:
           artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
+          run-id: ${{ needs.arm_native.outputs.artifact_run_id }}
+          github-token: ${{ github.token }}
           merge-multiple: true
           path: ${{ runner.temp }}/arm-native
       - name: Prepare the worker reference and CPU affinity
@@ -189,12 +194,14 @@ jobs:
           BENCHMARK_OUTCOME: ${{ steps.measure.outcome }}
           RUNNER_LABEL: ${{ matrix.runner }}
           ROUTE: ${{ matrix.route }}
+          NATIVE_BUILD_RUN: ${{ matrix.arch == 'aarch64' && needs.arm_native.outputs.artifact_run_id || github.run_id }}
         run: |
           shopt -s nullglob
           archive="$RUNNER_TEMP/benchmark-archive"
           for directory in "$RUNNER_TEMP"/benchmark-results/*; do
             printf 'benchmark_source=github-hosted-actions\nci_run_id=%s\nci_run_attempt=%s\nbenchmark_outcome=%s\nrunner_image=%s\nrunner_image_version=%s\nrunner_label=%s\nnative_build_arch=x86_64\n' \
               "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$BENCHMARK_OUTCOME" "${ImageOS:-unknown}" "${ImageVersion:-unknown}" "$RUNNER_LABEL" >> "$directory/environment.txt"
+            printf 'native_build_run_id=%s\n' "$NATIVE_BUILD_RUN" >> "$directory/environment.txt"
             mkdir -p "$archive"
             mv "$directory" "$archive/${directory##*/}-$EXPECTED_ARCH-$ROUTE"
             printf 'directory=%s\n' "$archive" >> "$GITHUB_OUTPUT"
