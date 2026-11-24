@@ -8,7 +8,7 @@
 package dev.perflab.nativeserve
 
 import dev.perflab.nativeserve.transport.StreamTransport
-import dev.perflab.nativeserve.transport.openSharedEpollTransports
+import dev.perflab.nativeserve.transport.openWorkerEpollTransports
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicReference
 import kotlinx.cinterop.MemScope
@@ -43,7 +43,9 @@ internal fun MemScope.runEpollWorkers(
             responseHeaderBytes = limits.responseHeaderBytes,
         )
     }
-    val transports = openSharedEpollTransports(host, port, partitions.map { it.connections })
+    val listener = getenv("NATIVESERVE_WORKER_LISTENER")?.toKString() ?: "shared"
+    require(listener == "shared" || listener == "reuseport") { "Unsupported worker listener: $listener" }
+    val transports = openWorkerEpollTransports(host, port, partitions.map { it.connections }, listener == "reuseport")
     val counters = if (getenv("NATIVESERVE_WORKER_DIAGNOSTICS")?.toKString() == "1") {
         List(workers) { HttpServerCounters() }
     } else null
@@ -60,6 +62,7 @@ internal fun MemScope.runEpollWorkers(
     try {
         newFixedThreadPoolContext(workers - 1, "nativeserve-epoll").use { dispatcher ->
             println("NativeServe backend=epoll tcp=ipv4 workers=$workers")
+            println("NativeServe worker_listener=$listener")
             runBlocking {
                 try {
                     for (index in 1 until workers) {

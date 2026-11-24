@@ -32,6 +32,11 @@ PY
 
 unset NATIVESERVE_WORKER_DIAGNOSTICS
 variants=(nativeserve-reference kotlin-reactor nativeserve-workers-2 rust-axum)
+diagnostic_variants=(nativeserve-workers-2)
+if [[ "${COMPARE_WORKER_LISTENERS:-false}" == true ]]; then
+  variants+=(nativeserve-workers-2-reuseport)
+  diagnostic_variants+=(nativeserve-workers-2-reuseport)
+fi
 for rate in 20000 40000; do
   for run in 1 2 3; do
     for offset in "${!variants[@]}"; do
@@ -56,14 +61,18 @@ for rate in 20000 40000; do
   done
 done
 
-PORT="$(available_port)"
-export PORT NATIVESERVE_WORKER_DIAGNOSTICS=1
-start_server nativeserve-workers-2 "$out/worker-distribution.server.txt"
-printf 'GET http://%s:%s/json\n' "$BIND_HOST" "$PORT" |
-  taskset -c "$LOAD_CPUS" vegeta attack -rate=20000/s -duration=3s -workers=64 -max-workers=64 \
-    -connections=64 -max-connections=64 -timeout=2s -http2=false -max-body=0 |
-  vegeta report -type=json > "$out/worker-distribution.load.json"
-stop_server
-grep -E '^NativeServe worker=[0-9]+ accepted=[0-9]+ requests=[0-9]+$' "$out/worker-distribution.server.txt" \
-  > "$out/worker-distribution.txt"
-test "$(wc -l < "$out/worker-distribution.txt")" -eq 2
+export NATIVESERVE_WORKER_DIAGNOSTICS=1
+for variant in "${diagnostic_variants[@]}"; do
+  prefix="$out/worker-distribution"
+  if [[ "$variant" == nativeserve-workers-2-reuseport ]]; then prefix="$prefix-reuseport"; fi
+  PORT="$(available_port)"
+  export PORT
+  start_server "$variant" "$prefix.server.txt"
+  printf 'GET http://%s:%s/json\n' "$BIND_HOST" "$PORT" |
+    taskset -c "$LOAD_CPUS" vegeta attack -rate=20000/s -duration=3s -workers=64 -max-workers=64 \
+      -connections=64 -max-connections=64 -timeout=2s -http2=false -max-body=0 |
+    vegeta report -type=json > "$prefix.load.json"
+  stop_server
+  grep -E '^NativeServe worker=[0-9]+ accepted=[0-9]+ requests=[0-9]+$' "$prefix.server.txt" > "$prefix.txt"
+  test "$(wc -l < "$prefix.txt")" -eq 2
+done

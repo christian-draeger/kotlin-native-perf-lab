@@ -17,7 +17,7 @@ start_server() {
   for ((attempt = 0; attempt < 100; attempt++)); do
     kill -0 "$server_pid" 2>/dev/null || break
     if curl -fsS --max-time 1 "$base/health" >/dev/null 2>&1; then
-      if [[ "$variant" == nativeserve-workers-2 ]]; then
+      if [[ "$variant" == nativeserve-workers-2* ]]; then
         grep -qFx 'NativeServe backend=epoll tcp=ipv4 workers=2' "$log" || {
           echo 'The candidate did not start with two epoll workers.' >&2
           cat "$log" >&2
@@ -25,6 +25,7 @@ start_server() {
         }
       fi
       case "$variant" in
+        nativeserve-workers-2-reuseport) grep -qFx 'NativeServe worker_listener=reuseport' "$log" || return 1 ;;
         nativeserve-epoll) grep -qFx 'NativeServe backend=epoll tcp=ipv4' "$log" || return 1 ;;
         nativeserve-io-uring) grep -q '^NativeServe backend=io_uring tcp=ipv4 features=0x' "$log" || return 1 ;;
       esac
