@@ -61,10 +61,7 @@ def embed(session, tokenizer, sentences):
     return pooled / np.linalg.norm(pooled, axis=1, keepdims=True)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("model_cache", type=Path, help="Directory to hold the verified model and tokenizer")
-    cache = parser.parse_args().model_cache
+def load_reference(cache):
     cache.mkdir(parents=True, exist_ok=True)
     model = model_file(cache, "onnx/model.onnx", MODEL_SHA256)
     tokenizer_path = model_file(cache, "tokenizer.json", TOKENIZER_SHA256)
@@ -74,6 +71,13 @@ def main():
     session = ort.InferenceSession(str(model), providers=["CPUExecutionProvider"])
     if session.get_providers() != ["CPUExecutionProvider"]:
         raise RuntimeError(f"Unexpected execution providers: {session.get_providers()}")
+    return session, tokenizer
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("model_cache", type=Path, help="Directory to hold the verified model and tokenizer")
+    session, tokenizer = load_reference(parser.parse_args().model_cache)
 
     embeddings = embed(session, tokenizer, SENTENCES)
     if embeddings.shape != (len(SENTENCES), 384) or embeddings.dtype != np.float32:
