@@ -705,6 +705,7 @@ function historicalTraffic(run) {
 function trafficStatus(cells, expected) {
   if (cells.some((cell) => !cell || cell.total !== expected)) return "missing";
   if (cells.some((cell) => cell.generator_qualified !== expected)) return "limited";
+  if (cells.some((cell) => cell.valid !== expected)) return "invalid";
   if (cells.every((cell) => cell.met === expected)) return "met";
   return "missed";
 }
@@ -722,10 +723,14 @@ function startTraffic() {
 
   const platformSelect = element("traffic-platform");
   const workerSelect = element("traffic-workers");
-  const badges = { met: "Both meet target", missed: "Target missed", limited: "Load unqualified", missing: "No paired result" };
+  const badges = {
+    met: "Both meet target", missed: "Target missed", limited: "Load unqualified",
+    invalid: "Trial checks failed", missing: "No paired result",
+  };
   const descriptions = {
-    missed: "At least one server missed a response target or a trial failed its checks. Review the trial rows for the breakdown.",
+    missed: "At least one server missed a latency target. The per-operation timings show where.",
     limited: "The tests missed scheduled arrivals or lacked verified generator headroom. Server capacity at this rate is unresolved.",
+    invalid: "At least one trial had a response failure or failed its warm-up or recovery checks. See the trial rows for details.",
     missing: "This run has no complete paired measurement at the selected rate.",
   };
   let selectedRate = 800;
@@ -764,6 +769,7 @@ function startTraffic() {
     const headings = [worker === "ktserve-workers-2" ? "ktServe · 2 workers" : "ktServe · 1 worker", "Axum"];
     const headline = outcome === "met" ? "Both meet the response target"
       : outcome === "limited" ? "Load delivery limits this comparison"
+      : outcome === "invalid" ? "Trial checks failed"
       : outcome === "missed" ? "Response targets missed" : "No paired result at this load";
     element("traffic-verdict").textContent = headline;
     element("traffic-verdict-note").textContent = outcome === "met" ? run.target : descriptions[outcome];
