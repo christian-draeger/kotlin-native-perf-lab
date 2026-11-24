@@ -17,6 +17,10 @@ on:
         description: Number of stalled response checks (1–30)
         type: number
         default: 1
+      run_pilot:
+        description: Run the exploratory Windows IOCP versus Axum pilot
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,7 +28,7 @@ permissions:
 jobs:
   probe:
     runs-on: windows-2022
-    timeout-minutes: 15
+    timeout-minutes: ${{ inputs.run_pilot && 20 || 15 }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -34,6 +38,13 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Check the pilot script syntax before building
+        shell: pwsh
+        run: |
+          $source = Resolve-Path components/ktserve/experiments/windows-iocp/benchmark.ps1
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($source.Path, [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { throw ($errors.Message -join [Environment]::NewLine) }
       - name: Build the Winsock probe, HTTP server and shared socket fixture
         shell: pwsh
         run: |
@@ -55,3 +66,46 @@ jobs:
           $env:KTSERVE_BACKEND = 'iocp'
           python scripts/tests/ktserve_stress.py $fixture --idle-trials $env:IDLE_TRIALS
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Axum and verify the pinned load generator
+        if: inputs.run_pilot
+        shell: pwsh
+        run: |
+          rustup toolchain install 1.100.0 --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo +1.100.0 build --manifest-path competitors/rust-axum/Cargo.toml --release --locked --target-dir "$env:RUNNER_TEMP/axum-iocp"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $asset = 'k6-v2.4.0-windows-amd64.zip'
+          $archive = "$env:RUNNER_TEMP/$asset"
+          $expected = 'aaa90b3afc336faf90172c7addf45c4f41305f6f188e3d564f79466e80ac68e3'
+          curl.exe -fsSL --retry 3 "https://github.com/grafana/k6/releases/download/v2.4.0/$asset" -o $archive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-FileHash -Algorithm SHA256 $archive).Hash -ne $expected) {
+            throw 'The k6 archive checksum differs from the pinned release.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath "$env:RUNNER_TEMP/io-load"
+          $load = @(Get-ChildItem "$env:RUNNER_TEMP/io-load" -Filter k6.exe -File -Recurse)
+          if ($load.Count -ne 1) { throw 'Expected exactly one k6 executable.' }
+          "WIN_IOCP_K6=$($load[0].FullName)" >> $env:GITHUB_ENV
+      - name: Compare IOCP and Axum on the same Windows runner
+        if: inputs.run_pilot
+        shell: pwsh
+        run: |
+          $project = 'components/ktserve/experiments/windows-iocp'
+          $server = "$project/build/bin/mingwX64/serverReleaseExecutable/ktserve-iocp.exe"
+          & "$project/benchmark.ps1" -KtServe $server -Axum "$env:RUNNER_TEMP/axum-iocp/release/axum-baseline.exe" -K6 $env:WIN_IOCP_K6 -Output "$env:RUNNER_TEMP/windows-iocp-results"
+      - name: Archive pilot toolchain versions
+        if: ${{ inputs.run_pilot && !cancelled() }}
+        shell: pwsh
+        run: |
+          $results = "$env:RUNNER_TEMP/windows-iocp-results"
+          if (-not (Test-Path $results)) { exit 0 }
+          "Kotlin/Native 2.4.21" > "$results/toolchains.txt"
+          rustc +1.100.0 -Vv >> "$results/toolchains.txt"
+          & ./components/ktserve/gradlew.bat --version >> "$results/toolchains.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ inputs.run_pilot && !cancelled() }}
+        with:
+          name: windows-iocp-pilot-x86_64-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/windows-iocp-results
+          if-no-files-found: warn
