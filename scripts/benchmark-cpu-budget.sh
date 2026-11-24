@@ -49,18 +49,14 @@ read -r SERVER_CPUS LOAD_CPUS <<< "$cpu_masks"
 export SERVER_CPUS LOAD_CPUS
 python3 "$ROOT/scripts/worker-topology.py" "$SERVER_CPUS" "$LOAD_CPUS" > "$out/cpu-topology.json"
 
-port_list="$(python3 - "$((runs * ${#variants[@]}))" <<'PY'
-from contextlib import ExitStack
+available_port() {
+  python3 - <<'PY'
 import socket
-import sys
-with ExitStack() as sockets:
-    for _ in range(int(sys.argv[1])):
-        sock = sockets.enter_context(socket.socket())
-        sock.bind(("127.0.0.1", 0))
-        print(sock.getsockname()[1])
+with socket.socket() as sock:
+    sock.bind(("127.0.0.1", 0))
+    print(sock.getsockname()[1])
 PY
-)"
-mapfile -t ports <<< "$port_list"
+}
 
 trap 'stop_server; cleanup_load' EXIT
 trap 'exit 130' INT
@@ -141,13 +137,13 @@ run_fixed_load() {
       taskset -c "$LOAD_CPUS" "${attack[@]}" > "$path.bin" 2> "$path.stderr.txt"
 }
 
-index=0
 wrk_args=(--latency -t "$threads" -c "$connections" --timeout 2s)
 for ((run = 1; run <= runs; run++)); do
   for ((offset = 0; offset < ${#variants[@]}; offset++)); do
     variant="${variants[(run - 1 + offset) % ${#variants[@]}]}"
-    export PORT="${ports[index]}"
-    index=$((index + 1))
+    # Earlier churn trials may consume an ephemeral port that was free at startup.
+    PORT="$(available_port)"
+    export PORT
     base="http://$BIND_HOST:$PORT"
     prefix="$out/$variant-run-$run"
     export JAVA_OPTS="$base_java_opts"
