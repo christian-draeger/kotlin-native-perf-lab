@@ -179,7 +179,16 @@ jobs:
           curl -fsSL --retry 3 "https://github.com/tsenart/vegeta/releases/download/v12.13.0/$asset" -o "$RUNNER_TEMP/$asset"
           printf '%s  %s\n' "$checksum" "$RUNNER_TEMP/$asset" | sha256sum --strict -c -
           tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" vegeta
-          PATH="$RUNNER_TEMP:$PATH" ./scripts/benchmark-worker-latency.sh "$RUNNER_TEMP/worker-latency"
+          export PATH="$RUNNER_TEMP:$PATH"
+          ./scripts/benchmark-worker-latency.sh "$RUNNER_TEMP/worker-latency/default"
+          if [[ "$EXPECTED_ARCH" == x86_64 ]]; then
+            alternate="$(python3 scripts/worker-topology.py --alternative "$SERVER_CPUS" "$LOAD_CPUS")"
+            if [[ -n "$alternate" ]]; then
+              read -r alternate_server alternate_load <<<"$alternate"
+              SERVER_CPUS="$alternate_server" LOAD_CPUS="$alternate_load" \
+                ./scripts/benchmark-worker-latency.sh "$RUNNER_TEMP/worker-latency/alternate-smt"
+            fi
+          fi
       - name: Upload matched-load raw results
         if: ${{ !cancelled() && inputs.suite == 'workers' && matrix.route == 'json' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

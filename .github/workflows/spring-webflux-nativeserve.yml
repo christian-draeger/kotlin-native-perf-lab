@@ -9,6 +9,7 @@ on:
       - 'components/nativeserve/src/commonMain/**'
       - 'components/nativeserve/src/jvmMain/**'
       - 'scripts/ci-gradle.sh'
+      - 'scripts/ci-maven-central-mirror.gradle'
       - '.github/workflows/spring-webflux-nativeserve.yml'
   workflow_dispatch:
 
