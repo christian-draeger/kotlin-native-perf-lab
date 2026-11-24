@@ -5,6 +5,7 @@ package dev.perflab.nativeserve.transport
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.MemScope
+import kotlinx.cinterop.ULongVar
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
@@ -66,6 +67,7 @@ import platform.posix.socket
 
 private const val BATCH_SIZE = 64
 private const val LISTENER_TOKEN = 0UL
+private const val APPLICATION_TOKEN = ULong.MAX_VALUE
 // EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
 private const val EPOLL_EXCLUSIVE = 0x1000_0000U
 
@@ -73,9 +75,11 @@ internal fun MemScope.openPlatformTransport(
     host: String,
     port: Int,
     connectionLimit: Int,
-): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN, edgeTriggered = configuredEdgeTrigger()) {
-    openListener(host, port)
-}
+): StreamTransport = openEpollTransport(
+    connectionLimit, EPOLLIN,
+    edgeTriggered = configuredEdgeTrigger(),
+    wakeOnApplicationProgress = configuredApplicationWakeup(),
+) { openListener(host, port) }
 
 internal fun MemScope.openEpollTransport(
     host: String,
@@ -91,12 +95,15 @@ internal fun MemScope.openWorkerEpollTransports(
     reusePort: Boolean,
 ): List<StreamTransport> {
     val edgeTriggered = configuredEdgeTrigger()
+    val wakeOnApplicationProgress = configuredApplicationWakeup()
     val transports = ArrayList<StreamTransport>(connectionLimits.size)
     val sharedListener = if (reusePort) -1 else openListener(host, port)
     try {
         for (limit in connectionLimits) {
             val events = if (reusePort) EPOLLIN else EPOLLIN or EPOLL_EXCLUSIVE
-            transports += openEpollTransport(limit, events, edgeTriggered = edgeTriggered) {
+            transports += openEpollTransport(
+                limit, events, edgeTriggered = edgeTriggered, wakeOnApplicationProgress = wakeOnApplicationProgress,
+            ) {
                 if (reusePort) openListener(host, port, reusePort = true)
                 else checked(fcntl(sharedListener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
             }
@@ -117,11 +124,19 @@ private fun configuredEdgeTrigger(): Boolean {
     return mode == "edge"
 }
 
+private fun configuredApplicationWakeup(): Boolean {
+    val mode = getenv("KTSERVE_EPOLL_APPLICATION_WAKEUP")?.toKString() ?: return false
+    require(mode == "poll" || mode == "eventfd") { "KTSERVE_EPOLL_APPLICATION_WAKEUP must be poll or eventfd" }
+    println("ktServe epoll application_wakeup=$mode")
+    return mode == "eventfd"
+}
+
 private fun MemScope.openEpollTransport(
     connectionLimit: Int,
     listenerEvents: UInt,
     tcpNoDelay: Boolean = false,
     edgeTriggered: Boolean = false,
+    wakeOnApplicationProgress: Boolean = false,
     open: () -> Int,
 ): StreamTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
@@ -129,6 +144,7 @@ private fun MemScope.openEpollTransport(
     // The event loop owns this option value and the accepted sockets for the enclosing scope.
     val noDelayValue = if (tcpNoDelay) alloc<IntVar> { value = 1 }.ptr else null
     memset(change.ptr, 0, sizeOf<epoll_event>().convert())
+    val applicationCount = if (wakeOnApplicationProgress) alloc<ULongVar>().ptr else null
     val listener = open()
     val poller = epoll_create1(EPOLL_CLOEXEC)
     if (poller < 0) {
@@ -136,7 +152,24 @@ private fun MemScope.openEpollTransport(
         close(listener)
         error("epoll_create1 failed (errno $cause)")
     }
-    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents, noDelayValue, edgeTriggered)
+    var applicationSignal: EpollApplicationSignal? = null
+    try {
+        if (applicationCount != null) {
+            applicationSignal = EpollApplicationSignal()
+            change.data.u64 = APPLICATION_TOKEN
+            change.events = EPOLLIN
+            checked(epoll_ctl(poller, EPOLL_CTL_ADD, applicationSignal.descriptor, change.ptr), "register eventfd")
+        }
+        return EpollTransport(
+            listener, poller, events, change.ptr, connectionLimit, listenerEvents, noDelayValue, edgeTriggered,
+            applicationSignal, applicationCount,
+        )
+    } catch (cause: Throwable) {
+        applicationSignal?.close()
+        close(poller)
+        close(listener)
+        throw cause
+    }
 }
 
 internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
@@ -194,7 +227,11 @@ private class EpollTransport(
     private val listenerEvents: UInt,
     private val noDelayValue: CPointer<IntVar>?,
     private val edgeTriggered: Boolean,
+    private val applicationSignal: EpollApplicationSignal?,
+    private val applicationCount: CPointer<ULongVar>?,
 ) : StreamTransport {
+    override val signalApplicationProgress: (() -> Unit)? = applicationSignal?.let { it::signal }
+
     private val peers = mutableMapOf<ConnectionId, Peer>()
     private val work = ArrayDeque<Peer>()
     private var processing: Peer? = null
@@ -300,6 +337,8 @@ private class EpollTransport(
             val token = event.data.u64
             if (token == LISTENER_TOKEN) {
                 acceptReady(completions)
+            } else if (token == APPLICATION_TOKEN) {
+                checkNotNull(applicationSignal).consume(checkNotNull(applicationCount))
             } else {
                 val peer = peers[ConnectionId(token.toLong())] ?: continue
                 if (edgeTriggered) peer.edgeReadiness = peer.edgeReadiness or event.events
@@ -478,6 +517,7 @@ private class EpollTransport(
         work.clear()
         acceptOperation = null
         acceptCancelled = false
+        applicationSignal?.close()
         close(poller)
         poller = -1
     }

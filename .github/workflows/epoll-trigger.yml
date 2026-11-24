@@ -80,6 +80,15 @@ jobs:
           result="$RUNNER_TEMP/epoll-trigger"
           bash scripts/benchmark-epoll-trigger.sh "$result" "$RUNNER_TEMP/reactor-stress-fixture.kexe"
           cat "$result/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify coroutine wake-ups in both peer modes
+        run: |
+          for trigger in level edge; do
+            KTSERVE_EPOLL_APPLICATION_WAKEUP=eventfd KTSERVE_EPOLL_TRIGGER="$trigger" \
+              python3 scripts/tests/reactor_stress.py "$RUNNER_TEMP/reactor-stress-fixture.kexe"
+          done
+      - name: Check eventfd close and descriptor reuse
+        if: matrix.arch == 'x86_64' && github.event_name == 'pull_request'
+        run: gradle -p components/nativeserve nativeTest
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ !cancelled() && (steps.measure.outcome == 'success' || steps.measure.outcome == 'failure') }}
         with:

@@ -115,17 +115,29 @@ def server(args, engine, affinity, log):
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
-    mode = ENGINES[args.family][engine]
+    mode = ENGINES[args.family]["ktserve" if engine == "ktserve-eventfd" else engine]
+    env = None
+    wakeup = None
+    if args.compare_native_wakeup:
+        env = {**os.environ, "KTSERVE_EPOLL_TRIGGER": "level"}
+        if engine == "cio":
+            env.pop("KTSERVE_EPOLL_APPLICATION_WAKEUP", None)
+        else:
+            wakeup = "eventfd" if engine == "ktserve-eventfd" else "poll"
+            env["KTSERVE_EPOLL_APPLICATION_WAKEUP"] = wakeup
     with log.open("w") as output:
         process = subprocess.Popen(
             [*affinity, str(args.executable), str(port), mode],
             stdout=output,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            env=env,
         )
         try:
             expected_engine = mode if args.family == "spring-webflux" else None
             wait_until_ready(process, port, log, expected_engine)
+            if wakeup and f"ktServe epoll application_wakeup={wakeup}\n" not in log.read_text():
+                raise RuntimeError(f"The server did not log {wakeup} application wake-up. See {log}")
             check_responses(port, args.load_tool == "k6")
             yield process, port
         finally:
@@ -158,6 +170,9 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
         ).stdout.splitlines()[0]
         workload = [f"workloads={','.join(WORKLOADS)}", f"upload_size_bytes={UPLOAD_SIZE}",
                     f"connections={args.connections}", f"load_threads={args.threads}"]
+        if args.compare_native_wakeup:
+            workload[0] = "workloads=/upload"
+            workload += ["integration_experiment=epoll-application-wakeup", "epoll_peer_trigger=level"]
     dependencies = sorted((args.executable.parent.parent / "lib").glob("*.jar"))
     with (args.output / "application.sha256").open("w") as manifest:
         for path in [args.executable, *dependencies]:
@@ -331,6 +346,9 @@ def benchmark(args):
     measure = trial if args.load_tool == "wrk" else trial_k6
 
     engines = list(ENGINES[args.family])
+    if args.compare_native_wakeup:
+        workloads = ("/upload",)
+        engines.append("ktserve-eventfd")
     for run in range(1, args.repeats + 1):
         for index, workload in enumerate(workloads):
             offset = (run - 1 + index) % len(engines)
@@ -350,6 +368,7 @@ def main():
     parser.add_argument("--output", type=lambda path: Path(path).resolve(), required=True)
     parser.add_argument("--smoke-only", action="store_true")
     parser.add_argument("--load-tool", choices=("k6", "wrk"), default="k6")
+    parser.add_argument("--compare-native-wakeup", action="store_true")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800], help="Mixed requests per second for k6")
     parser.add_argument("--vus", type=int, default=16, help="k6 virtual users per scenario")
     parser.add_argument("--connections", type=int, default=16)
@@ -364,6 +383,8 @@ def main():
         parser.error("Expected positive durations, repeats and at least one connection per load thread")
     if args.vus < 1 or any(rate < 20 or rate % 20 for rate in args.rates) or len(set(args.rates)) != len(args.rates):
         parser.error("Expected a positive VU count and distinct k6 arrival rates in multiples of 20")
+    if args.compare_native_wakeup and (args.family != "ktor-native" or args.load_tool != "wrk" or args.smoke_only):
+        parser.error("The native wake-up comparison needs the ktor-native family and the wrk load tool")
     args.output.mkdir(parents=True, exist_ok=True)
     if (args.output / "results.csv").exists():
         parser.error("Output directory already contains results.csv")

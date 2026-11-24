@@ -49,6 +49,7 @@ kotlin {
             if (targetOs == "macos") kotlin.setSrcDirs(listOf("src/macosMain/kotlin"))
             kotlin.srcDir("src/nativeShared/kotlin")
         }
+        if (targetOs == "linux") getByName("nativeTest").kotlin.srcDir("src/linuxTest/kotlin")
         commonTest.dependencies {
             implementation(kotlin("test"))
         }

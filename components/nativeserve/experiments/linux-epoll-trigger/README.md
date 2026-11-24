@@ -16,3 +16,9 @@ For a local rehearsal with GNU time, `wrk` and four available Linux CPU IDs:
 bash scripts/benchmark-epoll-trigger.sh "$PWD/results/epoll-trigger" \
   components/nativeserve/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
 ```
+
+## Application progress wake-ups
+
+`KTSERVE_EPOLL_APPLICATION_WAKEUP=eventfd` enables an independent opt-in readiness notification for suspending handlers and streaming bodies. The default `poll` mode retains timed checks. Either setting can run with level or edge triggered peer sockets. The Linux race test checks concurrent writes during close, repeated close and descriptor reuse. The transport stress checks exercise eventfd with both peer modes.
+
+Run **ktServe integration benchmarks** with the `native-wakeup` application selection to compare `poll` and `eventfd` in the same Ktor Native release beside CIO. It uses level-triggered peers, 16 HTTP/1.1 connections and the exact 24 KiB upload. Pages labels the series as an upload wake-up pilot. [Integration workflow](../../../../.github/workflows/integration-benchmarks.yml) · [Upload tracking issue](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/130)

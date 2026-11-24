@@ -17,7 +17,7 @@ on:
       application:
         description: Measure all apps, the JVM apps, or one application on both Linux architectures
         type: choice
-        options: [all, jvm, ktor-native, ktor-jvm, spring-webflux]
+        options: [all, jvm, ktor-native, ktor-jvm, spring-webflux, native-wakeup]
         default: all
       load_tool:
         description: Mixed k6 arrival rates or historical wrk single-endpoint runs
@@ -31,7 +31,7 @@ permissions:
 jobs:
   arm_build:
     name: Cross-link the Kotlin/Native Ktor app for ARM64
-    if: github.event_name == 'pull_request' || inputs.application == 'all' || inputs.application == 'ktor-native'
+    if: github.event_name == 'pull_request' || inputs.application == 'all' || inputs.application == 'ktor-native' || inputs.application == 'native-wakeup'
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     outputs:
@@ -71,6 +71,7 @@ jobs:
       matrix:
         family: >-
           ${{ fromJSON(inputs.application == 'ktor-native' && '["ktor-native"]'
+            || inputs.application == 'native-wakeup' && '["ktor-native"]'
             || inputs.application == 'ktor-jvm' && '["ktor-jvm"]'
             || inputs.application == 'spring-webflux' && '["spring-webflux"]'
             || inputs.application == 'jvm' && '["ktor-jvm", "spring-webflux"]'
@@ -87,7 +88,8 @@ jobs:
       FAMILY: ${{ matrix.family }}
       EXPECTED_ARCH: ${{ matrix.arch }}
       RUNNER_LABEL: ${{ matrix.runner }}
-      LOAD_TOOL: ${{ inputs.load_tool || 'k6' }}
+      LOAD_TOOL: ${{ inputs.application == 'native-wakeup' && 'wrk' || inputs.load_tool || 'k6' }}
+      APP_SELECTION: ${{ inputs.application }}
       LC_ALL: C
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -167,9 +169,11 @@ jobs:
         id: measure
         run: |
           duration=5
+          extra=()
           if [[ "$LOAD_TOOL" == k6 ]]; then duration=15; fi
+          if [[ "$APP_SELECTION" == native-wakeup ]]; then extra+=(--compare-native-wakeup --warmup 10); fi
           python3 scripts/benchmark-integrations.py --family "$FAMILY" --executable "$EXECUTABLE" \
-            --output "$RESULT_DIR" --load-tool "$LOAD_TOOL" --duration "$duration"
+            --output "$RESULT_DIR" --load-tool "$LOAD_TOOL" --duration "$duration" "${extra[@]}"
       - name: Record outcome
         if: ${{ !cancelled() && env.RESULT_DIR != '' }}
         env:
