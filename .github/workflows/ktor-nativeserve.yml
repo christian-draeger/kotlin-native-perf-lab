@@ -8,6 +8,8 @@ on:
       - 'components/nativeserve/src/commonMain/**'
       - 'components/nativeserve/src/nativeMain/**'
       - 'components/nativeserve/src/jvmMain/**'
+      - 'scripts/ci-gradle.sh'
+      - 'scripts/ci-maven-central-mirror.gradle'
       - '.github/workflows/ktor-nativeserve.yml'
   workflow_dispatch:
 
@@ -32,9 +34,9 @@ jobs:
           gradle-version: '9.7.0'
       - name: Test all JVM engines and the independent consumer
         run: |
-          gradle -p components/nativeserve/integrations/ktor jvmTest
+          bash scripts/ci-gradle.sh -p components/nativeserve/integrations/ktor jvmTest
           starter=components/nativeserve/examples/ktor-jvm
-          gradle -p "$starter" installDist
+          bash scripts/ci-gradle.sh -p "$starter" installDist
           "$starter/build/install/nativeserve-ktor-hello/bin/nativeserve-ktor-hello" 18089 &
           server=$!
           trap 'kill "$server" 2>/dev/null || true' EXIT
@@ -48,9 +50,9 @@ jobs:
         run: |
           project=components/nativeserve/integrations/ktor
           binary="$project/build/bin/native/releaseExecutable/nativeserve-ktor-example.kexe"
-          gradle -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
+          bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
           python3 "$project/smoke.py" "$binary"
-          gradle -p "$project" -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+          bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           readelf -h "$binary" | grep -E 'Machine:[[:space:]]+AArch64$'
           mkdir "$RUNNER_TEMP/ktor-arm"
           install -m 755 "$binary" "$RUNNER_TEMP/ktor-arm/example"

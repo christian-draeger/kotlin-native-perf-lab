@@ -21,11 +21,11 @@ class ResponseWriter internal constructor(private val chunks: Channel<ByteArray>
     }
 }
 
-internal class AsyncResponseSource(scope: CoroutineScope, produce: suspend ResponseWriter.() -> Unit) : ResponseSource {
+internal class AsyncResponseSource(scope: CoroutineScope, private val stream: ResponseStream.Produce) : ResponseSource {
     private val chunks = Channel<ByteArray>(1)
     private val job = scope.launch {
         try {
-            ResponseWriter(chunks).produce()
+            stream.producer(ResponseWriter(chunks))
             chunks.close()
         } catch (cause: Exception) {
             chunks.close(cause)
@@ -57,9 +57,18 @@ internal class AsyncResponseSource(scope: CoroutineScope, produce: suspend Respo
         chunk = null
         chunks.cancel()
         job.cancel()
+        closeProducer(stream.onClose)
     }
 
     private companion object {
         val EOF = ByteArray(0)
+    }
+}
+
+internal fun closeProducer(release: () -> Unit) {
+    try {
+        release()
+    } catch (_: Exception) {
+        // This exchange already released its transport-owned resources.
     }
 }

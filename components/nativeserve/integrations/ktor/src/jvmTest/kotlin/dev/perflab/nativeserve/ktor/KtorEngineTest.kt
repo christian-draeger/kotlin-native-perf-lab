@@ -55,6 +55,7 @@ class KtorEngineTest {
                 request("/download").body(),
             )
             assertEquals(404, request("/missing").statusCode())
+            assertEquals(500, request("/failure").statusCode())
         } finally {
             server.stop(500, 5_000)
         }
