@@ -3,10 +3,18 @@ plugins {
     application
 }
 
-repositories { mavenCentral() }
+val stagedVersion = providers.gradleProperty("ktserve.version").orNull
+
+repositories {
+    mavenCentral()
+    if (stagedVersion != null) exclusiveContent {
+        forRepository { maven { url = uri("../../build/maven-staging/$stagedVersion") } }
+        filter { includeGroup("io.github.christian-draeger") }
+    }
+}
 
 dependencies {
-    implementation("dev.perflab:ktserve")
+    implementation(if (stagedVersion == null) "dev.perflab:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
 }
 
 application {

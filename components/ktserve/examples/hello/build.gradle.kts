@@ -2,7 +2,15 @@ plugins {
     kotlin("multiplatform") version "2.4.21"
 }
 
-repositories { mavenCentral() }
+val stagedVersion = providers.gradleProperty("ktserve.version").orNull
+
+repositories {
+    mavenCentral()
+    if (stagedVersion != null) exclusiveContent {
+        forRepository { maven { url = uri("../../build/maven-staging/$stagedVersion") } }
+        filter { includeGroup("io.github.christian-draeger") }
+    }
+}
 
 val targetOs = providers.gradleProperty("benchmark.targetOs").getOrElse("linux")
 if (targetOs == "macos") layout.buildDirectory.set(layout.projectDirectory.dir("build/macos"))
@@ -24,7 +32,7 @@ kotlin {
     }
     sourceSets.named("nativeMain") {
         dependencies {
-            implementation("dev.perflab:ktserve")
+            implementation(if (stagedVersion == null) "dev.perflab:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
         }
     }
 }
