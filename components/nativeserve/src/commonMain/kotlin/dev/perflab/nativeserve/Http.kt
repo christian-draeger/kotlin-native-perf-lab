@@ -8,12 +8,49 @@ class Request internal constructor(
     val query: String?,
     private val parameters: Map<String, String> = emptyMap(),
     val bodyLength: Int? = 0,
+    private val rawHead: String? = null,
+    private val decodedFields: List<HttpField> = emptyList(),
 ) {
     fun pathParameter(name: String): String? = parameters[name]
 
     fun pathInt(name: String): Int? = pathParameter(name)?.toIntOrNull()
 
-    internal fun withParameters(values: Map<String, String>) = Request(method, path, query, values, bodyLength)
+    /** Return the first matching field. Header names are case-insensitive. */
+    fun header(name: String): String? {
+        forEachField { head, start, colon, valueStart, end ->
+            if (colon - start == name.length && head.regionMatches(start, name, 0, name.length, ignoreCase = true)) {
+                return head.substring(valueStart, end)
+            }
+        }
+        return decodedFields.firstOrNull { it.name.equals(name, ignoreCase = true) }?.value
+    }
+
+    /** Return the request head fields in wire order, with repeated names preserved. */
+    fun headers(): List<HttpField> {
+        if (rawHead == null) return decodedFields.toList()
+        return buildList {
+            forEachField { head, start, colon, valueStart, end ->
+                add(HttpField(head.substring(start, colon), head.substring(valueStart, end)))
+            }
+        }
+    }
+
+    private inline fun forEachField(action: (String, Int, Int, Int, Int) -> Unit) {
+        val head = rawHead ?: return
+        val firstEnd = head.indexOf("\r\n")
+        if (firstEnd < 0) return
+        var start = firstEnd + 2
+        while (start < head.length) {
+            val end = head.lineEnd(start)
+            val colon = head.indexOf(':', start)
+            val valueStart = head.skipOws(colon + 1, end)
+            action(head, start, colon, valueStart, head.trimmedEnd(valueStart, end))
+            start = end + 2
+        }
+    }
+
+    internal fun withParameters(values: Map<String, String>) =
+        Request(method, path, query, values, bodyLength, rawHead, decodedFields)
 }
 
 class Response internal constructor(
@@ -21,10 +58,28 @@ class Response internal constructor(
     internal val contentType: String?,
     internal val body: ByteArray,
     internal val stream: ResponseStream? = null,
-    internal val allowedMethods: String = "GET",
+    internal val allowedMethods: String? = "GET",
+    internal val fields: List<HttpField> = emptyList(),
+    internal val fieldBytes: Long = 0,
 ) {
+    internal val applicationHeaderBytes: Long
+        get() = fieldBytes + (contentType?.let { it.length.toLong() + 16 } ?: 0)
+
     init {
         require(status in 200..599) { "Response status must be between 200 and 599" }
+    }
+
+    /** Append application fields such as Cache-Control or Set-Cookie in the order provided. */
+    fun withHeaders(vararg headers: HttpField): Response {
+        if (headers.isEmpty()) return this
+        var size = fieldBytes
+        var allowed = allowedMethods
+        for (field in headers) {
+            field.requireApplicationField()
+            size += field.name.length.toLong() + field.value.length + 4
+            if (field.name.equals("allow", ignoreCase = true)) allowed = null
+        }
+        return Response(status, contentType, body, stream, allowed, fields + headers, size)
     }
 }
 
@@ -69,12 +124,18 @@ fun streamResponse(contentType: String, source: ResponseSource, status: Int = 20
 
 private fun sourceResponse(length: Int?, contentType: String, source: ResponseSource, status: Int): Response {
     require(status != 204 && status != 205 && status != 304) { "This response status forbids content" }
-    require(contentType.isNotBlank() && contentType.all { it in ' '..'~' }) { "Invalid response Content-Type" }
+    requireContentType(contentType)
     return Response(status, contentType, ByteArray(0), ResponseStream(length, source))
 }
 
 fun text(value: String, status: Int = 200): Response =
     Response(status, "text/plain; charset=UTF-8", value.encodeToByteArray())
+
+/** Return an encoded body. The body is owned by NativeServe after the handler returns. */
+fun response(body: ByteArray, status: Int = 200, contentType: String? = null): Response {
+    requireContentType(contentType)
+    return Response(status, contentType, body, allowedMethods = null)
+}
 
 inline fun <reified T> json(value: T, status: Int = 200): Response =
     jsonResponse(Json.encodeToString(value), status)
@@ -114,7 +175,8 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
     return buildString {
         append(version).append(' ').append(status).append(' ').append(reason).append("\r\n")
         contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
-        if (status == 405) append("Allow: ").append(allowedMethods).append("\r\n")
+        if (status == 405 && allowedMethods != null) append("Allow: ").append(allowedMethods).append("\r\n")
+        for (field in fields) append(field.name).append(": ").append(field.value).append("\r\n")
         if (status != 204 && status != 304) {
             if (length < 0) append("Transfer-Encoding: chunked\r\n")
             else append("Content-Length: ").append(length).append("\r\n")

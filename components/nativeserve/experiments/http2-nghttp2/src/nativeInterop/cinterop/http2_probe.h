@@ -118,19 +118,32 @@ static inline int32_t probe_get(struct probe_session *probe, const char *path) {
     return nghttp2_submit_request(probe->session, 0, fields, 4, 0, 0);
 }
 
+struct probe_field_pair {
+    const char *name;
+    const char *value;
+};
+
 static inline int probe_respond(struct probe_session *probe, int32_t stream, int status,
-                                const char *content_type, int64_t length, int has_body) {
+                                const char *content_type, int64_t length, int has_body,
+                                const struct probe_field_pair *extras, size_t extra_count) {
     char code[4], length_text[21];
     snprintf(code, sizeof(code), "%d", status);
     snprintf(length_text, sizeof(length_text), "%lld", (long long)length);
-    nghttp2_nv fields[3];
+    nghttp2_nv standard[3];
+    nghttp2_nv *fields = extra_count == 0 ? standard : calloc(3 + extra_count, sizeof(*fields));
+    if (!fields) return NGHTTP2_ERR_NOMEM;
     size_t count = 0;
     fields[count++] = probe_field(":status", code);
     if (content_type) fields[count++] = probe_field("content-type", content_type);
     if (length >= 0 && status != 204 && status != 304) fields[count++] = probe_field("content-length", length_text);
+    for (size_t index = 0; index < extra_count; ++index) {
+        fields[count++] = probe_field(extras[index].name, extras[index].value);
+    }
     nghttp2_data_provider provider = {0};
     provider.read_callback = probe_read_cb;
-    return nghttp2_submit_response(probe->session, stream, fields, count, has_body ? &provider : 0);
+    const int result = nghttp2_submit_response(probe->session, stream, fields, count, has_body ? &provider : 0);
+    if (fields != standard) free(fields);
+    return result;
 }
 
 static inline int probe_goaway(struct probe_session *probe) {

@@ -9,8 +9,10 @@ import dev.perflab.nativeserve.http2.bridge.PROBE_END
 import dev.perflab.nativeserve.http2.bridge.PROBE_HEADER
 import dev.perflab.nativeserve.http2.bridge.PROBE_HEADERS_END
 import dev.perflab.nativeserve.http2.bridge.probe_cancel
+import dev.perflab.nativeserve.HttpField
 import dev.perflab.nativeserve.http2.bridge.probe_close
 import dev.perflab.nativeserve.http2.bridge.probe_consume
+import dev.perflab.nativeserve.http2.bridge.probe_field_pair
 import dev.perflab.nativeserve.http2.bridge.probe_get
 import dev.perflab.nativeserve.http2.bridge.probe_goaway
 import dev.perflab.nativeserve.http2.bridge.probe_input
@@ -25,8 +27,12 @@ import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.StableRef
 import kotlinx.cinterop.UByteVar
 import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.asStableRef
 import kotlinx.cinterop.convert
+import kotlinx.cinterop.cstr
+import kotlinx.cinterop.get
+import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.pointed
 import kotlinx.cinterop.readBytes
 import kotlinx.cinterop.reinterpret
@@ -55,20 +61,39 @@ internal class Http2Session(server: Boolean, events: SessionEvents) : AutoClosea
 
     fun get(path: String): Int = probe_get(active(), path).also { check(it > 0) }
 
-    fun respond(stream: Int, status: Int, body: ByteArray, contentType: String? = "text/plain") {
-        respond(stream, status, contentType, BufferedBody(body))
+    fun respond(
+        stream: Int, status: Int, body: ByteArray, contentType: String? = "text/plain",
+        fields: List<HttpField> = emptyList(),
+    ) {
+        respond(stream, status, contentType, BufferedBody(body), fields)
     }
 
-    fun respond(stream: Int, status: Int, contentType: String?, source: ResponseSource, length: Int?, limit: Int) {
-        respond(stream, status, contentType, StreamingBody(source, length, limit))
+    fun respond(
+        stream: Int, status: Int, contentType: String?, source: ResponseSource, length: Int?, limit: Int,
+        fields: List<HttpField> = emptyList(),
+    ) {
+        respond(stream, status, contentType, StreamingBody(source, length, limit), fields)
     }
 
-    private fun respond(stream: Int, status: Int, contentType: String?, body: OutboundBody) {
+    private fun respond(stream: Int, status: Int, contentType: String?, body: OutboundBody, fields: List<HttpField>) {
         require(status in 200..599)
         check(!state.responses.containsKey(stream))
         state.responses[stream] = body
         val length = body.length?.toLong() ?: -1L
-        if (probe_respond(active(), stream, status, contentType, length, if (length == 0L) 0 else 1) != 0) {
+        val hasBody = if (length == 0L) 0 else 1
+        val result = if (fields.isEmpty()) {
+            probe_respond(active(), stream, status, contentType, length, hasBody, null, 0u)
+        } else {
+            memScoped {
+                val extra = allocArray<probe_field_pair>(fields.size)
+                fields.forEachIndexed { index, field ->
+                    extra[index].name = field.name.lowercase().cstr.getPointer(this)
+                    extra[index].value = field.value.cstr.getPointer(this)
+                }
+                probe_respond(active(), stream, status, contentType, length, hasBody, extra, fields.size.convert())
+            }
+        }
+        if (result != 0) {
             state.closeResponse(stream)
             error("Could not submit nghttp2 response")
         }

@@ -2,6 +2,7 @@
 
 package dev.perflab.nativeserve.http2
 
+import dev.perflab.nativeserve.HttpField
 import dev.perflab.nativeserve.PostBody
 import dev.perflab.nativeserve.Request
 import dev.perflab.nativeserve.RequestBodySink
@@ -236,6 +237,7 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
         if (name == ":method") head.method = value
         if (name == ":path") head.target = value
         if (name == "content-length") head.length = value.toIntOrNull()?.takeIf { it >= 0 } ?: Int.MAX_VALUE
+        if (!name.startsWith(':')) head.fields.add(HttpField(name, value))
         return true
     }
 
@@ -250,7 +252,10 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
         }
         val query = target.indexOf('?')
         val path = if (query < 0) target else target.substring(0, query)
-        val request = Request(method, path, if (query < 0) null else target.substring(query + 1), bodyLength = head.length)
+        val request = Request(
+            method, path, if (query < 0) null else target.substring(query + 1),
+            bodyLength = head.length, decodedFields = head.fields.toList(),
+        )
         head.request = request
         if (method != "POST") return
         if (head.length?.let { it > limits.requestBodyBytes } == true) {
@@ -304,18 +309,28 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
     private fun respond(stream: Int, head: RequestHead, response: Response) {
         head.responded = true
         val source = response.stream
-        if ((source?.length ?: response.body.size) > limits.responseBodyBytes) {
+        if ((source?.length ?: response.body.size) > limits.responseBodyBytes ||
+            response.applicationHeaderBytes > limits.responseHeaderBytes
+        ) {
             try {
                 source?.source?.close()
             } catch (_: Exception) {
                 // A rejected source has no pending writes.
             }
             session.respond(stream, 500, ByteArray(0), contentType = null)
-        } else if (source != null) {
-            session.respond(stream, response.status, response.contentType, source.source, source.length, limits.responseBodyBytes)
+            return
+        }
+        val allowed = response.allowedMethods
+        val fields = if (response.status == 405 && allowed != null) {
+            response.fields + HttpField("allow", allowed)
+        } else response.fields
+        if (source != null) {
+            session.respond(
+                stream, response.status, response.contentType, source.source, source.length, limits.responseBodyBytes, fields,
+            )
         } else {
             val body = if (response.status == 204 || response.status == 304) ByteArray(0) else response.body
-            session.respond(stream, response.status, body, response.contentType)
+            session.respond(stream, response.status, body, response.contentType, fields)
         }
     }
 
@@ -342,6 +357,7 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
     }
 
     private class RequestHead(val started: Long) {
+        val fields = mutableListOf<HttpField>()
         var method: String? = null
         var target: String? = null
         var length: Int? = null

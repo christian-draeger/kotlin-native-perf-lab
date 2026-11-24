@@ -90,6 +90,8 @@ fun main() {
 
 Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
 
+Use `request.header("accept")` for the first matching request value or `request.headers()` for the ordered header fields, including duplicates. Use `response(bytes, status, contentType)` for a pre-encoded body and `.withHeaders(HttpField("Cache-Control", "no-store"))` to add response headers. NativeServe validates response fields and sets framing and connection headers. `ServerLimits.responseHeaderBytes` bounds application-added fields and the Content-Type field.
+
 Use `getSuspending` when an HTTP/1.x handler calls a suspending API.
 
 ```kotlin
