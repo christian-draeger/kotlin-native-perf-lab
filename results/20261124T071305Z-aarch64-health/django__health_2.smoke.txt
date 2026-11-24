@@ -1,0 +1,4 @@
+/health HTTP/1.1 200 Content-Type='text/plain' Content-Length=None Transfer-Encoding='chunked' body_bytes=2
+/json HTTP/1.1 200 Content-Type='application/json' Content-Length=None Transfer-Encoding='chunked' body_bytes=47
+/users/123 HTTP/1.1 200 Content-Type='application/json' Content-Length=None Transfer-Encoding='chunked' body_bytes=48
+/users/invalid HTTP/1.1 400 Content-Type='text/html; charset=utf-8' Content-Length=None Transfer-Encoding='chunked' body_bytes=0

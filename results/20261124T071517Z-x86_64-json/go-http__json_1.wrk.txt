@@ -1,0 +1,14 @@
+Running 5s test @ http://127.0.0.1:58321/json
+  2 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency   133.14us  228.25us   5.14ms   92.79%
+    Req/Sec    89.73k     9.11k  168.81k    95.05%
+  Latency Distribution
+     50%   61.00us
+     75%  137.00us
+     90%  280.00us
+     99%    1.19ms
+  901025 requests in 5.10s, 133.19MB read
+Requests/sec: 176695.34
+Transfer/sec:     26.12MB
+perflab requests=901025 duration_us=5099314 p50_us=61 p95_us=468 p99_us=1190 connect=0 read=0 write=0 timeout=0 http_errors=0

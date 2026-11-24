@@ -1,0 +1,14 @@
+Running 10s test @ http://127.0.0.1:53011/users/123
+  2 threads and 16 connections
+  Thread Stats   Avg      Stdev     Max   +/- Stdev
+    Latency     1.32ms  263.64us  11.89ms   95.32%
+    Req/Sec     6.09k   318.92     6.71k    64.36%
+  Latency Distribution
+     50%    1.25ms
+     75%    1.34ms
+     90%    1.37ms
+     99%    2.48ms
+  122292 requests in 10.10s, 20.18MB read
+Requests/sec:  12108.43
+Transfer/sec:      2.00MB
+perflab requests=122292 duration_us=10099737 p50_us=1251 p95_us=1479 p99_us=2481 connect=0 read=0 write=0 timeout=0 http_errors=0
