@@ -73,12 +73,12 @@ def read_run(csv_path, note, checkout, revision):
             if separator:
                 environment[key] = value.strip('"')
     ci = environment.get("benchmark_source") == "github-hosted-actions"
+    suite = environment.get("benchmark_suite")
     if ci:
         architecture = environment.get("machine", "unknown")
         label = "ARM64" if architecture == "aarch64" else architecture
-        suite = " · Core suite" if environment.get("benchmark_suite") == "core" else ""
         note = {
-            "label": f"GitHub Actions · Linux {label}{suite}",
+            "label": f"GitHub Actions · Linux {label}",
             "kind": "Exploratory CI run",
             "host": environment.get("cpu_model"),
             "note": "wrk and the servers shared one GitHub-hosted VM. Runner CPUs and host conditions vary across series.",
@@ -103,6 +103,7 @@ def read_run(csv_path, note, checkout, revision):
         "dirty": environment.get("git_worktree") == "dirty",
         "ci_run_id": environment.get("ci_run_id") if ci else None,
         "ci_run_attempt": environment.get("ci_run_attempt") if ci else None,
+        "suite": suite,
         "scope": environment.get("benchmark_endpoint") or None,
         "incomplete": ci and environment.get("benchmark_outcome") != "success",
         "valid": sum(row["valid"] == "1" for row in rows),
@@ -126,8 +127,8 @@ def read_run(csv_path, note, checkout, revision):
     return result
 
 
-def reactor_history(runs):
-    """Group fully valid reactor runs with the same host class and workload."""
+def measurement_history(runs, variant=None):
+    """Group valid measurements with the same host class and workload."""
     profiles = {}
     for run in sorted(runs, key=lambda entry: entry["date"]):
         if run["incomplete"] or run["dirty"] or not all(
@@ -137,10 +138,11 @@ def reactor_history(runs):
         parameters = run["parameters"]
         if any(len(parameters[key]) != 1 for key in PARAMETERS):
             continue
-        endpoints = [
+        endpoints = sorted({
             group["endpoint"] for group in run["groups"]
-            if group["variant"] == "kotlin-reactor" and group["valid"] == group["total"] and group["stats"]
-        ]
+            if (variant is None or group["variant"] == variant)
+            and group["valid"] == group["total"] and group["stats"]
+        })
         if not endpoints:
             continue
         key = (
@@ -180,7 +182,8 @@ def main(destination, ci_checkout):
         "repository": f"https://github.com/{repo}",
         "revision": revision,
         "runs": sorted(runs, key=lambda run: run["date"], reverse=True),
-        "history": reactor_history(runs),
+        "history": measurement_history(runs, variant="kotlin-reactor"),
+        "framework_history": measurement_history(runs),
     }
     destination.mkdir(parents=True, exist_ok=True)
     for asset in ("index.html", "styles.css", "app.js"):

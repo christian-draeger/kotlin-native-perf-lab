@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Linux HTTP benchmarks and the NativeServe performance history.">
+  <meta name="description" content="Linux HTTP benchmarks and framework performance over time.">
   <title>Kotlin Native Performance Lab · Benchmark dashboard</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./data.js" defer></script>
@@ -17,6 +17,7 @@
         Kotlin Native Performance Lab
       </a>
       <nav aria-label="Navigation">
+        <a href="#framework-history" id="framework-history-link">Framework history</a>
         <a href="#reactor-history" id="history-link">NativeServe history</a>
         <a href="#details" id="details-link">Measurements</a>
         <a id="repository" href="https://github.com/christian-draeger/kotlin-native-perf-lab">Repository</a>
@@ -85,7 +86,52 @@
           </aside>
         </div>
 
-        <section class="card reactor-history" id="reactor-history" aria-labelledby="history-title">
+        <section class="card history-card" id="framework-history" aria-labelledby="framework-history-title" hidden>
+          <div class="card-heading">
+            <div>
+              <h2 id="framework-history-title">Frameworks over time</h2>
+              <p class="history-context" id="framework-workload"></p>
+            </div>
+            <div class="history-controls">
+              <label>Runner and workload <select id="framework-profile"></select></label>
+              <label>Endpoint <select id="framework-endpoint"></select></label>
+              <label>Metric <select id="framework-metric"></select></label>
+            </div>
+          </div>
+          <div class="chart-caption framework-caption">
+            <strong id="framework-axis"></strong>
+            <span id="framework-direction"></span>
+          </div>
+          <canvas id="framework-chart" role="img" aria-label="Framework trial medians over time"
+            aria-describedby="framework-caveat"></canvas>
+          <p class="history-context" id="framework-empty" hidden>Select a framework to display its measurements.</p>
+          <div class="framework-legend">
+            <div id="framework-series" role="group" aria-label="Visible frameworks"></div>
+            <button id="framework-visibility" class="framework-button" type="button">NativeServe only</button>
+          </div>
+          <p class="history-context" id="framework-caveat"></p>
+          <details class="framework-readings">
+            <summary>Run values and raw logs</summary>
+            <div class="framework-run">
+              <label>Run (UTC) <select id="framework-run"></select></label>
+              <a id="framework-raw">Raw logs</a>
+            </div>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Framework values for the selected run">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Framework</th>
+                    <th scope="col">Median</th>
+                    <th scope="col">Trials</th>
+                  </tr>
+                </thead>
+                <tbody id="framework-rows"></tbody>
+              </table>
+            </div>
+          </details>
+        </section>
+
+        <section class="card history-card reactor-history" id="reactor-history" aria-labelledby="history-title">
           <div class="card-heading">
             <div>
               <h2 id="history-title">NativeServe over time</h2>
