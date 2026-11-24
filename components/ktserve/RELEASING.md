@@ -31,6 +31,13 @@ The repository is under `components/ktserve/build/maven-staging/<version>/`. Wit
 ## Publish to Maven Central
 
 1. Verify `io.github.christian-draeger` in the [Central Publisher Portal](https://central.sonatype.com/). The repository and Maven POM declare the [Apache License 2.0](../../LICENSE). [Namespace verification](https://central.sonatype.org/register/namespace/)
-2. Build the signed candidate from its release commit in a clean checkout. Pass the ASCII-armored private key as `KTSERVE_PGP_PRIVATE_KEY` and its passphrase as `KTSERVE_PGP_PASSPHRASE` through the environment. Make the public key available to Central. [Signing requirements](https://central.sonatype.org/publish/requirements/gpg/)
-3. Zip the versioned repository content, preserving the `io/github/...` layout and excluding generated `maven-metadata.xml` files and their checksums. Upload the signed bundle via Central Portal and review the validation result before publishing. [Central Portal bundle upload](https://central.sonatype.org/publish/publish-portal-upload/)
+2. Make the public part of the release PGP key available to Central. Download `ktserve-maven-<version>` from the successful staging run for the release revision. With the release key in the local GnuPG keyring, run the command below from the repository root. [Signing requirements](https://central.sonatype.org/publish/requirements/gpg/)
+3. Upload the signed ZIP via Central Portal and review the validation result before publishing. [Central Portal bundle upload](https://central.sonatype.org/publish/publish-portal-upload/)
 4. Once Central lists the version, verify the dependency in a fresh JVM project using `mavenCentral()` and check `/health`. Publish an updated version for follow-up changes. [Central version immutability](https://central.sonatype.org/publish/requirements/immutability/)
+
+```sh
+python3 scripts/package-ktserve-maven.py /path/to/staged-repository 0.2.0-preview.2 \
+  "$RELEASE_KEY_FINGERPRINT" ktserve-0.2.0-preview.2-central.zip
+```
+
+The staging directory is the one containing `io/`. The command checks the full set of versioned JVM and Native artifacts, verifies their checksums, signs the existing files through GnuPG and writes the Central directory layout into the ZIP. GnuPG prompts locally if the key needs a passphrase. The manual Portal upload uses your Portal session.
