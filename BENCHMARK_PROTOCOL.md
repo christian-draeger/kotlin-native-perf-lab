@@ -102,7 +102,9 @@ python3 scripts/benchmark-integrations.py --family ktor-jvm \
 
 ## Compare a larger JSON response
 
-The `application` suite runs the four core variants on `GET /catalog/123`. Each handler builds and serializes 32 records with nested stock data, a request-derived identifier and UTF-8 text. The smoke check verifies exact bytes on a reused HTTP/1.1 connection for two IDs and verifies HTTP 400 for a malformed ID. The endpoint is registered only for this suite.
+The `application` suite runs the four core variants on `GET /catalog/123`. Each handler builds and serializes 32 records with nested stock data, a request-derived identifier and UTF-8 text. The smoke check verifies exact bytes on a reused HTTP/1.1 connection for two IDs and verifies HTTP 400 for a malformed ID. The endpoint is registered when an application suite is selected.
+
+The opt-in `application-mix` smoke suite adds streamed request and response bodies and an asynchronous wait to the same four reference applications. Run `BENCHMARK_SUITE=application-mix ./scripts/smoke-all.sh` after building them. `POST /upload` validates each byte and reports the received count, with a 64 KiB limit. `GET /download` sends two chunks separated by a 50 ms delay. `GET /wait` models a 20 ms asynchronous dependency wait. The smoke suite exercises the existing JSON/catalog endpoints on the same connection and keeps the mixed fixture separate from the catalog-only load series.
 
 Use **Actions → Benchmark dashboard → application** for the Linux x86_64 and ARM64 rehearsal. Pages lists the runs under **Application workloads**. Use `BENCHMARK_SUITE=application` with the two-host Linux command for a controlled rerun. This is a single application workload in the [workload ladder](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/114).
 
