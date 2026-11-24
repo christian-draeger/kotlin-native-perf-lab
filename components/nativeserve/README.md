@@ -50,6 +50,16 @@ Check startup from another terminal with `curl -fsS http://127.0.0.1:8080/health
 
 Run parser and routing tests directly on macOS with `./components/nativeserve/gradlew -p components/nativeserve jvmTest`. Run the shared HTTP checks against the running container with `./scripts/smoke.sh http://127.0.0.1:8080`.
 
+## Develop on the JVM
+
+The [JVM starter](examples/hello-jvm) runs the same routing DSL and HTTP core with the JDK 21 NIO transport. From the repository root:
+
+```sh
+./components/nativeserve/gradlew -p components/nativeserve/examples/hello-jvm run
+```
+
+Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `dev.perflab:nativeserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `NATIVESERVE_BACKEND=nio` explicitly selects the JVM backend.
+
 ## Write a handler
 
 The [hello example](examples/hello) is a separate Gradle build that consumes `dev.perflab:nativeserve` from this checkout. On Linux x86_64 with JDK 21, run the example from the repository root.
