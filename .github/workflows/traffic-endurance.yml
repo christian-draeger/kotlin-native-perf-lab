@@ -1,0 +1,76 @@
+name: ktServe traffic endurance
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/traffic-endurance.yml'
+      - 'scripts/benchmark-endurance.py'
+      - 'scripts/k6-endurance.js'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Thirty-minute endurance schedule or brief functional smoke
+        type: choice
+        options: [endurance, smoke]
+        default: endurance
+
+permissions:
+  contents: read
+
+jobs:
+  endurance:
+    name: Endurance (${{ matrix.variant }}, Linux x86_64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [ktserve, rust-axum]
+    env:
+      RUSTUP_TOOLCHAIN: '1.100.0'
+      LC_ALL: C
+      VARIANT: ${{ matrix.variant }}
+      PROFILE: ${{ inputs.profile || 'smoke' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        if: matrix.variant == 'ktserve'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        if: matrix.variant == 'ktserve'
+      - name: Install the pinned load generator
+        run: |
+          test "$(uname -m)" = x86_64
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          printf '%s\n' "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
+      - name: Build the matching release fixture
+        run: |
+          mkdir "$RUNNER_TEMP/endurance"
+          if [[ "$VARIANT" == ktserve ]]; then
+            ./components/ktserve/gradlew -p components/ktserve linkReleaseExecutableNative
+            {
+              java -version 2>&1
+              ./components/ktserve/gradlew --version
+              sed -n 's/.*kotlin("multiplatform") version "\([^"]*\)".*/kotlin=\1/p' components/ktserve/build.gradle.kts
+            } > "$RUNNER_TEMP/endurance/toolchains.txt"
+          else
+            rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+            cargo build --release --locked --manifest-path competitors/rust-axum/Cargo.toml
+            { rustc -vV; cargo --version; } > "$RUNNER_TEMP/endurance/toolchains.txt"
+          fi
+      - name: Measure steady load, bursts and recovery
+        run: |
+          args=(--output "$RUNNER_TEMP/endurance/measurement")
+          if [[ "$PROFILE" == smoke ]]; then args+=(--smoke); fi
+          python3 scripts/benchmark-endurance.py "$VARIANT" "${args[@]}"
+      - name: Retain measurements, logs and host information
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: traffic-endurance-${{ matrix.variant }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/endurance
+          if-no-files-found: error
