@@ -25,6 +25,17 @@ done
 variants=(ktserve-1-worker micronaut-1-io-thread axum-2-tokio-workers ktserve-2-workers micronaut-2-io-threads)
 threads=2
 connections=64
+load_mode="${CPU_BUDGET_MODE:-saturation}"
+rate="${OFFERED_RPS:-20000}"
+case "$load_mode" in
+  saturation) ;;
+  persistent|churn)
+    command -v vegeta >/dev/null || { echo 'Missing Vegeta.' >&2; exit 1; }
+    [[ "$rate" =~ ^[1-9][0-9]*$ ]] || { echo 'OFFERED_RPS must be a positive integer.' >&2; exit 2; }
+    variants+=(ktserve-default micronaut-default)
+    ;;
+  *) echo 'CPU_BUDGET_MODE must be saturation, persistent, or churn.' >&2; exit 2 ;;
+esac
 
 cpu_masks="$(python3 - <<'PY'
 import os
@@ -54,7 +65,9 @@ mapfile -t ports <<< "$port_list"
 trap 'stop_server; cleanup_load' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-prepare_load
+if [[ "$load_mode" == saturation ]]; then
+  prepare_load
+fi
 git_sha="$(git -C "$ROOT" rev-parse HEAD)"
 {
   printf 'git_sha=%s\nbenchmark_suite=cpu-budget\nbenchmark_endpoint=/json\n' "$git_sha"
@@ -62,11 +75,16 @@ git_sha="$(git -C "$ROOT" rev-parse HEAD)"
   printf 'server_affinity=%s\nload_affinity=%s\n' "$SERVER_CPUS" "$LOAD_CPUS"
   printf 'runs=%s warmup_s=%s duration_s=%s threads=%s connections=%s\n' "$runs" "$warmup" "$duration" "$threads" "$connections"
   printf 'micronaut_event_loop_group=perflab\nmicronaut_acceptor_threads=1\naxum_tokio_worker_threads=2\n'
-  printf 'protocol=HTTP/1.1 persistent connections\nktserve_two_worker_listener=shared\n'
+  printf 'protocol=HTTP/1.1\ncpu_budget_mode=%s\nktserve_two_worker_listener=shared\n' "$load_mode"
   cat /etc/os-release
   lscpu
   java -version
-  load_environment
+  if [[ "$load_mode" == saturation ]]; then
+    load_environment
+  else
+    printf 'offered_rps=%s\nload_generator=exploratory same-host Vegeta with a separate CPU affinity set\n' "$rate"
+    vegeta -version
+  fi
 } > "$out/environment.txt" 2>&1
 (
   cd "$ROOT"
@@ -82,12 +100,16 @@ verify_workers() {
     awk '/^Name:|^Cpus_allowed_list:/ {print}' "$task/status" 2>/dev/null || true
   done > "$prefix.tasks.txt"
   case "$variant" in
-    ktserve-1-worker)
+    ktserve-1-worker|ktserve-default)
       grep -Fxq 'ktServe backend=epoll tcp=ipv4' "$prefix.server.txt"
       ;;
     ktserve-2-workers)
       grep -Fxq 'ktServe backend=epoll tcp=ipv4 workers=2' "$prefix.server.txt"
       grep -Fxq 'ktServe worker_listener=shared' "$prefix.server.txt"
+      ;;
+    micronaut-default)
+      timeout 10s jcmd "$server_pid" Thread.print > "$prefix.netty-threads.txt" 2>&1
+      grep -iE '^"[^"]*eventloopgroup[^"]*"' "$prefix.netty-threads.txt" > "$prefix.default-loop-threads.txt"
       ;;
     micronaut-*)
       expected=1
@@ -109,6 +131,16 @@ verify_workers() {
   esac
 }
 
+run_fixed_load() {
+  local base="$1" seconds="$2" path="$3"
+  local -a attack=(vegeta attack "-rate=$rate/s" "-duration=${seconds}s" -workers=64 -max-workers=64
+    -connections=64 -max-connections=64 -timeout=2s -http2=false -redirects=-1 -max-body=0)
+  if [[ "$load_mode" == churn ]]; then attack+=(-keepalive=false); fi
+  printf 'GET %s/json\n' "$base" |
+    LC_ALL=C /usr/bin/time -o "$path.client.txt" -f "$load_timing_format" \
+      taskset -c "$LOAD_CPUS" "${attack[@]}" > "$path.bin" 2> "$path.stderr.txt"
+}
+
 index=0
 wrk_args=(--latency -t "$threads" -c "$connections" --timeout 2s)
 for ((run = 1; run <= runs; run++)); do
@@ -119,13 +151,16 @@ for ((run = 1; run <= runs; run++)); do
     base="http://$BIND_HOST:$PORT"
     prefix="$out/$variant-run-$run"
     export JAVA_OPTS="$base_java_opts"
+    unset KTSERVE_WORKERS
     case "$variant" in
       ktserve-1-worker)
         export KTSERVE_WORKERS=1
         launcher=ktserve
         ;;
       ktserve-2-workers) launcher=ktserve-workers-2 ;;
+      ktserve-default) launcher=ktserve ;;
       axum-2-tokio-workers) launcher=rust-axum ;;
+      micronaut-default) launcher=micronaut ;;
       micronaut-*)
         count=1
         if [[ "$variant" == micronaut-2-* ]]; then count=2; fi
@@ -135,15 +170,28 @@ for ((run = 1; run <= runs; run++)); do
     esac
     start_server "$launcher" "$prefix.server.txt"
     bash "$ROOT/scripts/smoke.sh" "$base" > "$prefix.smoke.txt"
-    run_load "${wrk_args[@]}" -d "${warmup}s" "$base/json" > "$prefix.warmup.wrk.txt" 2>&1
-    read -r before _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
-    run_load "${wrk_args[@]}" -d "${duration}s" "$base/json" > "$prefix.wrk.txt" 2>&1
-    read -r after peak rss < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
-    verify_workers "$variant" "$prefix"
-    python3 "$ROOT/scripts/parse_wrk.py" --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" \
-      --csv "$out/results.csv" --variant "$variant" --endpoint /json --run "$run" --git-sha "$git_sha" \
-      --connections "$connections" --threads "$threads" --duration "$duration" --warmup "$warmup" \
-      --cpu-start "$before" --cpu-end "$after" --peak-rss-kib "$peak" --rss-kib "$rss"
+    if [[ "$load_mode" == saturation ]]; then
+      run_load "${wrk_args[@]}" -d "${warmup}s" "$base/json" > "$prefix.warmup.wrk.txt" 2>&1
+      read -r before _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
+      run_load "${wrk_args[@]}" -d "${duration}s" "$base/json" > "$prefix.wrk.txt" 2>&1
+      read -r after peak rss < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
+      verify_workers "$variant" "$prefix"
+      python3 "$ROOT/scripts/parse_wrk.py" --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" \
+        --csv "$out/results.csv" --variant "$variant" --endpoint /json --run "$run" --git-sha "$git_sha" \
+        --connections "$connections" --threads "$threads" --duration "$duration" --warmup "$warmup" \
+        --cpu-start "$before" --cpu-end "$after" --peak-rss-kib "$peak" --rss-kib "$rss"
+    else
+      run_fixed_load "$base" "$warmup" "$prefix.warmup"
+      read -r before _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
+      run_fixed_load "$base" "$duration" "$prefix"
+      read -r after peak rss < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
+      verify_workers "$variant" "$prefix"
+      vegeta report -type=json "$prefix.warmup.bin" > "$prefix.warmup.vegeta.json"
+      vegeta report -type=json "$prefix.bin" > "$prefix.vegeta.json"
+      gzip -n "$prefix.bin" "$prefix.warmup.bin"
+      python3 "$ROOT/scripts/parse_vegeta.py" "$prefix" "$out/results.csv" "$variant" "$load_mode" \
+        "$run" "$git_sha" "$rate" "$duration" "$warmup" "$connections" "$threads" "$before" "$after" "$peak" "$rss"
+    fi
     stop_server
   done
 done
