@@ -31,6 +31,7 @@ const variants = {
   javalin: { label: "Javalin", detail: "Kotlin · Jetty", color: "kotlin" },
   "ktor-native-cio": { label: "Ktor with CIO", detail: "Kotlin/Native", color: "kotlin" },
   "ktor-native-ktserve": { label: "Ktor with ktServe", detail: "Kotlin/Native · epoll", color: "reactor" },
+  "ktor-native-ktserve-eventfd": { label: "Ktor with ktServe eventfd", detail: "Kotlin/Native · epoll", color: "reactor" },
   "ktor-jvm-cio": { label: "Ktor with CIO", detail: "JVM", color: "kotlin" },
   "ktor-jvm-netty": { label: "Ktor with Netty", detail: "JVM", color: "kotlin" },
   "ktor-jvm-ktserve": { label: "Ktor with ktServe", detail: "JVM · JDK NIO", color: "reactor" },
@@ -746,10 +747,11 @@ function startIntegration() {
   function changeFamily() {
     familyRuns = runs.filter((entry) => entry.integration === familySelect.value);
     runSelect.replaceChildren(...familyRuns.map((entry) => new Option([
-      entry.load_tool === "k6" ? "k6 · mixed" : "wrk · single endpoint", entry.machine,
+      entry.experiment === "epoll-application-wakeup" ? "wrk · upload wake-up pilot"
+        : entry.load_tool === "k6" ? "k6 · mixed" : "wrk · single endpoint", entry.machine,
       utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
     ].filter(Boolean).join(" · "), entry.id)));
-    const latestComplete = familyRuns.find((entry) => !entry.incomplete && entry.valid === entry.total);
+    const latestComplete = familyRuns.find((entry) => !entry.experiment && !entry.incomplete && entry.valid === entry.total);
     if (latestComplete) runSelect.value = latestComplete.id;
     changeRun();
   }

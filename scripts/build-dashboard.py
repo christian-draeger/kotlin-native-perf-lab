@@ -117,6 +117,7 @@ def read_run(csv_path, note, checkout, revision):
         "ci_run_attempt": environment.get("ci_run_attempt") if ci else None,
         "suite": suite,
         "integration": integration,
+        "experiment": environment.get("integration_experiment"),
         "scope": environment.get("benchmark_endpoint") or None,
         "incomplete": ci and environment.get("benchmark_outcome") != "success",
         "valid": sum(row["valid"] == "1" for row in rows),
