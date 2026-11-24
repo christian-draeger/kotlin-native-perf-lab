@@ -63,7 +63,7 @@ private const val LISTENER_TOKEN = 0UL
 // EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
 private const val EPOLL_EXCLUSIVE = 0x1000_0000U
 
-internal fun MemScope.openEpollTransport(
+internal fun MemScope.openPlatformTransport(
     host: String,
     port: Int,
     connectionLimit: Int,

@@ -8,7 +8,7 @@ import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.Submission
 import dev.perflab.nativeserve.transport.TransportCompletions
 import dev.perflab.nativeserve.transport.TransportFailure
-import dev.perflab.nativeserve.transport.openEpollTransport
+import dev.perflab.nativeserve.transport.openPlatformTransport
 import kotlinx.cinterop.addressOf
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
@@ -28,8 +28,8 @@ import platform.posix.send
 import platform.posix.sockaddr_in
 import platform.posix.socket
 
-internal fun probeEpoll(port: Int): Unit = memScoped {
-    val transport = openEpollTransport("127.0.0.1", port, connectionLimit = 2)
+internal fun probeTransport(port: Int): Unit = memScoped {
+    val transport = openPlatformTransport("127.0.0.1", port, connectionLimit = 2)
     val completions = ProbeCompletions()
     val sockets = mutableListOf<Int>()
 
@@ -97,7 +97,7 @@ internal fun probeEpoll(port: Int): Unit = memScoped {
         transport.await(completions) { completions.reads.size == 2 }
         check(completions.reads.last() == Triple(lastRead, winningConnection, 1))
         check(completions.failures.size == 2)
-        println("epoll accepted, cancelled and ignored retired stream work")
+        println("Transport accepted, cancelled and ignored retired stream work")
     } finally {
         transport.close()
         sockets.forEach { close(it) }
@@ -109,7 +109,7 @@ private fun StreamTransport.await(completions: TransportCompletions, until: () -
         if (until()) return
         poll(100, completions)
     }
-    check(until()) { "Timed out waiting for the expected epoll completions" }
+    check(until()) { "Timed out waiting for the expected transport completions" }
 }
 
 private class ProbeCompletions : TransportCompletions {
