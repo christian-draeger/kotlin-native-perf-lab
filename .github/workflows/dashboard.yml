@@ -33,6 +33,10 @@ on:
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
         type: string
+      compare_worker_listeners:
+        description: In the workers suite, include two workers with per-worker SO_REUSEPORT listeners
+        type: boolean
+        default: false
       benchmark_label:
         description: Optional feature or change label shown in the NativeServe history
         type: string
@@ -81,6 +85,7 @@ jobs:
       RUSTUP_TOOLCHAIN: '1.100.0'
       EXPECTED_ARCH: ${{ matrix.arch }}
       BENCHMARK_SUITE: ${{ inputs.suite }}
+      COMPARE_WORKER_LISTENERS: ${{ inputs.compare_worker_listeners }}
       BENCHMARK_ENDPOINT: ${{ matrix.endpoint }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

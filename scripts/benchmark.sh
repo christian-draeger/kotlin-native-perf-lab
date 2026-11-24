@@ -166,6 +166,7 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   fi
   printf 'variants=%s\n' "${variants[*]}"
   printf 'benchmark_suite=%s\n' "${BENCHMARK_SUITE:-core}"
+  if [[ "$suite" == workers ]]; then printf 'compare_worker_listeners=%s\n' "${COMPARE_WORKER_LISTENERS:-false}"; fi
   printf 'benchmark_endpoint=%s\n' "${BENCHMARK_ENDPOINT:-}"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
   echo "max_warmup_windows=$WARMUP_WINDOWS"

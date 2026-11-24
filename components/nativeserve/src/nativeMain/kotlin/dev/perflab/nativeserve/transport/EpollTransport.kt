@@ -43,6 +43,7 @@ import platform.posix.SOCK_NONBLOCK
 import platform.posix.SOCK_STREAM
 import platform.posix.SOL_SOCKET
 import platform.posix.SO_REUSEADDR
+import platform.posix.SO_REUSEPORT
 import platform.posix.accept
 import platform.posix.bind
 import platform.posix.close
@@ -69,26 +70,28 @@ internal fun MemScope.openPlatformTransport(
     connectionLimit: Int,
 ): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN) { openListener(host, port) }
 
-internal fun MemScope.openSharedEpollTransports(
+internal fun MemScope.openWorkerEpollTransports(
     host: String,
     port: Int,
     connectionLimits: List<Int>,
+    reusePort: Boolean,
 ): List<StreamTransport> {
     val transports = ArrayList<StreamTransport>(connectionLimits.size)
-    val listener = openListener(host, port)
+    val sharedListener = if (reusePort) -1 else openListener(host, port)
     try {
         for (limit in connectionLimits) {
-            val transport = openEpollTransport(limit, EPOLLIN or EPOLL_EXCLUSIVE) {
-                checked(fcntl(listener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
+            val events = if (reusePort) EPOLLIN else EPOLLIN or EPOLL_EXCLUSIVE
+            transports += openEpollTransport(limit, events) {
+                if (reusePort) openListener(host, port, reusePort = true)
+                else checked(fcntl(sharedListener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
             }
-            transports.add(transport)
         }
         return transports
     } catch (cause: Throwable) {
         transports.forEach(StreamTransport::close)
         throw cause
     } finally {
-        close(listener)
+        if (sharedListener >= 0) close(sharedListener)
     }
 }
 
@@ -126,7 +129,12 @@ internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
     return address
 }
 
-internal fun MemScope.openListener(host: String, port: Int, nonBlocking: Boolean = true): Int {
+internal fun MemScope.openListener(
+    host: String,
+    port: Int,
+    nonBlocking: Boolean = true,
+    reusePort: Boolean = false,
+): Int {
     val address = ipv4SocketAddress(host, port)
     val mode = if (nonBlocking) SOCK_NONBLOCK else 0
     val listener = checked(socket(AF_INET, SOCK_STREAM or mode or SOCK_CLOEXEC, 0), "socket")
@@ -134,6 +142,9 @@ internal fun MemScope.openListener(host: String, port: Int, nonBlocking: Boolean
         val reuse = alloc<IntVar>()
         reuse.value = 1
         checked(setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, reuse.ptr, sizeOf<IntVar>().convert()), "setsockopt")
+        if (reusePort) {
+            checked(setsockopt(listener, SOL_SOCKET, SO_REUSEPORT, reuse.ptr, sizeOf<IntVar>().convert()), "SO_REUSEPORT")
+        }
         checked(bind(listener, address.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()), "bind $host:$port")
         checked(listen(listener, 256), "listen")
     } catch (cause: Throwable) {

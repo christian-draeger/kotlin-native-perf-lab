@@ -53,6 +53,8 @@ The fixed-rate artifact includes Linux package, core and SMT sibling data for ea
 
 An additional diagnostic run enables per-worker accept and parsed-request totals during a 3-second, 20,000 requests/s trial. The totals include the initial health request. The latency and throughput trials run with counters disabled.
 
+Enable **compare worker listeners** in the workflow or set `COMPARE_WORKER_LISTENERS=true` locally to add two workers with separate `SO_REUSEPORT` listeners to the same trials. The two listener variants use the same release binary, process CPU budget and connection limits. Compare accepted connections and handled requests separately. A balanced accept count can still lead to uneven load if persistent connections send different request rates. The diagnostic samples are exploratory.
+
 Dashboard benchmarks on `main` reuse the ARM64 release artifact when a successful Ubuntu smoke run produced it for the exact benchmark commit. The build falls back to cross-compilation when the verified artifact is unavailable. The raw environment record includes `native_build_run_id`.
 
 Review the actual delivered rate and failures before comparing p99 at fixed load. Keep the one-worker result alongside the prior release to spot regressions in the default path. Use the two-host setup to decide on a new default.
