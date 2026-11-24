@@ -63,7 +63,7 @@ Review the actual delivered rate and failures before comparing p99 at fixed load
 
 ## Compare framework engines
 
-Run **Actions → ktServe integration benchmarks** on `main` for a comparison within each framework. Each row uses the same application code, routes and response semantics for all its launch modes. [Workflow](.github/workflows/integration-benchmarks.yml) · [Dashboard engine comparisons](https://christian-draeger.github.io/kotlin-native-perf-lab/#integration-benchmarks)
+Run **Actions → ktServe integration benchmarks** on `main` for a comparison within each framework. Select one app, `jvm` for both JVM apps or `all` for all three. Each row uses the same application code, routes and response semantics for all its launch modes. [Workflow](.github/workflows/integration-benchmarks.yml) · [Dashboard engine comparisons](https://christian-draeger.github.io/kotlin-native-perf-lab/#integration-benchmarks)
 
 | Application | Engines |
 | --- | --- |

@@ -12,6 +12,12 @@ on:
       - 'scripts/wrk-stats.lua'
       - '.github/workflows/integration-benchmarks.yml'
   workflow_dispatch:
+    inputs:
+      application:
+        description: Measure all apps, the JVM apps, or one application on both Linux architectures
+        type: choice
+        options: [all, jvm, ktor-native, ktor-jvm, spring-webflux]
+        default: all
 
 permissions:
   contents: read
@@ -19,6 +25,7 @@ permissions:
 jobs:
   arm_build:
     name: Cross-link the Kotlin/Native Ktor app for ARM64
+    if: github.event_name == 'pull_request' || inputs.application == 'all' || inputs.application == 'ktor-native'
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     outputs:
@@ -52,10 +59,16 @@ jobs:
   benchmark:
     name: ${{ matrix.family }} (${{ matrix.arch }})
     needs: arm_build
+    if: ${{ !cancelled() && (needs.arm_build.result == 'success' || needs.arm_build.result == 'skipped') }}
     strategy:
       fail-fast: false
       matrix:
-        family: [ktor-native, ktor-jvm, spring-webflux]
+        family: >-
+          ${{ fromJSON(inputs.application == 'ktor-native' && '["ktor-native"]'
+            || inputs.application == 'ktor-jvm' && '["ktor-jvm"]'
+            || inputs.application == 'spring-webflux' && '["spring-webflux"]'
+            || inputs.application == 'jvm' && '["ktor-jvm", "spring-webflux"]'
+            || '["ktor-native", "ktor-jvm", "spring-webflux"]') }}
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
         include:
           - runner: ubuntu-24.04
