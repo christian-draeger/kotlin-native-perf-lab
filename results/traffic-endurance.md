@@ -26,6 +26,8 @@ The first full run measured release commit `ea12f5ae0c21b83de2d6f74c5f2c1447caa3
 | ktServe, one worker | Intel Xeon 6975P-C | 1,824,000 / 1,824,000 | 0 | 51.636–52.420 ms | 28.38 MiB |
 | Axum, two workers | AMD EPYC 7763 | 1,821,771 / 1,824,000 | 2,229 | 51.624–81.342 ms | 18.26 MiB |
 
+The raw k6 summaries include 47,993 additional validated warm-up responses per server. Their full totals are 1,871,993 for ktServe and 1,869,764 for Axum. The postflight uses a separate HTTP check after k6 exits.
+
 During ktServe's 3,200/s burst, p99 was 51.636–51.640 ms across its two one-minute windows. End RSS moved from 25.07 MiB at the end of the initial steady phase to 26.60 MiB at the end of the final recovery. During Axum's 3,200/s burst, throughput fell to about 3,181 validated responses/s and p99 rose to 78.545–81.342 ms. Its final recovery had a p99 range of 51.695–51.741 ms. The drop and latency observations describe the shared runner and its load-generator budget. They leave dedicated-host capacity unresolved.
 
 [Exact ktServe artifact files](traffic-endurance-data/45505063246/traffic-endurance-ktserve-1/) · [Exact Axum artifact files](traffic-endurance-data/45505063246/traffic-endurance-rust-axum-1/)
