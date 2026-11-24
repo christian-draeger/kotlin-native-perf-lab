@@ -161,3 +161,10 @@ class DashboardTest(unittest.TestCase):
             integration = dashboard.read_run(health / "results.csv", {}, root, "archive-revision")
             self.assertEqual(integration["integration"], "ktor-jvm")
             self.assertEqual(integration["note"]["label"], "Ktor JVM · Linux ARM64")
+
+            with (health / "environment.txt").open("a") as output:
+                output.write("integration_family=application-mix\nload_tool=k6\n")
+            app_mix = dashboard.read_run(health / "results.csv", {}, root, "archive-revision")
+            self.assertEqual(app_mix["integration"], "application-mix")
+            self.assertEqual(app_mix["load_tool"], "k6")
+            self.assertEqual(app_mix["note"]["label"], "Standalone application mix · Linux ARM64")
