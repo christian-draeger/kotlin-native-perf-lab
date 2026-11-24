@@ -111,3 +111,22 @@ All 36 saturation and 48 fixed-rate trials were valid. Each mode has three repea
 The eventfd variant reduced fixed-load p99 relative to polling in all four cells and consumed more CPU per request in all four. At saturation, the inline, polling and eventfd medians were 142,798, 91,953 and 106,857 req/s on x86_64 and 95,978, 68,128 and 71,934 on ARM64. Both dispatcher paths retained about 24–26 MiB peak RSS, compared with 17–18 MiB inline. The experiment captures scheduler and completion costs for a small handler that finishes immediately. Upstream waiting and mixed streaming traffic remain separate tests.
 
 Keep the eventfd implementation in the experiment branch. The next hypothesis is a bounded completion queue with fewer notifications, followed by an identical application workload with real suspensions. Validate cancellation and wake-up races before considering the change for the default transport. [Prototype #118](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/118) · [Follow-up #112](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/112)
+
+### Separate HTTP response header and body buffers
+
+The `aeaebcc` release executable compared the current contiguous response with two buffers sent by one Linux `sendmsg` call. Both modes used one epoll worker, the same handler, and the same `kotlinx.serialization` path. Each of the six hosted Linux cells ran five interleaved trials per variant, with 16 HTTP/1.1 connections, disjoint server/load CPU masks in the same VM, ten seconds of warm-up and five measured seconds. All 150 trials met the harness criteria, including all 60 NativeServe trials. Core Ktor and Axum fixtures ran unchanged alongside both modes. [Raw data, runner metadata and binary checksums](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45362385849)
+
+| Linux | Route | Req/s, contiguous → gathered | Paired req/s change, median [min–max] | p99 ms | CPU s/M | Peak RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| x86_64 | `/health` | 164,474 → 162,464 | −1.23% [−1.26%, −0.60%] | 0.187 → 0.188 | 6.24 → 6.29 | 16.95 → 16.95 |
+| x86_64 | `/json` | 141,952 → 141,074 | −1.00% [−1.35%, +1.03%] | 0.223 → 0.220 | 7.24 → 7.28 | 16.95 → 16.95 |
+| x86_64 | `/users/123` | 130,811 → 128,968 | −1.15% [−1.60%, −0.87%] | 0.238 → 0.239 | 7.91 → 8.00 | 16.73 → 16.71 |
+| ARM64 | `/health` | 108,300 → 109,880 | +0.09% [−1.59%, +2.23%] | 0.298 → 0.295 | 9.34 → 9.23 | 15.95 → 15.96 |
+| ARM64 | `/json` | 90,657 → 92,958 | −0.23% [−2.61%, +6.17%] | 0.368 → 0.350 | 11.22 → 10.91 | 15.95 → 15.95 |
+| ARM64 | `/users/123` | 85,256 → 83,956 | +0.43% [−4.22%, +1.67%] | 0.369 → 0.374 | 11.98 → 12.17 | 15.83 → 15.83 |
+
+The paired column takes the median of individual ratios within repetition, so it can differ from the ratio of the two medians. For example ARM64 `/json` had a higher overall gathered median and a slightly negative paired median. The x86_64 `/health` and `/users/123` measurements favored contiguous writes in all five repeats. The ARM64 paired ranges included both improvement and regression in every cell. p99 describes saturation at each variant's achieved throughput.
+
+Both Linux architectures passed parity, pipelining, shutdown and rebinding. A local ARM64 Linux test also ran the existing stress fixture through both modes, including its 8 MiB body case, slow readers and cancellation. That check exercised behavior and kept performance conclusions scoped to the three small-response CI fixtures. The two expanded x86_64 Competitor smoke attempts failed on Maven Central rate limiting and have separate tracking. [Linux correctness](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45362389075) · [Maven follow-up #122](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/122)
+
+Keep the contiguous writer and preserve the gathered implementation as a benchmark prototype. The measured changes are small and provide no consistent advantage for these endpoints. A matched larger-payload comparison may change the trade-off between copying and the second buffer lease. That belongs to [#114](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/114). [Prototype #121](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/121) · [Decision #120](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/120)
