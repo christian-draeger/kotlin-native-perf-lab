@@ -8,6 +8,7 @@ on:
       - 'components/nativeserve/examples/spring-webflux/**'
       - 'components/nativeserve/src/commonMain/**'
       - 'components/nativeserve/src/jvmMain/**'
+      - 'scripts/ci-gradle.sh'
       - '.github/workflows/spring-webflux-nativeserve.yml'
   workflow_dispatch:
 
@@ -34,13 +35,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
         with:
           gradle-version: '9.7.0'
-      - run: gradle -p components/nativeserve/integrations/webflux test
+      - run: bash scripts/ci-gradle.sh -p components/nativeserve/integrations/webflux test
       - name: Test startup, server selection and graceful shutdown
-        run: gradle -p components/nativeserve/integrations/spring-boot-starter test
+        run: bash scripts/ci-gradle.sh -p components/nativeserve/integrations/spring-boot-starter test
       - name: Build and exercise an independent Spring Boot consumer
         run: |
           starter=components/nativeserve/examples/spring-webflux
-          gradle -p "$starter" installDist
+          bash scripts/ci-gradle.sh -p "$starter" installDist
           NATIVESERVE_ENABLED=true SERVER_ADDRESS=127.0.0.1 SERVER_PORT=18090 \
             "$starter/build/install/nativeserve-spring-hello/bin/nativeserve-spring-hello" > "$RUNNER_TEMP/spring-starter.log" 2>&1 &
           server=$!

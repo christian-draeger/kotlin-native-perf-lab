@@ -69,6 +69,7 @@ internal fun Application.exampleModule(stop: () -> Unit = {}) {
             }
         }
         get("/suspended") { call.respondText(suspended.load().toString()) }
+        get("/failure") { error("fixture handler failure") }
         get("/stop") {
             call.respondText("ok")
             stop()
