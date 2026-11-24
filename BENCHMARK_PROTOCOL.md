@@ -91,8 +91,8 @@ The GitHub-hosted comparison runs each engine in an independent server process a
 To check the Ktor JVM fixture locally with JDK 21, build its distribution and run the HTTP smoke checks across its engines.
 
 ```sh
-fixture=components/nativeserve/benchmarks/ktor-jvm
-./components/nativeserve/gradlew -p "$fixture" installDist
+fixture=components/ktserve/benchmarks/ktor-jvm
+./components/ktserve/gradlew -p "$fixture" installDist
 python3 scripts/benchmark-integrations.py --family ktor-jvm \
   --executable "$fixture/build/install/ktserve-benchmark-ktor-jvm/bin/ktserve-benchmark-ktor-jvm" \
   --output "$(mktemp -d)" --smoke-only

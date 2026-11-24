@@ -1,0 +1,169 @@
+# ktServe
+
+HTTP framework for Kotlin/Native and the JVM.
+
+ktServe provides a Kotlin routing API on Linux x86_64 and ARM64 and on Apple Silicon macOS. Its event loop uses nonblocking sockets with epoll on Linux and kqueue on macOS. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
+
+Set `KTSERVE_WORKERS=2` on the benchmark executable to try the experimental worker configuration. The process-wide connection limit is divided among workers. Each worker runs its own epoll loop on a shared listener. This option is available for evaluating the benchmark application.
+
+## Run the example
+
+On Linux x86_64 with JDK 21:
+
+```sh
+cd components/ktserve
+./gradlew runReleaseExecutableNative
+```
+
+In another terminal:
+
+```sh
+curl -fsS http://127.0.0.1:8080/health
+curl -fsS http://127.0.0.1:8080/users/123
+```
+
+Set `PORT` to change the example port. CI cross-compiles the ARM64 executable on x86_64 and runs the smoke checks on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
+
+The Ubuntu smoke workflow publishes verified snapshot archives for Linux x86_64 and ARM64. In the directory containing the downloaded archive and its checksum, run `sha256sum -c <archive>.sha256`, extract the archive, and start `./ktserve`. The included compatibility file describes the target and executable interpreter.
+
+## Develop on Apple Silicon
+
+With JDK 21 and a configured full Xcode installation, run the separate consumer directly on macOS from the repository root.
+
+```sh
+./components/ktserve/gradlew -p components/ktserve/examples/hello -Pbenchmark.targetOs=macos runReleaseExecutableNative
+```
+
+Check it with `curl -fsS http://127.0.0.1:8080/health`. Use `runDebugExecutableNative` for a local debug build. If Command Line Tools are selected, prefix the command with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` to select the installed Xcode for this build. The macOS smoke workflow verifies releases on macOS 15 ARM64 and publishes checksummed `ktserve-snapshot-*-macos-arm64.tar.gz` artifacts. A prebuilt archive runs with `./ktserve` after `shasum -a 256 -c <archive>.sha256` and extraction. The native development target is Apple Silicon.
+
+The Linux container mode below reproduces the Linux deployment backend on the same Mac.
+
+With a local OrbStack or Docker-compatible Linux runtime and a JDK supported by the Gradle wrapper, run this from the repository root:
+
+```sh
+./scripts/dev-ktserve.sh
+```
+
+Gradle builds the Linux ARM64 release on macOS. The script runs it in Ubuntu 24.04 pinned by image digest and forwards its HTTP port to Mac localhost. The first run downloads the pinned Gradle and Kotlin toolchains and the runtime image. Later builds reuse the normal Gradle and Kotlin caches.
+
+Check startup from another terminal with `curl -fsS http://127.0.0.1:8080/health`. Stop the foreground server with Ctrl+C and rerun the same command after editing the application. Set `PORT=8081` before the command to use another host port when 8080 is occupied. Use a local Docker context so the runtime can mount the compiled file. This workflow is for development and exploratory measurements.
+
+Run parser and routing tests directly on macOS with `./components/ktserve/gradlew -p components/ktserve jvmTest`. Run the shared HTTP checks against the running container with `./scripts/smoke.sh http://127.0.0.1:8080`.
+
+## Develop on the JVM
+
+The [JVM starter](examples/hello-jvm) runs the same routing DSL and HTTP core with the JDK 21 NIO transport. From the repository root:
+
+```sh
+./components/ktserve/gradlew -p components/ktserve/examples/hello-jvm run
+```
+
+Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `dev.perflab:ktserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `KTSERVE_BACKEND=nio` explicitly selects the JVM backend.
+
+## Use ktServe with a framework
+
+- [Ktor engine](integrations/ktor/README.md) on Kotlin/Native Linux and the JVM.
+- [Spring Boot starter](integrations/spring-boot-starter/README.md) for an opt-in WebFlux server on the JVM.
+- [Spring WebFlux adapter](integrations/webflux/README.md) for a reactive `HttpHandler` on the JVM.
+
+## Experiments
+
+- [HTTP/2 with nghttp2 and TLS ingress](experiments/http2-nghttp2/README.md)
+- [Linux io_uring](experiments/linux-io-uring/README.md)
+- [Windows x64 IOCP](experiments/windows-iocp/README.md)
+
+## Write a handler
+
+The [hello example](examples/hello) is a separate Gradle build that consumes `dev.perflab:ktserve` from this checkout. On Linux x86_64 with JDK 21, run the example from the repository root.
+
+```sh
+./components/ktserve/gradlew -p components/ktserve/examples/hello runReleaseExecutableNative
+```
+
+Open `http://127.0.0.1:8080/` to see the greeting. The example uses the same Kotlin version and Gradle wrapper as ktServe. Linux CI builds and tests the example release executable on x86_64 and ARM64.
+
+```kotlin
+import dev.perflab.ktserve.*
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class User(val id: Int, val name: String)
+
+fun main() {
+    serve(port = 8080) {
+        get("/health") { text("ok") }
+        get("/users/{id}") { request ->
+            val id = request.pathInt("id") ?: return@get badRequest()
+            json(User(id, "example"))
+        }
+    }
+}
+```
+
+Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
+
+Use `request.header("accept")` for the first matching request value or `request.headers()` for the ordered header fields, including duplicates. Use `response(bytes, status, contentType)` for a pre-encoded body and `.withHeaders(HttpField("Cache-Control", "no-store"))` to add response headers. ktServe validates response fields and sets framing and connection headers. `ServerLimits.responseHeaderBytes` bounds application-added fields and the Content-Type field.
+
+Use `getSuspending` when an HTTP/1.x handler calls a suspending API.
+
+```kotlin
+getSuspending("/profile/{id}") { request ->
+    val id = request.pathInt("id") ?: return@getSuspending badRequest()
+    json(profileStore.load(id))
+}
+```
+
+Suspending handlers run on `Dispatchers.Default` and can run concurrently across connections. Each connection has one active handler and sends pipelined responses in order. A peer EOF while the handler is pending, `ServerLimits.handlerMillis`, or the end of the shutdown drain cancels the coroutine. Cancellation is cooperative. Applications should use cancellable I/O and release their own resources in `finally`. The experimental h2c engine returns HTTP 501 for these routes.
+
+Framework adapters can use `application { request, body -> … }` to own routing on an HTTP/1.x listener. `body.readChunk()` suspends until a chunk or the end of the body arrives. Each returned array belongs to the application. While the handler is slow, ktServe queues one body chunk and pauses connection reads once the bounded input fills. A response returned before the request body finishes closes the connection after writing. HEAD responses keep their known content length and omit the payload. The request size, request body timeout and handler timeout apply to the whole exchange.
+
+For a body with a known byte length, return `streamResponse` from a route. ktServe sends the response head and pulls up to 16 KiB at a time as the connection writes progress.
+
+```kotlin
+get("/download") {
+    streamResponse(48 * 1024, "application/octet-stream", ResponseSource { buffer, limit ->
+        buffer.fill('x'.code.toByte(), toIndex = limit)
+        limit
+    })
+}
+```
+
+Create a new source for each response. Return promptly from `read` and `close`. Writes pull data on the owning I/O loop. A response returned by a cancelled coroutine may be closed on the handler dispatcher. Write up to `limit` bytes starting at index zero and release any references to the buffer before returning. Override `close` to release source resources. ktServe takes ownership when the handler returns the response and closes it after the final write completes or the response is cancelled. `ServerLimits.responseBodyBytes` also applies to streamed bodies. If the source ends early or fails after the head is sent, the server closes the connection so the client can detect the incomplete body.
+
+For an HTTP/1.1 stream with an unknown length, use `streamResponse(contentType, source)` and return `-1` at end of input. ktServe applies chunked framing and terminates the stream when it reaches EOF. The response size limit applies to the body bytes. An unknown-length response to an HTTP/1.0 request returns HTTP 500 and closes the source. [HTTP/1.1 message framing](https://www.rfc-editor.org/rfc/rfc9112.html#name-chunked-transfer-coding)
+
+Use `streamSuspending` to generate a response with suspending APIs. Its writer copies at most 16 KiB per chunk and suspends when the transfer queue fills. Acquire resources inside the producer and release them in `finally`. ktServe cancels a producer when the response completes, the connection closes, or the shutdown drain ends. The experimental h2c server returns HTTP 501 for suspending producers.
+
+ktServe accepts origin-form HTTP/1.0 and HTTP/1.1 requests. `get` handles requests with empty bodies. `postStreaming` consumes a POST with a valid `Content-Length` or HTTP/1.1 chunked framing through a `RequestBodySink`. `accept` sees one borrowed slice at a time and must return promptly. `complete` returns the response after the full body arrives. ktServe calls `close` once per opened sink, including on disconnect and timeout. The input buffer bounds each slice, and `requestBodyBytes` and `requestBodyMillis` bound the full body. `headerBytes` also caps total chunk-size lines and trailers. ktServe validates trailers before completing the body, and the handler receives only the body bytes. An `Expect` header returns HTTP 417. The example binds to loopback using a numeric IPv4 address.
+
+The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
+
+## Ownership and lifetime
+
+| Resource | Owner and release |
+| --- | --- |
+| Listening socket | The Linux backend closes it if setup fails or the HTTP loop stops accepting connections. |
+| Poll descriptor and event storage | epoll or kqueue owns its descriptor. Event storage lives in the scope of `serve`. |
+| Accepted descriptor | The backend tracks each descriptor by its connection ID and closes any remaining sockets when `serve` exits. The HTTP loop owns the HTTP state for each connection. |
+| Request storage | One fixed Kotlin byte array per client. It keeps unread pipelined bytes and is pinned only during `recv`. |
+| Suspended handler | One coroutine and a single-result handoff per active connection. The connection can allocate one additional read buffer of up to 4 KiB to observe EOF or receive pipelined bytes. |
+| Output storage | Each client retains at most one encoded response or a response head with a reusable chunk buffer of up to 16 KiB. The stream buffer is reused after the preceding write completes. The array is pinned only during `send`. The poller checks for write readiness while output is pending. |
+
+The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
+
+Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. Set ingress request size and timeout limits that match the backend's `ServerLimits`. Synchronous route handlers run on the I/O loop and should return promptly.
+
+The native resource suite uses a separate release fixture with short deadlines and large bodies to check slow and disconnected clients, descriptor caps and retained heap. To run it locally from the repository root on Linux x86_64:
+
+```sh
+./components/ktserve/gradlew -p components/ktserve linkStressReleaseExecutableNative
+python3 scripts/tests/ktserve_stress.py components/ktserve/build/bin/native/stressReleaseExecutable/ktserve-stress-fixture.kexe
+```
+
+On macOS, add `-Pbenchmark.targetOs=macos` to the Gradle command and use the fixture under `components/ktserve/build/macos/bin/native/stressReleaseExecutable/`.
+
+## Upgrade from the preview
+
+Use the `dev.perflab.ktserve` Kotlin package and the `dev.perflab:ktserve` Gradle component. The Ktor factory is `KtServe`. Its artifact is `dev.perflab:ktserve-ktor`. The WebFlux adapter and Spring Boot starter use `dev.perflab:ktserve-webflux` and `dev.perflab:ktserve-spring-boot-starter`. Spring Boot settings begin with `ktserve`, and environment switches use the `KTSERVE_` prefix.
+
+Start a new release archive with `./ktserve` or launch from the built repository with `./scripts/run-server.sh ktserve`. Old snapshot archives retain their original executable names. The dashboard maps historical variant IDs to ktServe while keeping the original archives, logs and CSV rows available.

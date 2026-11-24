@@ -24,16 +24,16 @@ fi
 (( CONNECTIONS % THREADS == 0 )) || { echo 'CONNECTIONS must be a multiple of THREADS.' >&2; exit 2; }
 suite="${BENCHMARK_SUITE:-core}"
 if [[ "$suite" == workers ]]; then
-  [[ "${NATIVESERVE_REFERENCE_BINARY:-}" == /* && -x "$NATIVESERVE_REFERENCE_BINARY" ]] || {
-    echo 'NATIVESERVE_REFERENCE_BINARY must be an absolute path to an executable release binary.' >&2; exit 2;
+  [[ "${KTSERVE_REFERENCE_BINARY:-}" == /* && -x "$KTSERVE_REFERENCE_BINARY" ]] || {
+    echo 'KTSERVE_REFERENCE_BINARY must be an absolute path to an executable release binary.' >&2; exit 2;
   }
-  [[ "${NATIVESERVE_REFERENCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || {
-    echo 'NATIVESERVE_REFERENCE_SHA must identify the reference source commit.' >&2; exit 2;
+  [[ "${KTSERVE_REFERENCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || {
+    echo 'KTSERVE_REFERENCE_SHA must identify the reference source commit.' >&2; exit 2;
   }
 fi
 if [[ "$suite" == io-backends ]]; then
-  [[ "${NATIVESERVE_IO_BINARY:-}" == /* && -x "$NATIVESERVE_IO_BINARY" ]] || {
-    echo 'NATIVESERVE_IO_BINARY must be an absolute executable path.' >&2; exit 2;
+  [[ "${KTSERVE_IO_BINARY:-}" == /* && -x "$KTSERVE_IO_BINARY" ]] || {
+    echo 'KTSERVE_IO_BINARY must be an absolute executable path.' >&2; exit 2;
   }
 fi
 if [[ "$suite" == workers || "$suite" == io-backends ]]; then
@@ -128,9 +128,9 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   cd "$ROOT"
   if [[ "$suite" == io-backends ]]; then
     printf 'kotlin_native=2.4.21\nliburing=%s\n' "${LIBURING_VERSION:-unknown}"
-    sha256sum "$NATIVESERVE_IO_BINARY"
+    sha256sum "$KTSERVE_IO_BINARY"
     printf 'server_affinity=%s\nload_affinity=%s\n' "${server_affinity:-${SERVER_CPUS:-all}}" "${load_affinity:-remote}"
-    "$NATIVESERVE_IO_BINARY" --capabilities
+    "$KTSERVE_IO_BINARY" --capabilities
   elif [[ "$suite" != competitors ]]; then
     rustc -Vv
     cargo --version
@@ -141,11 +141,11 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
     fi
     sha256sum competitors/ktor/build/jvmDist/app.jar competitors/ktor/build/jvmDist/lib/*.jar \
       competitors/ktor/build/bin/native/releaseExecutable/*.kexe competitors/rust-axum/target/release/axum-baseline \
-      components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+      components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
   fi
   if [[ "$suite" == workers ]]; then
-    printf 'nativeserve_reference_sha=%s\n' "$NATIVESERVE_REFERENCE_SHA"
-    sha256sum "$NATIVESERVE_REFERENCE_BINARY"
+    printf 'ktserve_reference_sha=%s\n' "$KTSERVE_REFERENCE_SHA"
+    sha256sum "$KTSERVE_REFERENCE_BINARY"
     printf 'server_affinity=%s\nload_affinity=%s\n' "${server_affinity:-${SERVER_CPUS:-all}}" "${load_affinity:-remote}"
   fi
   if [[ "$suite" == expanded || "$suite" == competitors ]]; then
@@ -234,7 +234,7 @@ for ((run = 1; run <= RUNS; run++)); do
       run_load "${wrk_args[@]}" -d "${DURATION}s" "$base$endpoint" > "$prefix.wrk.txt" 2>&1
       read -r cpu_end peak_rss_kib rss_kib < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
       variant_sha="$GIT_SHA"
-      if [[ "$variant" == nativeserve-reference ]]; then variant_sha="$NATIVESERVE_REFERENCE_SHA"; fi
+      if [[ "$variant" == ktserve-reference ]]; then variant_sha="$KTSERVE_REFERENCE_SHA"; fi
       python3 "$ROOT/scripts/parse_wrk.py" \
         --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" --csv "$OUT/results.csv" \
         --variant "$variant" --endpoint "$endpoint" --run "$run" --connections "$CONNECTIONS" \

@@ -62,13 +62,21 @@ def commit_label(sha):
     return lines[0]
 
 
+def canonical_variant(variant):
+    if variant in ("kotlin-reactor", "nativeserve"):
+        return "ktserve"
+    if variant.startswith("nativeserve-"):
+        return "ktserve" + variant[len("nativeserve"):]
+    return variant
+
+
 def read_run(csv_path, note, checkout, revision):
     folder = csv_path.parent
     with csv_path.open(newline="") as file:
         rows = list(csv.DictReader(file))
     groups = defaultdict(list)
     for row in rows:
-        groups[row["endpoint"], row["variant"]].append(row)
+        groups[row["endpoint"], canonical_variant(row["variant"])].append(row)
     environment_path = folder / "environment.txt"
     environment = {}
     if environment_path.is_file():
@@ -209,7 +217,7 @@ def main(destination, ci_checkout):
         "repository": f"https://github.com/{repo}",
         "revision": revision,
         "runs": comparison_runs,
-        "history": measurement_history(comparison_runs, variant="kotlin-reactor"),
+        "history": measurement_history(comparison_runs, variant="ktserve"),
         "framework_history": measurement_history(comparison_runs),
         "integration_runs": integration_runs,
     }

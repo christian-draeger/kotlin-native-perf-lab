@@ -1,15 +1,15 @@
-name: NativeServe Windows IOCP
+name: ktServe Windows IOCP
 
 on:
   pull_request:
     paths:
-      - 'components/nativeserve/experiments/windows-iocp/**'
-      - 'components/nativeserve/src/commonMain/**'
-      - 'components/nativeserve/src/nativeShared/**'
-      - 'components/nativeserve/src/nativeStress/**'
-      - 'components/nativeserve/gradlew.bat'
-      - 'components/nativeserve/gradle/wrapper/**'
-      - 'scripts/tests/reactor_*'
+      - 'components/ktserve/experiments/windows-iocp/**'
+      - 'components/ktserve/src/commonMain/**'
+      - 'components/ktserve/src/nativeShared/**'
+      - 'components/ktserve/src/nativeStress/**'
+      - 'components/ktserve/gradlew.bat'
+      - 'components/ktserve/gradle/wrapper/**'
+      - 'scripts/tests/ktserve_*'
       - '.github/workflows/windows-iocp.yml'
   workflow_dispatch:
 
@@ -32,19 +32,19 @@ jobs:
       - name: Build the Winsock probe, HTTP server and shared socket fixture
         shell: pwsh
         run: |
-          $project = 'components/nativeserve/experiments/windows-iocp'
+          $project = 'components/ktserve/experiments/windows-iocp'
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
-          & ./components/nativeserve/gradlew.bat -p $project linkReleaseExecutableMingwX64 linkServerReleaseExecutableMingwX64 linkStressReleaseExecutableMingwX64
+          & ./components/ktserve/gradlew.bat -p $project linkReleaseExecutableMingwX64 linkServerReleaseExecutableMingwX64 linkStressReleaseExecutableMingwX64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $binary = Join-Path $project 'build/bin/mingwX64/releaseExecutable/iocp-probe.exe'
           Get-FileHash -Algorithm SHA256 $binary
           & $binary
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Get-FileHash -Algorithm SHA256 (Join-Path $project 'build/bin/mingwX64/serverReleaseExecutable/nativeserve-iocp.exe')
+          Get-FileHash -Algorithm SHA256 (Join-Path $project 'build/bin/mingwX64/serverReleaseExecutable/ktserve-iocp.exe')
       - name: Exercise real IOCP sockets, limits and shutdown
         shell: pwsh
         run: |
-          $fixture = 'components/nativeserve/experiments/windows-iocp/build/bin/mingwX64/stressReleaseExecutable/nativeserve-iocp-stress.exe'
-          $env:NATIVESERVE_BACKEND = 'iocp'
-          python scripts/tests/reactor_stress.py $fixture
+          $fixture = 'components/ktserve/experiments/windows-iocp/build/bin/mingwX64/stressReleaseExecutable/ktserve-iocp-stress.exe'
+          $env:KTSERVE_BACKEND = 'iocp'
+          python scripts/tests/ktserve_stress.py $fixture
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

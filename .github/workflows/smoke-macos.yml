@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths: &paths
-      - 'components/nativeserve/**'
-      - 'scripts/package-nativeserve.sh'
+      - 'components/ktserve/**'
+      - 'scripts/package-ktserve.sh'
       - 'scripts/smoke.sh'
-      - 'scripts/tests/reactor_*.py'
+      - 'scripts/tests/ktserve_*.py'
       - '.github/workflows/smoke-macos.yml'
   pull_request:
     paths: *paths
@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   smoke:
-    name: NativeServe (macOS ARM64)
+    name: ktServe (macOS ARM64)
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -39,48 +39,48 @@ jobs:
           test "$(uname -m)" = arm64
           sw_vers
           xcodebuild -version
-          project=components/nativeserve
+          project=components/ktserve
           "$project/gradlew" -p "$project" -Pbenchmark.targetOs=macos \
             jvmTest linkReleaseExecutableNative linkStressReleaseExecutableNative
           "$project/gradlew" -p "$project/examples/hello" -Pbenchmark.targetOs=macos linkReleaseExecutableNative
       - name: Test transport and resource contracts
         run: |
-          fixture=components/nativeserve/build/macos/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
-          python3 scripts/tests/reactor_stress.py "$fixture"
+          fixture=components/ktserve/build/macos/bin/native/stressReleaseExecutable/ktserve-stress-fixture.kexe
+          python3 scripts/tests/ktserve_stress.py "$fixture"
       - name: Verify the packaged release and checkout consumer
         run: |
-          project=components/nativeserve
-          binary="$project/build/macos/bin/native/releaseExecutable/nativeserve.kexe"
+          project=components/ktserve
+          binary="$project/build/macos/bin/native/releaseExecutable/ktserve.kexe"
           version="snapshot-${GITHUB_SHA:0:12}"
-          archive="nativeserve-$version-macos-arm64.tar.gz"
-          package="$RUNNER_TEMP/nativeserve-release"
-          repeat="$RUNNER_TEMP/nativeserve-repack"
-          ./scripts/package-nativeserve.sh "$binary" "$version" "$package"
-          ./scripts/package-nativeserve.sh "$binary" "$version" "$repeat"
+          archive="ktserve-$version-macos-arm64.tar.gz"
+          package="$RUNNER_TEMP/ktserve-release"
+          repeat="$RUNNER_TEMP/ktserve-repack"
+          ./scripts/package-ktserve.sh "$binary" "$version" "$package"
+          ./scripts/package-ktserve.sh "$binary" "$version" "$repeat"
           cmp "$package/$archive" "$repeat/$archive"
           (cd "$package" && shasum -a 256 -c "$archive.sha256")
-          unpacked="$RUNNER_TEMP/nativeserve-unpacked"
+          unpacked="$RUNNER_TEMP/ktserve-unpacked"
           mkdir "$unpacked"
           tar -xzf "$package/$archive" -C "$unpacked"
-          cmp "$binary" "$unpacked/nativeserve"
+          cmp "$binary" "$unpacked/ktserve"
 
           export PORT=18081
-          "$unpacked/nativeserve" > "$RUNNER_TEMP/native-startup.log" 2>&1 &
+          "$unpacked/ktserve" > "$RUNNER_TEMP/native-startup.log" 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
           base="http://127.0.0.1:$PORT"
           curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health"
           ./scripts/smoke.sh "$base"
-          python3 scripts/tests/reactor_http_smoke.py "$PORT"
-          python3 scripts/tests/reactor_shutdown_smoke.py "$PORT" "$pid" "$unpacked/nativeserve"
+          python3 scripts/tests/ktserve_http_smoke.py "$PORT"
+          python3 scripts/tests/ktserve_shutdown_smoke.py "$PORT" "$pid" "$unpacked/ktserve"
           wait "$pid"
-          grep -Fx 'NativeServe backend=kqueue tcp=ipv4' "$RUNNER_TEMP/native-startup.log"
+          grep -Fx 'ktServe backend=kqueue tcp=ipv4' "$RUNNER_TEMP/native-startup.log"
 
           "$project/examples/hello/build/macos/bin/native/releaseExecutable/hello.kexe" "$PORT" &
           pid=$!
-          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/")" = 'Hello from NativeServe'
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/")" = 'Hello from ktServe'
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: nativeserve-macos-arm64-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nativeserve-release
+          name: ktserve-macos-arm64-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ktserve-release
           if-no-files-found: error

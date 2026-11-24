@@ -18,26 +18,27 @@ case "$variant" in
     [[ -x "$bin" ]] || { echo 'Missing Axum release binary. Run scripts/build-all.sh' >&2; exit 1; }
     exec "$bin"
     ;;
-  nativeserve-reference)
-    exec env NATIVESERVE_WORKERS=1 "${NATIVESERVE_REFERENCE_BINARY:?Missing NativeServe reference binary}"
+  ktserve-reference)
+    # The selected reference can be a pre-rename snapshot.
+    exec env KTSERVE_WORKERS=1 NATIVESERVE_WORKERS=1 "${KTSERVE_REFERENCE_BINARY:?Missing ktServe reference binary}"
     ;;
-  nativeserve-epoll|nativeserve-io-uring)
+  ktserve-epoll|ktserve-io-uring)
     backend=epoll
-    if [[ "$variant" == nativeserve-io-uring ]]; then backend=io_uring; fi
-    exec env NATIVESERVE_BACKEND="$backend" "${NATIVESERVE_IO_BINARY:?Missing experimental backend binary}" \
+    if [[ "$variant" == ktserve-io-uring ]]; then backend=io_uring; fi
+    exec env KTSERVE_BACKEND="$backend" "${KTSERVE_IO_BINARY:?Missing experimental backend binary}" \
       "${PORT:-8080}" "${BIND_HOST:-127.0.0.1}"
     ;;
-  ktserve|nativeserve|kotlin-reactor|nativeserve-workers-2|nativeserve-workers-2-reuseport)
-    bin="$ROOT/components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe"
+  ktserve|ktserve-workers-2|ktserve-workers-2-reuseport)
+    bin="$ROOT/components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe"
     [[ -x "$bin" ]] || { echo 'Missing ktServe release binary. Run scripts/build-all.sh' >&2; exit 1; }
-    if [[ "$variant" == nativeserve-workers-2* ]]; then
-      export NATIVESERVE_WORKERS=2
-      export NATIVESERVE_WORKER_LISTENER=shared
-      if [[ "$variant" == nativeserve-workers-2-reuseport ]]; then
-        export NATIVESERVE_WORKER_LISTENER=reuseport
+    if [[ "$variant" == ktserve-workers-2* ]]; then
+      export KTSERVE_WORKERS=2
+      export KTSERVE_WORKER_LISTENER=shared
+      if [[ "$variant" == ktserve-workers-2-reuseport ]]; then
+        export KTSERVE_WORKER_LISTENER=reuseport
       fi
     elif [[ "${BENCHMARK_SUITE:-}" == workers ]]; then
-      export NATIVESERVE_WORKERS=1
+      export KTSERVE_WORKERS=1
     fi
     exec "$bin"
     ;;

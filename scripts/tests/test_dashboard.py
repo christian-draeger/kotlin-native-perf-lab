@@ -13,30 +13,30 @@ spec.loader.exec_module(dashboard)
 
 
 class DashboardTest(unittest.TestCase):
-    def test_history_uses_valid_reactor_trials_and_keeps_workloads_apart(self):
+    def test_history_uses_valid_ktserve_trials_and_keeps_workloads_apart(self):
         parameters = {name: [value] for name, value in zip(dashboard.PARAMETERS, (16, 2, 10, 5))}
-        reactor = {
-            "variant": "kotlin-reactor", "endpoint": "/health", "valid": 3, "total": 3,
+        ktserve = {
+            "variant": "ktserve", "endpoint": "/health", "valid": 3, "total": 3,
             "stats": {"rps": {"median": 100, "min": 90, "max": 110}},
         }
         common = {
             "machine": "x86_64", "host": "AMD EPYC", "os": "Ubuntu 24.04",
             "runner": "ubuntu-24.04", "load_generator": "local HTTP/1.1",
             "note": {"kind": "Exploratory CI run"}, "dirty": False, "incomplete": False,
-            "parameters": parameters, "groups": [reactor],
+            "parameters": parameters, "groups": [ktserve],
         }
         runs = []
         for day, overrides in enumerate((
             {}, {}, {"machine": "aarch64"}, {"host": "Intel Xeon"},
             {"parameters": {**parameters, "connections": [64]}},
             {"incomplete": True}, {"dirty": True},
-            {"groups": [{**reactor, "valid": 2}]},
-            {"groups": [{**reactor, "variant": "rust-axum"}]},
+            {"groups": [{**ktserve, "valid": 2}]},
+            {"groups": [{**ktserve, "variant": "rust-axum"}]},
             {"parameters": {**parameters, "connections": [16, 64]}},
         ), 1):
             run = deepcopy({**common, **overrides})
             runs.append({**run, "id": str(day), "date": f"2026-11-{day:02}"})
-        profiles = dashboard.measurement_history(runs[::-1], variant="kotlin-reactor")
+        profiles = dashboard.measurement_history(runs[::-1], variant="ktserve")
         self.assertEqual(len(profiles), 4)
         self.assertEqual(
             [[entry["id"] for entry in profile["runs"]] for profile in profiles],
@@ -48,6 +48,41 @@ class DashboardTest(unittest.TestCase):
             [[entry["id"] for entry in profile["runs"]] for profile in framework_profiles],
             [["1", "2", "9"], ["5"], ["4"], ["3"]],
         )
+
+    def test_maps_archived_ids_without_changing_trial_data(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            rows = {
+                "endpoint": "/json", "variant": "kotlin-reactor", "valid": "1",
+                "rps": 101, "p50_us": 50, "p95_us": 100, "p99_us": 150,
+                "cpu_seconds_per_million_requests": 10, "peak_rss_kib": 2048,
+                "connections": 16, "threads": 2, "warmup_s": 10, "target_duration_s": 5,
+            }
+            runs = []
+            for day, variant in ((22, "kotlin-reactor"), (23, "ktserve")):
+                reports = root / f"results/202611{day}T221558Z"
+                reports.mkdir(parents=True)
+                (reports / "environment.txt").write_text(
+                    'PRETTY_NAME="Ubuntu 24.04"\nmachine=x86_64\n'
+                    'load_generator=local HTTP/1.1\nModel name: AMD EPYC\n'
+                )
+                path = reports / "results.csv"
+                with path.open("w", newline="") as output:
+                    writer = csv.DictWriter(output, fieldnames=rows)
+                    writer.writeheader()
+                    writer.writerow({**rows, "variant": variant})
+                original = path.read_bytes()
+                run = dashboard.read_run(path, {}, root, "archive-revision")
+                self.assertEqual(path.read_bytes(), original)
+                self.assertEqual(run["groups"][0]["variant"], "ktserve")
+                self.assertEqual(run["groups"][0]["stats"]["rps"]["median"], 101)
+                runs.append(run)
+            history = dashboard.measurement_history(runs, variant="ktserve")
+            self.assertEqual(len(history), 1)
+            self.assertEqual([run["id"] for run in history[0]["runs"]], [run["id"] for run in runs])
+
+        self.assertEqual(dashboard.canonical_variant("nativeserve-workers-2"), "ktserve-workers-2")
+        self.assertEqual(dashboard.canonical_variant("spring-webflux-reactor-netty"), "spring-webflux-reactor-netty")
 
     def test_separates_groups_and_excludes_invalid_trials(self):
         with TemporaryDirectory() as directory:

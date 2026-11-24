@@ -3,7 +3,7 @@
 Mission: make a Kotlin/Native HTTP server competitive with Rust/Axum **without falsifying benchmark conclusions**.
 
 1. Preserve API parity across `competitors/ktor/` and `competitors/rust-axum/`; any new payload or endpoint must exist in all baseline servers.
-2. Keep the baseline implementations stable once they are validated; place our new framework in a separate `components/nativeserve/` directory. Never silently rewrite the baseline to improve the comparison.
+2. Keep the baseline implementations stable once they are validated; place our new framework in a separate `components/ktserve/` directory. Never silently rewrite the baseline to improve the comparison.
 3. Record each benchmark's host CPU, kernel, architecture, toolchain versions, commits, parameters, raw logs, p50/p95/p99, requests/sec, CPU-seconds and peak RSS. Never invent values.
 4. Benchmarks must use release binaries, warmed servers, identical connection count, HTTP version, endpoint and response semantics. Keep the load generator off the server machine for a serious comparison.
 5. Make one architectural improvement per commit/PR and remeasure all variants, including negative results. Prefer measurements and flamegraphs to speculative tuning.

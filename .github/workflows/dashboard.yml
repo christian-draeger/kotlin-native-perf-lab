@@ -132,11 +132,19 @@ jobs:
           ' <<<"$info" >/dev/null
           sha="$(jq -er '.head_sha' <<<"$info")"
           attempt="$(jq -er '.run_attempt' <<<"$info")"
+          suffix="-linux-$EXPECTED_ARCH-$attempt"
+          prefix="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REFERENCE_RUN/artifacts?per_page=100" \
+            | jq -er --arg suffix "$suffix" '
+              [.artifacts[] | select(.expired == false) | .name] as $available
+              | ["ktserve", "nativeserve"]
+              | map(. as $prefix | select($available | index($prefix + $suffix)))
+              | first // empty
+            ')"
           gh run download "$REFERENCE_RUN" --repo "$GITHUB_REPOSITORY" \
-            --name "nativeserve-linux-$EXPECTED_ARCH-$attempt" --dir "$reference"
-          archive="nativeserve-snapshot-${sha:0:12}-linux-$EXPECTED_ARCH.tar.gz"
-          (cd "$reference"; sha256sum --strict -c "$archive.sha256"; tar -xzf "$archive" nativeserve)
-          printf 'NATIVESERVE_REFERENCE_BINARY=%s/nativeserve\nNATIVESERVE_REFERENCE_SHA=%s\n' "$reference" "$sha" >> "$GITHUB_ENV"
+            --name "$prefix$suffix" --dir "$reference"
+          archive="$prefix-snapshot-${sha:0:12}-linux-$EXPECTED_ARCH.tar.gz"
+          (cd "$reference"; sha256sum --strict -c "$archive.sha256"; tar -xzf "$archive" "$prefix")
+          printf 'KTSERVE_REFERENCE_BINARY=%s/%s\nKTSERVE_REFERENCE_SHA=%s\n' "$reference" "$prefix" "$sha" >> "$GITHUB_ENV"
           python3 - <<'PY' >> "$GITHUB_ENV"
           import os
           cpus = sorted(os.sched_getaffinity(0))

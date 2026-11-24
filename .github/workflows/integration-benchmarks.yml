@@ -3,9 +3,9 @@ name: ktServe integration benchmarks
 on:
   pull_request:
     paths:
-      - 'components/nativeserve/benchmarks/**'
-      - 'components/nativeserve/integrations/**'
-      - 'components/nativeserve/src/**'
+      - 'components/ktserve/benchmarks/**'
+      - 'components/ktserve/integrations/**'
+      - 'components/ktserve/src/**'
       - 'scripts/benchmark-integrations.py'
       - 'scripts/k6-integration.js'
       - 'scripts/parse_wrk.py'
@@ -49,8 +49,8 @@ jobs:
           gradle-version: '9.7.0'
       - name: Link the release app
         run: |
-          project=components/nativeserve/integrations/ktor
-          binary="$project/build/bin/native/releaseExecutable/nativeserve-ktor-example.kexe"
+          project=components/ktserve/integrations/ktor
+          binary="$project/build/bin/native/releaseExecutable/ktserve-ktor-example.kexe"
           bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           readelf -h "$binary" | grep -E 'Machine:[[:space:]]+AArch64$'
           install -D "$binary" "$RUNNER_TEMP/integration-arm/ktor-example"
@@ -105,7 +105,7 @@ jobs:
             printf 'benchmark_source=github-hosted-actions\nrunner_label=%s\n' "$RUNNER_LABEL"
             printf 'ci_run_id=%s\nci_run_attempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
             grep '^PRETTY_NAME=' /etc/os-release
-            printf 'kotlin_version=%s\n' "$(sed -n 's/.*kotlin("multiplatform") version "\([^"]*\)".*/\1/p' components/nativeserve/integrations/ktor/build.gradle.kts)"
+            printf 'kotlin_version=%s\n' "$(sed -n 's/.*kotlin("multiplatform") version "\([^"]*\)".*/\1/p' components/ktserve/integrations/ktor/build.gradle.kts)"
           } > "$result/environment.txt"
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
         if: matrix.family != 'ktor-native' || matrix.arch == 'x86_64'
@@ -120,16 +120,16 @@ jobs:
         if: matrix.family != 'ktor-native'
         run: |
           app="ktserve-benchmark-$FAMILY"
-          project="components/nativeserve/benchmarks/$FAMILY"
+          project="components/ktserve/benchmarks/$FAMILY"
           bash scripts/ci-gradle.sh -p "$project" installDist
           printf 'EXECUTABLE=%s\n' "$project/build/install/$app/bin/$app" >> "$GITHUB_ENV"
           gradle --version > "$RESULT_DIR/gradle-version.txt"
       - name: Link the x86_64 app
         if: matrix.family == 'ktor-native' && matrix.arch == 'x86_64'
         run: |
-          project=components/nativeserve/integrations/ktor
+          project=components/ktserve/integrations/ktor
           bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
-          printf 'EXECUTABLE=%s\n' "$project/build/bin/native/releaseExecutable/nativeserve-ktor-example.kexe" >> "$GITHUB_ENV"
+          printf 'EXECUTABLE=%s\n' "$project/build/bin/native/releaseExecutable/ktserve-ktor-example.kexe" >> "$GITHUB_ENV"
           gradle --version > "$RESULT_DIR/gradle-version.txt"
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         if: matrix.family == 'ktor-native' && matrix.arch == 'aarch64'

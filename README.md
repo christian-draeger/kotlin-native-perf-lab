@@ -8,17 +8,17 @@ The Kotlin Native Performance Lab is the project behind ktServe. Its [GitHub Pag
 
 | Start with | Example |
 | --- | --- |
-| A standalone Kotlin service on Linux, Apple Silicon, or the JVM | [Standalone quickstart](components/nativeserve/README.md) |
-| A Ktor application with the ktServe engine | [Ktor JVM example](components/nativeserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/nativeserve/integrations/ktor/README.md) |
-| A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/nativeserve/examples/spring-webflux) · [Starter guide](components/nativeserve/integrations/spring-boot-starter/README.md) |
+| A standalone Kotlin service on Linux, Apple Silicon, or the JVM | [Standalone quickstart](components/ktserve/README.md) |
+| A Ktor application with the ktServe engine | [Ktor JVM example](components/ktserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/ktserve/integrations/ktor/README.md) |
+| A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/ktserve/examples/spring-webflux) · [Starter guide](components/ktserve/integrations/spring-boot-starter/README.md) |
 
-Earlier previews were published as NativeServe. The same packages, configuration keys, and benchmark history remain available. [Compatibility names](components/nativeserve/README.md#compatibility-names)
+ktServe replaces the NativeServe preview identifiers in packages, build coordinates and configuration. Historical benchmark results remain available. [Upgrade from the preview](components/ktserve/README.md#upgrade-from-the-preview)
 
 ## Repository layout
 
 | Directory | Contents |
 | --- | --- |
-| `components/nativeserve/` | ktServe and its public Kotlin API, platform implementation and component tests. |
+| `components/ktserve/` | ktServe and its public Kotlin API, platform implementation and component tests. |
 | `components/` | Project-owned components and their modules or standalone builds. |
 | `competitors/` | Reference implementations for Rust/Axum, the Kotlin server ecosystem, ASP.NET Core, Go, Hono, Elysia and FastAPI. |
 | `scripts/` | Shared build, validation, measurement and profiling commands. |

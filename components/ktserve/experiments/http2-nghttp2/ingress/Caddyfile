@@ -1,0 +1,14 @@
+{
+	admin off
+	auto_https disable_redirects
+	grace_period 3s
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$KTSERVE_TLS_HOST:localhost}:{$KTSERVE_TLS_PORT:8443} {
+	bind {$KTSERVE_TLS_BIND:127.0.0.1}
+	tls "{$KTSERVE_TLS_CERT}" "{$KTSERVE_TLS_KEY}"
+	reverse_proxy h2c://127.0.0.1:{$KTSERVE_H2C_PORT:8080}
+}

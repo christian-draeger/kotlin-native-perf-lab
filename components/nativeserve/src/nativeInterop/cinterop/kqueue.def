@@ -1,3 +1,0 @@
-headers = nativeserve_kqueue.h
-headerFilter = nativeserve_kqueue.h
-package = dev.perflab.nativeserve.kqueue

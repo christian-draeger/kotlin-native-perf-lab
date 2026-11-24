@@ -22,7 +22,7 @@ The first public preview should provide a runnable starter, one documented build
 
 ## Core and transport architecture
 
-Application handlers and the HTTP core depend on a small [internal transport contract](components/nativeserve/TRANSPORT.md). Platform backends implement that contract and own OS resources. The shared parser and routing code provide the starting point for the [epoll extraction](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/49).
+Application handlers and the HTTP core depend on a small [internal transport contract](components/ktserve/TRANSPORT.md). Platform backends implement that contract and own OS resources. The shared parser and routing code provide the starting point for the [epoll extraction](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/49).
 
 - Keep business handlers, routes, serialization and HTTP framing/state portable. Expose typed HTTP values, portable failures and supported capabilities through the application-facing API.
 - Model accept, read, write, deadlines, cancellation and close with explicit operation identity, partial progress, EOF and terminal outcomes. Adapt readiness notifications and operation completions inside their platform implementations.
@@ -35,7 +35,7 @@ Readiness APIs such as epoll and kqueue report when I/O can progress. Completion
 
 The initial Linux reference implementation uses the following ownership and protocol bounds.
 
-- Keep the new library and executable in `components/nativeserve/`. The benchmark application calls the same public routing and response APIs as a consumer.
+- Keep the new library and executable in `components/ktserve/`. The benchmark application calls the same public routing and response APIs as a consumer.
 - Start with one level-triggered epoll loop. Use nonblocking sockets, retain bytes across partial input and output, and register write interest while there are bytes left to send. The first reactor uses one owner per connection.
 - Parse a bounded request head incrementally. Keep HTTP framing validation, route selection, JSON encoding and I/O as separate boundaries. Start with origin-form HTTP/1.x GET requests. Cover the parity endpoints and document the supported request-body and method scope.
 - Cap concurrent sockets, request head size, retained pending output and connection idle time. Close a connection when parsing or I/O can no longer progress safely. Consumers get useful messages on startup failures.
@@ -47,7 +47,7 @@ The initial Linux reference implementation uses the following ownership and prot
 | Milestone | Deliverable | Exit evidence |
 | --- | --- | --- |
 | [0 · Baseline and validation](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/1) | Merge the accepted phase-0 matrix and separate quick checks from native and benchmark runs. | Baseline smoke, Pages build, preserved raw data, and measured time to actionable feedback. |
-| [1 · NativeServe reference server](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/2) | Implement the bounded parser and epoll loop, expose the parity routes, and integrate a fourth benchmark variant. | Unit and HTTP checks on both architectures, one archived four-variant CI series per architecture. |
+| [1 · ktServe reference server](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/2) | Implement the bounded parser and epoll loop, expose the parity routes, and integrate a fourth benchmark variant. | Unit and HTTP checks on both architectures, one archived four-variant CI series per architecture. |
 | [2 · Framework developer experience](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/3) | Refine routing and typed JSON, verify the starter, and make shutdown and startup failures predictable. | A fresh-checkout example using the public API succeeds with the documented commands. |
 | [2a · Portable transport and Mac development workflow](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/10) | Define the transport contract, extract epoll and provide a one-command Mac-to-Linux workflow. | Shared contract fixtures, Linux release smoke, measured boundary overhead and a clean-checkout local development check. |
 | [2b · Native macOS development](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/11) | Add a kqueue backend and direct Apple Silicon development through the shared API. | The same HTTP and transport contracts pass on macOS and Linux, with supported Mac consumer artifacts and a documented build/run path. |
@@ -94,7 +94,7 @@ After the WebFlux comparison, [assess Spring MVC and Servlet compatibility](http
 
 Evaluate [reusable protocol components and the session adapter](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/78) alongside the bounded streaming work in #37. Keep routing, application handlers, and typed serialization reusable across protocols and runtimes. Use the adapter for [bounded HTTP/2 sessions](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/79) with multiplexing and flow control, then verify [TLS and ALPN deployment](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/80) on Linux x86_64 and ARM64.
 
-The [nghttp2 session experiment](components/nativeserve/experiments/http2-nghttp2) exercises the Kotlin/Native memory boundary, fragmented input, flow-control credit and cancellation on both Linux architectures.
+The [nghttp2 session experiment](components/ktserve/experiments/http2-nghttp2) exercises the Kotlin/Native memory boundary, fragmented input, flow-control credit and cancellation on both Linux architectures.
 
 Report protocol, TLS mode, connections, and concurrent streams in the [matched HTTP/2 comparisons](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81). HTTP/2 gets a separate workload series. [HTTP/2 specification](https://www.rfc-editor.org/rfc/rfc9113.html)
 

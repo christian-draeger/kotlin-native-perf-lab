@@ -20,9 +20,9 @@ from parse_wrk import read_load_timing
 
 SCRIPTS = Path(__file__).resolve().parent
 ENGINES = {
-    "ktor-native": {"cio": "cio", "ktserve": "nativeserve"},
-    "ktor-jvm": {"cio": "cio", "netty": "netty", "ktserve": "nativeserve"},
-    "spring-webflux": {"reactor-netty": "reactor-netty", "ktserve": "nativeserve"},
+    "ktor-native": {"cio": "cio", "ktserve": "ktserve"},
+    "ktor-jvm": {"cio": "cio", "netty": "netty", "ktserve": "ktserve"},
+    "spring-webflux": {"reactor-netty": "reactor-netty", "ktserve": "ktserve"},
 }
 UPLOAD_SIZE = 24 * 1024
 UPLOAD = b"x" * UPLOAD_SIZE

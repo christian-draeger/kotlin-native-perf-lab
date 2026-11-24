@@ -1,3 +1,0 @@
-headers = uring_transport.h
-headerFilter = uring_transport.h
-package = dev.perflab.nativeserve.uring

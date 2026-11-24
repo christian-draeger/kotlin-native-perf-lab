@@ -13,7 +13,7 @@ mkdir -p "$out"
 test ! -e "$out/results.csv"
 unset LOAD_SSH
 export LC_ALL=C BIND_HOST=127.0.0.1 NO_PROXY=127.0.0.1 no_proxy=127.0.0.1
-export BENCHMARK_SUITE=application NATIVESERVE_BACKEND=epoll NATIVESERVE_WORKER_DIAGNOSTICS=0
+export BENCHMARK_SUITE=application KTSERVE_BACKEND=epoll KTSERVE_WORKER_DIAGNOSTICS=0
 
 runs="${RUNS:-3}"
 warmup="${WARMUP:-5}"
@@ -52,14 +52,14 @@ PY
 start_trial_server() {
   local mode="$1" profile="$2" prefix="$3"
   export KTSERVE_EPOLL_TRIGGER="$mode"
-  export NATIVESERVE_WORKERS="${profile%%-*}" NATIVESERVE_WORKER_LISTENER="${profile#*-}"
+  export KTSERVE_WORKERS="${profile%%-*}" KTSERVE_WORKER_LISTENER="${profile#*-}"
   PORT="$(pick_port)"
   export PORT
   start_server ktserve "$prefix.server.txt"
   grep -Fxq "ktServe epoll peer_trigger=$mode" "$prefix.server.txt"
-  if [[ "$NATIVESERVE_WORKERS" == 2 ]]; then
+  if [[ "$KTSERVE_WORKERS" == 2 ]]; then
     grep -Fq 'workers=2' "$prefix.server.txt"
-    grep -Fq "worker_listener=$NATIVESERVE_WORKER_LISTENER" "$prefix.server.txt"
+    grep -Fq "worker_listener=$KTSERVE_WORKER_LISTENER" "$prefix.server.txt"
   fi
   "$ROOT/scripts/smoke.sh" "http://$BIND_HOST:$PORT" > "$prefix.smoke.txt" 2>&1
 }
@@ -86,15 +86,15 @@ if [[ "${GITHUB_ACTIONS:-}" == true ]]; then benchmark_source=github-hosted-acti
   cat /etc/os-release
   lscpu
   uname -a
-  grep -m1 'kotlin("multiplatform") version' "$ROOT/components/nativeserve/build.gradle.kts"
-  grep -m1 '^distributionUrl=' "$ROOT/components/nativeserve/gradle/wrapper/gradle-wrapper.properties"
-  sha256sum "$ROOT/components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe" "$fixture"
+  grep -m1 'kotlin("multiplatform") version' "$ROOT/components/ktserve/build.gradle.kts"
+  grep -m1 '^distributionUrl=' "$ROOT/components/ktserve/gradle/wrapper/gradle-wrapper.properties"
+  sha256sum "$ROOT/components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe" "$fixture"
   load_environment
 } > "$out/environment.txt" 2>&1
 
 for mode in "${modes[@]}"; do
   # Check real transport cancellation, limits and bidirectional streaming before load.
-  KTSERVE_EPOLL_TRIGGER="$mode" python3 "$ROOT/scripts/tests/reactor_stress.py" "$fixture" > "$out/$mode-stress.txt" 2>&1
+  KTSERVE_EPOLL_TRIGGER="$mode" python3 "$ROOT/scripts/tests/ktserve_stress.py" "$fixture" > "$out/$mode-stress.txt" 2>&1
   for profile in "${profiles[@]}"; do
     prefix="$out/$mode-$profile-check"
     start_trial_server "$mode" "$profile" "$prefix"

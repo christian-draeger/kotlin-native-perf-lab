@@ -38,12 +38,12 @@ for index in "${!variants[@]}"; do
     cat "$log" >&2
     exit 1
   fi
-  if [[ "$variant" == kotlin-reactor && "${BENCHMARK_SUITE:-core}" != application ]]; then
-    python3 "$ROOT/scripts/tests/reactor_http_smoke.py" "$PORT"
-    python3 "$ROOT/scripts/tests/reactor_shutdown_smoke.py" "$PORT" "$server_pid"
+  if [[ "$variant" == ktserve && "${BENCHMARK_SUITE:-core}" != application ]]; then
+    python3 "$ROOT/scripts/tests/ktserve_http_smoke.py" "$PORT"
+    python3 "$ROOT/scripts/tests/ktserve_shutdown_smoke.py" "$PORT" "$server_pid"
     wait "$server_pid"
     server_pid=''
-    start_server "$variant" "$logs/reactor-rebind.txt"
+    start_server "$variant" "$logs/ktserve-rebind.txt"
   fi
   stop_server
 done

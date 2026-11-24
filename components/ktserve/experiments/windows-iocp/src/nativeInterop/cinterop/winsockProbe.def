@@ -1,0 +1,4 @@
+headers = winsock_probe.h iocp_transport.h
+headerFilter = winsock_probe.h iocp_transport.h
+package = dev.perflab.ktserve.probe
+linkerOpts = -lws2_32

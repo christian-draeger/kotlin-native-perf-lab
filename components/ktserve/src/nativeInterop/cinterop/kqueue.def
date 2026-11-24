@@ -1,0 +1,3 @@
+headers = ktserve_kqueue.h
+headerFilter = ktserve_kqueue.h
+package = dev.perflab.ktserve.kqueue
