@@ -256,7 +256,7 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
         val path = if (query < 0) target else target.substring(0, query)
         val request = Request(
             method, path, if (query < 0) null else target.substring(query + 1),
-            bodyLength = head.length, decodedFields = head.fields.toList(),
+            bodyLength = head.length, decodedFields = head.fields.toList(), version = "HTTP/2",
         )
         head.request = request
         if (method != "POST") return

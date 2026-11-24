@@ -1,0 +1,77 @@
+name: NativeServe Ktor engine
+
+on:
+  pull_request:
+    paths:
+      - 'components/nativeserve/integrations/ktor/**'
+      - 'components/nativeserve/examples/ktor-jvm/**'
+      - 'components/nativeserve/src/commonMain/**'
+      - 'components/nativeserve/src/nativeMain/**'
+      - 'components/nativeserve/src/jvmMain/**'
+      - '.github/workflows/ktor-nativeserve.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: JVM and Kotlin/Native Ktor applications
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Test all JVM engines and the independent consumer
+        run: |
+          gradle -p components/nativeserve/integrations/ktor jvmTest
+          starter=components/nativeserve/examples/ktor-jvm
+          gradle -p "$starter" installDist
+          "$starter/build/install/nativeserve-ktor-hello/bin/nativeserve-ktor-hello" 18089 &
+          server=$!
+          trap 'kill "$server" 2>/dev/null || true' EXIT
+          for attempt in {1..50}; do
+            if [ "$(curl -fsS http://127.0.0.1:18089/health 2>/dev/null)" = ok ]; then exit 0; fi
+            kill -0 "$server"
+            sleep .1
+          done
+          exit 1
+      - name: Link both native versions and run the x86_64 fixture
+        run: |
+          project=components/nativeserve/integrations/ktor
+          binary="$project/build/bin/native/releaseExecutable/nativeserve-ktor-example.kexe"
+          gradle -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
+          python3 "$project/smoke.py" "$binary"
+          gradle -p "$project" -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+          readelf -h "$binary" | grep -E 'Machine:[[:space:]]+AArch64$'
+          mkdir "$RUNNER_TEMP/ktor-arm"
+          install -m 755 "$binary" "$RUNNER_TEMP/ktor-arm/example"
+          cp "$project/smoke.py" "$RUNNER_TEMP/ktor-arm/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: nativeserve-ktor-example-arm64
+          path: ${{ runner.temp }}/ktor-arm
+          if-no-files-found: error
+
+  arm_smoke:
+    name: Ktor NativeServe and CIO on Linux ARM64
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: nativeserve-ktor-example-arm64
+          path: ${{ runner.temp }}/ktor-arm
+      - run: |
+          test "$(uname -m)" = aarch64
+          chmod +x "$RUNNER_TEMP/ktor-arm/example"
+          python3 "$RUNNER_TEMP/ktor-arm/smoke.py" "$RUNNER_TEMP/ktor-arm/example"

@@ -13,7 +13,17 @@ fun serve(
     limits: ServerLimits = ServerLimits(),
     stopRequested: () -> Boolean = { false },
     configure: Routes.() -> Unit,
-): Unit = serveEpoll(port, host, limits, 1, stopRequested, configure)
+): Unit = serveEpoll(port, host, limits, 1, stopRequested, configure = configure)
+
+/** Serve HTTP and notify the caller after the listener has successfully bound. */
+fun serve(
+    port: Int = 8080,
+    host: String = "127.0.0.1",
+    limits: ServerLimits = ServerLimits(),
+    stopRequested: () -> Boolean = { false },
+    onListening: () -> Unit,
+    configure: Routes.() -> Unit,
+): Unit = serveEpoll(port, host, limits, 1, stopRequested, onListening, configure)
 
 internal fun serveEpoll(
     port: Int,
@@ -21,6 +31,7 @@ internal fun serveEpoll(
     limits: ServerLimits = ServerLimits(),
     workers: Int,
     stopRequested: () -> Boolean,
+    onListening: () -> Unit = {},
     configure: Routes.() -> Unit,
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
@@ -35,6 +46,7 @@ internal fun serveEpoll(
     val transport = openPlatformTransport(host, port, limits.connections)
     try {
         println("NativeServe backend=$backend tcp=ipv4")
+        onListening()
         HttpServer(transport, routes, limits).run(stopRequested)
     } finally {
         transport.close()
