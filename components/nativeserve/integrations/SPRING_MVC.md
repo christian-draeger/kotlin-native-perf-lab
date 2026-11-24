@@ -4,7 +4,7 @@ Defer a Servlet engine until the paired WebFlux measurements establish where Nat
 
 | Servlet contract | NativeServe capability and remaining work |
 | --- | --- |
-| Container bootstrap and lifecycle | NativeServe can bind and drain an HTTP listener. Spring Boot passes `ServletContextInitializer` instances to a `ServletWebServerFactory`. Creating the context, registers, listeners, Servlet init/destroy, error dispatch, and application restart belongs to the container. |
+| Container bootstrap and lifecycle | NativeServe can bind and drain an HTTP listener. Spring Boot passes `ServletContextInitializer` instances to a `ServletWebServerFactory`. The container owns context creation, component registration, listeners, Servlet init/destroy, error dispatch, and application restart. |
 | Request and response | The HTTP exchange exposes method, target, fields, status, cookies through adapters, and bounded body streams. A Servlet bridge must implement request wrappers, encoding, stream and writer modes, flushing and commitment, buffer reset, multipart, redirects, dispatch paths, and listener readiness. |
 | Filters and dispatch | The HTTP core can dispatch one active exchange per connection. Servlet filter ordering and wrapper lifetimes must survive `REQUEST`, `ASYNC`, `ERROR`, `FORWARD` and `INCLUDE` dispatch. |
 | Sessions and security | Fields and cookies can carry session identifiers. Session lookup, rotation, invalidation, listener events, expiry, and security context semantics need a container or verified application-owned session infrastructure. |
