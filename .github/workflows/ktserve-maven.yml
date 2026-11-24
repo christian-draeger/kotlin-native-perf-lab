@@ -3,6 +3,7 @@ name: ktServe Maven staging
 on:
   pull_request:
     paths:
+      - 'LICENSE'
       - 'components/ktserve/build.gradle.kts'
       - 'components/ktserve/gradle/**'
       - 'components/ktserve/gradle.properties'
@@ -45,6 +46,13 @@ jobs:
           project=components/ktserve
           "$project/gradlew" -p "$project" "-Pktserve.version=$KTSERVE_VERSION" \
             publishAllPublicationsToStagingRepository
+          group="$project/build/maven-staging/$KTSERVE_VERSION/io/github/christian-draeger"
+          for pom in "$group"/*/"$KTSERVE_VERSION"/*.pom; do
+            grep -Fq '<name>Apache License, Version 2.0</name>' "$pom"
+          done
+          for jar in "$group"/*/"$KTSERVE_VERSION"/*.jar; do
+            unzip -p "$jar" META-INF/LICENSE | cmp - LICENSE
+          done
       - name: Run the published JVM consumer on JDK 21
         run: |
           project=components/ktserve

@@ -1,3 +1,4 @@
+import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget
@@ -9,6 +10,7 @@ plugins {
 
 repositories { mavenCentral() }
 
+group = "io.github.christian-draeger"
 val publicationVersion = providers.gradleProperty("ktserve.version").orNull
 val projectUrl = "https://github.com/christian-draeger/kotlin-native-perf-lab"
 if (publicationVersion != null) {
@@ -16,7 +18,6 @@ if (publicationVersion != null) {
     require(versionPattern.matches(publicationVersion) && !publicationVersion.endsWith("-SNAPSHOT", ignoreCase = true)) {
         "ktserve.version must be a release version such as 0.2.0-preview.2"
     }
-    group = "io.github.christian-draeger"
     version = publicationVersion
     apply(plugin = "maven-publish")
 }
@@ -44,9 +45,9 @@ kotlin {
             getByName("nativeMain").kotlin.setSrcDirs(emptyList<String>())
             getByName("linuxMain").kotlin.apply {
                 srcDir("src/nativeMain/kotlin")
-                exclude("dev/perflab/ktserve/example/**")
+                exclude("io/github/christian_draeger/ktserve/example/**")
             }
-            getByName("macosMain").kotlin.exclude("dev/perflab/ktserve/example/**")
+            getByName("macosMain").kotlin.exclude("io/github/christian_draeger/ktserve/example/**")
         }
     } else {
         jvm()
@@ -63,7 +64,7 @@ kotlin {
         native.useKtServeInterop(macos = targetOs == "macos")
         native.binaries.executable {
             baseName = "ktserve"
-            entryPoint = "dev.perflab.ktserve.example.main"
+            entryPoint = "io.github.christian_draeger.ktserve.example.main"
         }
         val stressCompilation = native.compilations.create("stress") {
             associateWith(native.compilations.getByName("main"))
@@ -71,7 +72,7 @@ kotlin {
         native.binaries.executable("stress", listOf(RELEASE)) {
             compilation = stressCompilation
             baseName = "ktserve-stress-fixture"
-            entryPoint = "dev.perflab.ktserve.fixture.main"
+            entryPoint = "io.github.christian_draeger.ktserve.fixture.main"
         }
         sourceSets {
             getByName("nativeMain") {
@@ -93,6 +94,9 @@ kotlin {
 }
 
 if (publicationVersion != null) {
+    tasks.withType<Jar>().configureEach {
+        from("../../LICENSE") { into("META-INF") }
+    }
     val documentationJar = tasks.register<Jar>("publicationDocumentation") {
         archiveClassifier.set("javadoc")
         from("README.md", "TRANSPORT.md")
@@ -108,6 +112,13 @@ if (publicationVersion != null) {
                 name.set("ktServe")
                 description.set("An HTTP framework for Kotlin on the JVM and Kotlin/Native")
                 url.set(projectUrl)
+                licenses {
+                    license {
+                        name.set("Apache License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        distribution.set("repo")
+                    }
+                }
                 developers {
                     developer {
                         id.set("christian-draeger")

@@ -5,13 +5,13 @@ plugins {
 
 repositories { mavenCentral() }
 
-group = "dev.perflab"
+group = "io.github.christian-draeger"
 version = "0.1.0-preview"
 
 dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
     api("org.springframework.boot:spring-boot-starter-webflux")
-    api("dev.perflab:ktserve-webflux")
+    api("io.github.christian-draeger:ktserve-webflux")
     implementation(kotlin("reflect"))
     testImplementation(kotlin("test"))
 }

@@ -15,11 +15,11 @@ kotlin {
         }
         binaries.executable(buildTypes = listOf(RELEASE)) {
             baseName = "iocp-probe"
-            entryPoint = "dev.perflab.ktserve.probe.main"
+            entryPoint = "io.github.christian_draeger.ktserve.probe.main"
         }
         binaries.executable("server", listOf(RELEASE)) {
             baseName = "ktserve-iocp"
-            entryPoint = "dev.perflab.ktserve.example.iocpMain"
+            entryPoint = "io.github.christian_draeger.ktserve.example.iocpMain"
         }
         val stress = compilations.create("stress") {
             associateWith(main)
@@ -30,7 +30,7 @@ kotlin {
         binaries.executable("stress", listOf(RELEASE)) {
             compilation = stress
             baseName = "ktserve-iocp-stress"
-            entryPoint = "dev.perflab.ktserve.fixture.main"
+            entryPoint = "io.github.christian_draeger.ktserve.fixture.main"
         }
     }
     sourceSets.commonMain {

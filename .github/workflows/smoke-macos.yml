@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths: &paths
+      - 'LICENSE'
       - 'components/ktserve/**'
       - 'scripts/package-ktserve.sh'
       - 'scripts/smoke.sh'
@@ -63,6 +64,7 @@ jobs:
           mkdir "$unpacked"
           tar -xzf "$package/$archive" -C "$unpacked"
           cmp "$binary" "$unpacked/ktserve"
+          cmp LICENSE "$unpacked/LICENSE"
 
           export PORT=18081
           "$unpacked/ktserve" > "$RUNNER_TEMP/native-startup.log" 2>&1 &

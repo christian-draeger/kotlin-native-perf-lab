@@ -1,6 +1,6 @@
 # ktServe Maven releases
 
-The proposed first Maven Central coordinate is `io.github.christian-draeger:ktserve:0.2.0-preview.2`. The Maven group comes from the repository owner's GitHub namespace. Kotlin imports remain under `dev.perflab.ktserve`.
+The first Maven Central candidate is `io.github.christian-draeger:ktserve:0.2.0-preview.2`. The Maven group follows the repository owner's GitHub namespace. Kotlin and Java imports use `io.github.christian_draeger.ktserve` because source package identifiers require a Java-compatible spelling.
 
 Once the version is live on Central, a Kotlin/JVM application on JDK 21 can use the following dependency. In a Kotlin Multiplatform project, place the dependency in the source set that uses ktServe. Shared routing can live in `commonMain`. Server startup uses the platform source set.
 
@@ -30,7 +30,7 @@ The repository is under `components/ktserve/build/maven-staging/<version>/`. Wit
 
 ## Publish to Maven Central
 
-1. Record the license approved by the project's rights holder in the repository and in the Maven POM. Verify `io.github.christian-draeger` in the [Central Publisher Portal](https://central.sonatype.com/). [POM requirements](https://central.sonatype.org/publish/requirements/) · [Namespace verification](https://central.sonatype.org/register/namespace/)
+1. Verify `io.github.christian-draeger` in the [Central Publisher Portal](https://central.sonatype.com/). The repository and Maven POM declare the [Apache License 2.0](../../LICENSE). [Namespace verification](https://central.sonatype.org/register/namespace/)
 2. Build the signed candidate from its release commit in a clean checkout. Pass the ASCII-armored private key as `KTSERVE_PGP_PRIVATE_KEY` and its passphrase as `KTSERVE_PGP_PASSPHRASE` through the environment. Make the public key available to Central. [Signing requirements](https://central.sonatype.org/publish/requirements/gpg/)
 3. Zip the versioned repository content, preserving the `io/github/...` layout and excluding generated `maven-metadata.xml` files and their checksums. Upload the signed bundle via Central Portal and review the validation result before publishing. [Central Portal bundle upload](https://central.sonatype.org/publish/publish-portal-upload/)
 4. Once Central lists the version, verify the dependency in a fresh JVM project using `mavenCentral()` and check `/health`. Publish an updated version for follow-up changes. [Central version immutability](https://central.sonatype.org/publish/requirements/immutability/)

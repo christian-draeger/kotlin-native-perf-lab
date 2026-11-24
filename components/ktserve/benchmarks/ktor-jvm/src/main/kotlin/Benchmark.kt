@@ -1,6 +1,6 @@
-package dev.perflab.ktserve.ktor.example
+package io.github.christian_draeger.ktserve.ktor.example
 
-import dev.perflab.ktserve.ktor.KtServe
+import io.github.christian_draeger.ktserve.ktor.KtServe
 import io.ktor.server.application.Application
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer

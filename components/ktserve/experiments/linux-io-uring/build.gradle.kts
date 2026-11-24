@@ -23,7 +23,7 @@ kotlin {
     }
     native.binaries.executable(buildTypes = listOf(RELEASE)) {
         baseName = "ktserve-io-uring"
-        entryPoint = "dev.perflab.ktserve.example.uringMain"
+        entryPoint = "io.github.christian_draeger.ktserve.example.uringMain"
         linkerOpts(file(uringShim.get()).absolutePath, file(uringArchive.get()).absolutePath)
     }
     val stress = native.compilations.create("stress") {
@@ -34,7 +34,7 @@ kotlin {
     native.binaries.executable("stress", listOf(RELEASE)) {
         compilation = stress
         baseName = "ktserve-io-uring-stress"
-        entryPoint = "dev.perflab.ktserve.fixture.uringStressMain"
+        entryPoint = "io.github.christian_draeger.ktserve.fixture.uringStressMain"
         linkerOpts(file(uringShim.get()).absolutePath, file(uringArchive.get()).absolutePath)
     }
     sourceSets.commonMain {
@@ -46,6 +46,6 @@ kotlin {
     }
     sourceSets.getByName("nativeMain") {
         kotlin.srcDir("../../src/nativeShared/kotlin")
-        kotlin.srcDir("../../src/nativeMain/kotlin/dev/perflab/ktserve/transport")
+        kotlin.srcDir("../../src/nativeMain/kotlin/io/github/christian_draeger/ktserve/transport")
     }
 }

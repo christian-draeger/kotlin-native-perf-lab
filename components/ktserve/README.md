@@ -58,7 +58,7 @@ The [JVM starter](examples/hello-jvm) runs the same routing DSL and HTTP core wi
 ./components/ktserve/gradlew -p components/ktserve/examples/hello-jvm run
 ```
 
-Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `dev.perflab:ktserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `KTSERVE_BACKEND=nio` explicitly selects the JVM backend.
+Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `io.github.christian-draeger:ktserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `KTSERVE_BACKEND=nio` explicitly selects the JVM backend.
 
 The [Maven release guide](RELEASING.md) covers the versioned library and how to test it from a separate Gradle project.
 
@@ -76,7 +76,7 @@ The [Maven release guide](RELEASING.md) covers the versioned library and how to 
 
 ## Write a handler
 
-The [hello example](examples/hello) is a separate Gradle build that consumes `dev.perflab:ktserve` from this checkout. On Linux x86_64 with JDK 21, run the example from the repository root.
+The [hello example](examples/hello) is a separate Gradle build that consumes `io.github.christian-draeger:ktserve` from this checkout. On Linux x86_64 with JDK 21, run the example from the repository root.
 
 ```sh
 ./components/ktserve/gradlew -p components/ktserve/examples/hello runReleaseExecutableNative
@@ -85,7 +85,7 @@ The [hello example](examples/hello) is a separate Gradle build that consumes `de
 Open `http://127.0.0.1:8080/` to see the greeting. The example uses the same Kotlin version and Gradle wrapper as ktServe. Linux CI builds and tests the example release executable on x86_64 and ARM64.
 
 ```kotlin
-import dev.perflab.ktserve.*
+import io.github.christian_draeger.ktserve.*
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -166,6 +166,6 @@ On macOS, add `-Pbenchmark.targetOs=macos` to the Gradle command and use the fix
 
 ## Upgrade from the preview
 
-Use the `dev.perflab.ktserve` Kotlin package and the `dev.perflab:ktserve` Gradle component. The Ktor factory is `KtServe`. Its artifact is `dev.perflab:ktserve-ktor`. The WebFlux adapter and Spring Boot starter use `dev.perflab:ktserve-webflux` and `dev.perflab:ktserve-spring-boot-starter`. Spring Boot settings begin with `ktserve`, and environment switches use the `KTSERVE_` prefix.
+Use the `io.github.christian_draeger.ktserve` Kotlin package and the `io.github.christian-draeger:ktserve` Gradle component. The Ktor factory is `KtServe`. Its artifact is `io.github.christian-draeger:ktserve-ktor`. The WebFlux adapter and Spring Boot starter use `io.github.christian-draeger:ktserve-webflux` and `io.github.christian-draeger:ktserve-spring-boot-starter`. Spring Boot settings begin with `ktserve`, and environment switches use the `KTSERVE_` prefix.
 
 Start a new release archive with `./ktserve` or launch from the built repository with `./scripts/run-server.sh ktserve`. Old snapshot archives retain their original executable names. The dashboard maps historical variant IDs to ktServe while keeping the original archives, logs and CSV rows available.

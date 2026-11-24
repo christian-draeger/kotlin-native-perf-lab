@@ -4,6 +4,8 @@ ktServe is an HTTP server for Kotlin/Native and the JVM. Use its Kotlin routing 
 
 The Kotlin Native Performance Lab is the project behind ktServe. Its [GitHub Pages site](https://christian-draeger.github.io/kotlin-native-perf-lab/) introduces the server, explains the architecture, and publishes benchmark results with their measured revisions and conditions.
 
+ktServe is licensed under the [Apache License 2.0](LICENSE). Third-party assets retain their accompanying licenses.
+
 ## Try ktServe
 
 | Start with | Example |
@@ -11,6 +13,8 @@ The Kotlin Native Performance Lab is the project behind ktServe. Its [GitHub Pag
 | A standalone Kotlin service on Linux, Apple Silicon, or the JVM | [Standalone quickstart](components/ktserve/README.md) |
 | A Ktor application with the ktServe engine | [Ktor JVM example](components/ktserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/ktserve/integrations/ktor/README.md) |
 | A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/ktserve/examples/spring-webflux) · [Starter guide](components/ktserve/integrations/spring-boot-starter/README.md) |
+
+The library uses the Maven coordinate `io.github.christian-draeger:ktserve` and the Kotlin package `io.github.christian_draeger.ktserve`. [Maven release guide](components/ktserve/RELEASING.md)
 
 ktServe replaces the NativeServe preview identifiers in packages, build coordinates and configuration. Historical benchmark results remain available. [Upgrade from the preview](components/ktserve/README.md#upgrade-from-the-preview)
 
