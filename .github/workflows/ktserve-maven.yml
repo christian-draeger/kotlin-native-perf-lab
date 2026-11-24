@@ -1,0 +1,107 @@
+name: ktServe Maven staging
+
+on:
+  pull_request:
+    paths:
+      - 'components/ktserve/build.gradle.kts'
+      - 'components/ktserve/gradle/**'
+      - 'components/ktserve/gradle.properties'
+      - 'components/ktserve/src/**'
+      - 'components/ktserve/examples/hello/**'
+      - 'components/ktserve/examples/hello-jvm/**'
+      - '.github/workflows/ktserve-maven.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: ktServe version to stage
+        required: true
+        default: '0.2.0-preview.2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ktserve-maven-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  stage:
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      KTSERVE_VERSION: ${{ inputs.version || '0.2.0-preview.2' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Stage versioned JVM and Native artifacts
+        run: |
+          test "$(uname -m)" = arm64
+          project=components/ktserve
+          "$project/gradlew" -p "$project" "-Pktserve.version=$KTSERVE_VERSION" \
+            publishAllPublicationsToStagingRepository
+      - name: Run the published JVM consumer on JDK 21
+        run: |
+          project=components/ktserve
+          jvm="$project/examples/hello-jvm"
+          "$project/gradlew" -p "$jvm" "-Pktserve.version=$KTSERVE_VERSION" installDist
+          "$jvm/build/install/ktserve-hello-jvm/bin/ktserve-hello-jvm" 18080 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18080/health)" = ok
+      - name: Link and run the published Native consumers
+        run: |
+          project=components/ktserve
+          native="$project/examples/hello"
+          version="-Pktserve.version=$KTSERVE_VERSION"
+          "$project/gradlew" -p "$native" "$version" -Pbenchmark.targetOs=macos linkReleaseExecutableNative
+          "$native/build/macos/bin/native/releaseExecutable/hello.kexe" 18081 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18081/health)" = ok
+
+          mkdir -p "$RUNNER_TEMP/ktserve-linux-consumers"
+          for arch in x86_64 aarch64; do
+            "$project/gradlew" -p "$native" "$version" "-Pbenchmark.targetArch=$arch" linkReleaseExecutableNative
+            cp "$native/build/bin/native/releaseExecutable/hello.kexe" "$RUNNER_TEMP/ktserve-linux-consumers/$arch"
+          done
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ktserve-maven-${{ env.KTSERVE_VERSION }}
+          path: components/ktserve/build/maven-staging/${{ env.KTSERVE_VERSION }}/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ktserve-maven-linux-consumers
+          path: ${{ runner.temp }}/ktserve-linux-consumers/
+          if-no-files-found: error
+
+  linux-consumer:
+    needs: stage
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ktserve-maven-linux-consumers
+      - name: Run the published Linux consumer
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$ARCH"
+          chmod +x "$ARCH"
+          "./$ARCH" 18082 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18082/health)" = ok

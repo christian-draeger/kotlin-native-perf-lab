@@ -60,6 +60,8 @@ The [JVM starter](examples/hello-jvm) runs the same routing DSL and HTTP core wi
 
 Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `dev.perflab:ktserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `KTSERVE_BACKEND=nio` explicitly selects the JVM backend.
 
+The [Maven release guide](RELEASING.md) covers the versioned library and how to test it from a separate Gradle project.
+
 ## Use ktServe with a framework
 
 - [Ktor engine](integrations/ktor/README.md) on Kotlin/Native Linux and the JVM.
