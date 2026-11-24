@@ -186,7 +186,7 @@ private class KqueueTransport(
         if (poller < 0) return
 
         val wait = if (failure != null || queued > 0) 0 else timeoutMillis
-        val count = nativeserve_kqueue_poll(poller, events, BATCH_SIZE, wait)
+        val count = nativeserve_kqueue_poll(poller, events, wait)
         if (count < 0 && errno == EINTR) return
         checked(count, "kevent64 poll")
         repeat(count) { index ->
