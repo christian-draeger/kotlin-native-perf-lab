@@ -38,6 +38,10 @@ static inline void ns_close_socket(uint64_t socket) {
     if (socket != NS_INVALID_SOCKET) closesocket((SOCKET)socket);
 }
 
+static inline void ns_shutdown_send(uint64_t socket) {
+    shutdown((SOCKET)socket, SD_SEND);
+}
+
 static inline void ns_close_listener(ns_iocp *state) {
     ns_close_socket(state->listener);
     state->listener = INVALID_SOCKET;
