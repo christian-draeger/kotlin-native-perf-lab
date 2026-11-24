@@ -9,6 +9,7 @@ out="${1:?Usage: benchmark-worker-latency.sh OUTPUT_DIRECTORY}"
 export BENCHMARK_SUITE=workers
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
 mkdir -p "$out"
+python3 "$ROOT/scripts/worker-topology.py" "$SERVER_CPUS" "$LOAD_CPUS" > "$out/topology.json"
 {
   git -C "$ROOT" rev-parse HEAD
   printf 'reference_sha=%s\nserver_cpus=%s\nload_cpus=%s\n' "$NATIVESERVE_REFERENCE_SHA" "$SERVER_CPUS" "$LOAD_CPUS"
