@@ -18,14 +18,14 @@ private data class CatalogItem(val sku: String, val name: String, val descriptio
 @Serializable
 private data class Stock(val available: Boolean, val units: Int)
 
-internal fun Routes.parityRoutes(catalogWorkload: Boolean = false) {
+internal fun Routes.parityRoutes(suite: String? = null) {
     get("/health") { text("ok") }
     get("/json") { json(User(42, "benchmark-user", true)) }
     get("/users/{id}") { request ->
         val id = request.pathInt("id") ?: return@get badRequest()
         json(User(id, "benchmark-user", true))
     }
-    if (catalogWorkload) {
+    if (suite == "application" || suite == "application-mix") {
         get("/catalog/{id}") { request ->
             val id = request.pathInt("id") ?: return@get badRequest()
             json(Catalog(id, List(32) { index ->
@@ -36,4 +36,5 @@ internal fun Routes.parityRoutes(catalogWorkload: Boolean = false) {
             }))
         }
     }
+    if (suite == "application-mix") applicationMixRoutes()
 }

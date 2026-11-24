@@ -31,6 +31,7 @@ INTEGRATIONS = {
     "ktor-native": "Ktor Native",
     "ktor-jvm": "Ktor JVM",
     "spring-webflux": "Spring Boot WebFlux",
+    "application-mix": "Standalone application mix",
 }
 
 

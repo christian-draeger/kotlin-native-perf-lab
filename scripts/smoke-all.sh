@@ -38,7 +38,7 @@ for index in "${!variants[@]}"; do
     cat "$log" >&2
     exit 1
   fi
-  if [[ "$variant" == ktserve && "${BENCHMARK_SUITE:-core}" != application ]]; then
+  if [[ "$variant" == ktserve && "${BENCHMARK_SUITE:-core}" != application* ]]; then
     python3 "$ROOT/scripts/tests/ktserve_http_smoke.py" "$PORT"
     python3 "$ROOT/scripts/tests/ktserve_shutdown_smoke.py" "$PORT" "$server_pid"
     wait "$server_pid"

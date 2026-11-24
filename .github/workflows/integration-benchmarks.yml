@@ -8,6 +8,7 @@ on:
       - 'components/ktserve/src/**'
       - 'scripts/benchmark-integrations.py'
       - 'scripts/k6-integration.js'
+      - 'scripts/install-k6.sh'
       - 'scripts/parse_wrk.py'
       - 'scripts/proc_metrics.py'
       - 'scripts/wrk-stats.lua'
@@ -165,15 +166,8 @@ jobs:
             exit
           fi
           sudo apt-get install -y time
-          case "$EXPECTED_ARCH" in
-            x86_64) arch=amd64; digest=5a5ecf23529ccf93135bc7e5b0c1cd5126ecf5f2672e22eed1556a0ab74abb87 ;;
-            aarch64) arch=arm64; digest=7bb415f59d81ad649a86f6da6b3e1bd2e4e64e84909deef13e9bca70608abccb ;;
-          esac
-          asset="k6-v2.4.0-linux-$arch.tar.gz"
-          curl -fsSL --retry 3 "https://github.com/grafana/k6/releases/download/v2.4.0/$asset" -o "$RUNNER_TEMP/$asset"
-          printf '%s  %s\n' "$digest" "$RUNNER_TEMP/$asset" | sha256sum --strict -c -
-          tar -xzf "$RUNNER_TEMP/$asset" --strip-components=1 -C "$RUNNER_TEMP" "k6-v2.4.0-linux-$arch/k6"
-          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          printf '%s\n' "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
       - name: Measure the engines in isolation
         if: github.event_name == 'workflow_dispatch'
         id: measure

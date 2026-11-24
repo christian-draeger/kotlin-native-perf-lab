@@ -8,7 +8,8 @@ http2 = ["axum/http2"]
 
 [dependencies]
 axum = { version = "=0.8.9", features = ["json"] }
-tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "net"] }
+futures-util = { version = "0.3", default-features = false }
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "net", "time"] }
 serde = { version = "1", features = ["derive"] }
 
 [profile.release]
