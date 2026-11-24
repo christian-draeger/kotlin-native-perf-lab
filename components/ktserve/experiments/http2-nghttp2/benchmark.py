@@ -48,7 +48,12 @@ def wait_for_json(server, url, path, certificate=None):
 
 
 def load(log, prefix, url, streams, duration, requests=None):
-    protocol = ["--alpn-list=h2"] if url.startswith("https://") else ["-p", "h2c"]
+    tls = url.startswith("https://")
+    protocol = ["--alpn-list=h2"] if tls else ["-p", "h2c"]
+    env = {**os.environ, "LC_ALL": "C"}
+    if tls:
+        # The hosted h2load aborted in libev's epoll teardown with concurrent TLS streams.
+        env["LIBEV_FLAGS"] = "2"  # EVBACKEND_POLL
     command = [
         "taskset", "-c", prefix, "/usr/bin/time", "-f", "load_time %U %S %e %M",
         "h2load", *protocol, "-c", str(CONNECTIONS), "-m", str(streams),
@@ -58,7 +63,7 @@ def load(log, prefix, url, streams, duration, requests=None):
         command.append(f"--log-file={requests}")
     with log.open("w") as output:
         subprocess.run([*command, url], stdout=output, stderr=subprocess.STDOUT,
-                       timeout=duration + 15, check=True, env={**os.environ, "LC_ALL": "C"})
+                       timeout=duration + 15, check=True, env=env)
     return log.read_text()
 
 
@@ -284,6 +289,7 @@ def main():
         ):
             output.write(command_output(*command) + "\n")
         if args.caddy:
+            output.write("h2load_libev_backend=poll\n")
             output.write(command_output(str(args.caddy), "version") + "\n")
             output.write(command_output("openssl", "version") + "\n")
     verify_socket_options(args)
