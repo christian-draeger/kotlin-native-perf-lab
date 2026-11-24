@@ -8,6 +8,7 @@ import dev.perflab.nativeserve.Request
 import dev.perflab.nativeserve.RequestBodySink
 import dev.perflab.nativeserve.Response
 import dev.perflab.nativeserve.ResponseSource
+import dev.perflab.nativeserve.ResponseStream
 import dev.perflab.nativeserve.Routes
 import dev.perflab.nativeserve.ServerLimits
 import dev.perflab.nativeserve.emptyResponse
@@ -310,14 +311,14 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
     private fun respond(stream: Int, head: RequestHead, response: Response) {
         head.responded = true
         val source = response.stream
+        if (source is ResponseStream.Produce) {
+            session.respond(stream, 501, ByteArray(0), contentType = null)
+            return
+        }
         if ((source?.length ?: response.body.size) > limits.responseBodyBytes ||
             response.applicationHeaderBytes > limits.responseHeaderBytes
         ) {
-            try {
-                source?.source?.close()
-            } catch (_: Exception) {
-                // A rejected source has no pending writes.
-            }
+            source?.discard()
             session.respond(stream, 500, ByteArray(0), contentType = null)
             return
         }
@@ -325,7 +326,7 @@ private class H2cConnection(private val routes: Routes, private val limits: Serv
         val fields = if (response.status == 405 && allowed != null) {
             response.fields + HttpField("allow", allowed)
         } else response.fields
-        if (source != null) {
+        if (source is ResponseStream.Pull) {
             session.respond(
                 stream, response.status, response.contentType, source.source, source.length, limits.responseBodyBytes, fields,
             )

@@ -106,7 +106,14 @@ fun interface ResponseSource : AutoCloseable {
     override fun close() {}
 }
 
-internal class ResponseStream(val length: Int?, val source: ResponseSource)
+internal sealed class ResponseStream(val length: Int?) {
+    class Pull(length: Int?, val source: ResponseSource) : ResponseStream(length)
+    class Produce(length: Int?, val producer: suspend ResponseWriter.() -> Unit) : ResponseStream(length)
+
+    fun discard() {
+        if (this is Pull) source.release()
+    }
+}
 
 /**
  * Stream a body with a known byte length. Pass a fresh [source] per response.
@@ -125,7 +132,23 @@ fun streamResponse(contentType: String, source: ResponseSource, status: Int = 20
 private fun sourceResponse(length: Int?, contentType: String, source: ResponseSource, status: Int): Response {
     require(status != 204 && status != 205 && status != 304) { "This response status forbids content" }
     requireContentType(contentType)
-    return Response(status, contentType, ByteArray(0), ResponseStream(length, source))
+    return Response(status, contentType, ByteArray(0), ResponseStream.Pull(length, source))
+}
+
+/**
+ * Stream an HTTP/1.x response from a suspending producer. A null length uses HTTP/1.1 chunked framing.
+ * Acquire body resources inside the producer, which starts only when a response body can be sent.
+ */
+fun streamSuspending(
+    length: Int? = null,
+    contentType: String? = null,
+    status: Int = 200,
+    producer: suspend ResponseWriter.() -> Unit,
+): Response {
+    require(length == null || length >= 0) { "Response length must be nonnegative" }
+    require(status != 204 && status != 205 && status != 304) { "This response status forbids content" }
+    requireContentType(contentType)
+    return Response(status, contentType, ByteArray(0), ResponseStream.Produce(length, producer), allowedMethods = null)
 }
 
 fun text(value: String, status: Int = 200): Response =

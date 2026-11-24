@@ -20,6 +20,61 @@ import kotlin.test.assertTrue
 
 class JvmServerTest {
     @Test
+    fun suspendingResponseKeepsOrderAndOtherConnectionsProgress() {
+        val ready = CompletableDeferred<Unit>()
+        withServer(ServerLimits(), routes = {
+            get("/slow") {
+                streamSuspending(length = 3) {
+                    write(byteArrayOf('a'.code.toByte()))
+                    ready.await()
+                    write("bc".encodeToByteArray())
+                }
+            }
+        }) { port, _ ->
+            client(port).use { socket ->
+                socket.send("GET /slow HTTP/1.1\r\nHost: localhost\r\n\r\n" +
+                    "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                val input = socket.getInputStream().buffered()
+                assertEquals(3, input.responseLength(200))
+                assertEquals('a'.code, input.read())
+                client(port).use { other ->
+                    other.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    assertEquals("ok", other.getInputStream().buffered().response())
+                }
+                ready.complete(Unit)
+                assertEquals("bc", input.readNBytes(2).decodeToString())
+                assertEquals("ok", input.response())
+                assertEquals(-1, input.read())
+            }
+        }
+    }
+
+    @Test
+    fun disconnectCancelsAWaitingResponseProducer() {
+        val started = CompletableFuture<Unit>()
+        val cancelled = CompletableFuture<Unit>()
+        withServer(ServerLimits(), routes = {
+            get("/cancel") {
+                streamSuspending(length = 1) {
+                    try {
+                        started.complete(Unit)
+                        awaitCancellation()
+                    } finally {
+                        cancelled.complete(Unit)
+                    }
+                }
+            }
+        }) { port, _ ->
+            client(port).use { socket ->
+                socket.send("GET /cancel HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                assertEquals(1, socket.getInputStream().buffered().responseLength(200))
+                started.get(5, TimeUnit.SECONDS)
+            }
+            cancelled.get(5, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
     fun streamsApplicationBodiesAcrossBackpressureAndAcceptsNonPostMethods() {
         val reading = CompletableDeferred<Unit>()
         val entered = CompletableFuture<Unit>()
@@ -264,6 +319,13 @@ class JvmServerTest {
     }
 
     private fun BufferedInputStream.response(status: Int = 200): String {
+        val size = responseLength(status)
+        val body = readNBytes(size)
+        assertEquals(size, body.size)
+        return body.decodeToString()
+    }
+
+    private fun BufferedInputStream.responseLength(status: Int): Int {
         val reader = this
         fun line(): String = buildString {
             while (true) {
@@ -281,9 +343,6 @@ class JvmServerTest {
             if (header.isEmpty()) break
             if (header.startsWith("Content-Length: ")) length = header.substringAfter(": ").toInt()
         }
-        val size = checkNotNull(length)
-        val body = readNBytes(size)
-        assertEquals(size, body.size)
-        return body.decodeToString()
+        return checkNotNull(length)
     }
 }

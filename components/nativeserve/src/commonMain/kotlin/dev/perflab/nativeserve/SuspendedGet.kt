@@ -26,5 +26,5 @@ internal class SuspendedGet(scope: CoroutineScope, handler: suspend () -> Respon
 }
 
 private fun Response.releaseSource() {
-    stream?.source?.release()
+    stream?.discard()
 }
