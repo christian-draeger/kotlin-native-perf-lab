@@ -1,0 +1,106 @@
+name: ktServe CPU-budget comparison
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/cpu-budget.yml'
+      - 'scripts/benchmark-cpu-budget.sh'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  arm_native:
+    uses: ./.github/workflows/arm-native.yml
+    with:
+      reuse_smoke: true
+
+  compare:
+    name: HTTP/1.1 JSON (${{ matrix.arch }})
+    needs: arm_native
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    env:
+      LC_ALL: C
+      EXPECTED_ARCH: ${{ matrix.arch }}
+      RUSTUP_TOOLCHAIN: '1.100.0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: |
+            competitors/kotlin-jvm/pom.xml
+            competitors/kotlin-jvm/micronaut/pom.xml
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        if: matrix.arch == 'x86_64'
+        with:
+          gradle-version: '9.7.0'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.arch == 'aarch64'
+        with:
+          artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
+          run-id: ${{ needs.arm_native.outputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/ktserve-arm-build
+      - name: Build the three release servers and install wrk
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk time
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          cargo build --manifest-path competitors/rust-axum/Cargo.toml --release --locked
+          project=components/nativeserve
+          binary="$project/build/bin/native/releaseExecutable/nativeserve.kexe"
+          if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
+            install -D "$RUNNER_TEMP/ktserve-arm-build/nativeserve.kexe" "$binary"
+          else
+            bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
+          fi
+          pom=competitors/kotlin-jvm/micronaut/pom.xml
+          log="$RUNNER_TEMP/micronaut-build.log"
+          if ! mvn -B -ntp -f "$pom" package 2>&1 | tee "$log"; then
+            grep -Eq '(\[ERROR\]|\[FATAL\]).*https://repo\.maven\.apache\.org/maven2.*(HTTP Status|status code): 429([^0-9]|$)' "$log"
+            mvn -B -ntp --settings scripts/ci-maven-central-mirror.xml -f "$pom" package
+          fi
+      - name: Verify and measure the worker configurations
+        id: measure
+        env:
+          RUNS: ${{ github.event_name == 'pull_request' && '1' || '3' }}
+          WARMUP: ${{ github.event_name == 'pull_request' && '3' || '15' }}
+          DURATION: ${{ github.event_name == 'pull_request' && '2' || '5' }}
+        run: |
+          result="$RUNNER_TEMP/cpu-budget"
+          mkdir -p "$result"
+          {
+            printf 'benchmark_source=github-hosted-actions\nrunner_label=%s\n' "${{ matrix.runner }}"
+            printf 'ci_run_id=%s\nci_run_attempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'ci_event=%s\n' "$GITHUB_EVENT_NAME"
+            rustc -Vv
+            cargo --version
+            mvn --version
+            grep -m1 'kotlin("multiplatform") version' components/nativeserve/build.gradle.kts
+          } > "$result/build-environment.txt"
+          bash scripts/benchmark-cpu-budget.sh "$result"
+          cat "$result/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() && (steps.measure.outcome == 'success' || steps.measure.outcome == 'failure') }}
+        with:
+          name: cpu-budget-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/cpu-budget
+          if-no-files-found: error
