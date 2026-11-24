@@ -26,7 +26,7 @@ METRICS = {
     "rss": ("peak_rss_kib", 1024),
 }
 PARAMETERS = ("connections", "threads", "warmup_s", "target_duration_s")
-EXTRA_PARAMETERS = ("offered_rate", "vus_per_scenario")
+EXTRA_PARAMETERS = ("offered_rate", "vus_per_scenario", "precondition_s")
 INTEGRATIONS = {
     "ktor-native": "Ktor Native",
     "ktor-jvm": "Ktor JVM",

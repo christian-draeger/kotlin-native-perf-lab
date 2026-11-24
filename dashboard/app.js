@@ -734,6 +734,7 @@ function startIntegration() {
         ["connections", " connections"],
         ["threads", " wrk threads"],
         ["vus_per_scenario", " max VUs per scenario"],
+        ["precondition_s", " s cold-start load"],
         ["warmup_s", " s warm-up"],
         ["target_duration_s", " s trial"],
       ].flatMap(([key, label]) => run.parameters[key]?.length ? [run.parameters[key].join(" / ") + label] : []),
