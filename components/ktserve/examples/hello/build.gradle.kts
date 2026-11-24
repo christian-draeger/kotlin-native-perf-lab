@@ -28,11 +28,11 @@ kotlin {
     }
     native.binaries.executable {
         baseName = "hello"
-        entryPoint = "dev.perflab.examples.hello.main"
+        entryPoint = "io.github.christian_draeger.examples.hello.main"
     }
     sourceSets.named("nativeMain") {
         dependencies {
-            implementation(if (stagedVersion == null) "dev.perflab:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
+            implementation(if (stagedVersion == null) "io.github.christian-draeger:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
         }
     }
 }

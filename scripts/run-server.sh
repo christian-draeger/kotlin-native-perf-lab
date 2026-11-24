@@ -6,7 +6,7 @@ case "$variant" in
   ktor-jvm)
     jar="$ROOT/competitors/ktor/build/jvmDist/app.jar"
     [[ -f "$jar" ]] || { echo 'Missing JVM build. Run scripts/build-all.sh' >&2; exit 1; }
-    exec java ${JAVA_OPTS:-} -cp "$jar:$ROOT/competitors/ktor/build/jvmDist/lib/*" dev.perflab.MainJvmKt
+    exec java ${JAVA_OPTS:-} -cp "$jar:$ROOT/competitors/ktor/build/jvmDist/lib/*" io.github.christian_draeger.MainJvmKt
     ;;
   ktor-native)
     bin="$ROOT/competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe"
@@ -74,7 +74,7 @@ case "$variant" in
     ;;
   vertx|micronaut|http4k|javalin)
     app="$ROOT/competitors/kotlin-jvm/$variant/target"
-    exec java ${JAVA_OPTS:-} -cp "$app/app.jar:$app/lib/*" dev.perflab.ApplicationKt
+    exec java ${JAVA_OPTS:-} -cp "$app/app.jar:$app/lib/*" io.github.christian_draeger.ApplicationKt
     ;;
   *) echo "Unknown variant: $variant" >&2; exit 2 ;;
 esac

@@ -11,11 +11,11 @@ kotlin.sourceSets.main {
 }
 
 dependencies {
-    implementation("dev.perflab:ktserve-ktor")
+    implementation("io.github.christian-draeger:ktserve-ktor")
     implementation("io.ktor:ktor-server-cio:3.6.1")
     implementation("io.ktor:ktor-server-netty:3.6.1")
     implementation("io.ktor:ktor-server-content-negotiation:3.6.1")
     implementation("io.ktor:ktor-serialization-kotlinx-json:3.6.1")
 }
 
-application { mainClass.set("dev.perflab.ktserve.ktor.example.BenchmarkKt") }
+application { mainClass.set("io.github.christian_draeger.ktserve.ktor.example.BenchmarkKt") }

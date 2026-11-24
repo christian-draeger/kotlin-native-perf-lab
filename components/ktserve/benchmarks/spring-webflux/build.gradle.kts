@@ -5,6 +5,6 @@ plugins {
 
 repositories { mavenCentral() }
 
-dependencies { implementation("dev.perflab:ktserve-spring-boot-starter") }
+dependencies { implementation("io.github.christian-draeger:ktserve-spring-boot-starter") }
 
-application { mainClass.set("dev.perflab.benchmark.spring.BenchmarkKt") }
+application { mainClass.set("io.github.christian_draeger.benchmark.spring.BenchmarkKt") }

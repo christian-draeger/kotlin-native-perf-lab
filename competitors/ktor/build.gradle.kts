@@ -25,7 +25,7 @@ kotlin {
         os == "Mac OS X" && arch == "x86_64" -> macosX64("native")
         else -> error("Unsupported Kotlin/Native benchmark host: $os $arch")
     }
-    nativeTarget.binaries.executable { entryPoint = "dev.perflab.main" }
+    nativeTarget.binaries.executable { entryPoint = "io.github.christian_draeger.main" }
 
     sourceSets {
         commonMain.dependencies {

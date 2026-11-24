@@ -1,6 +1,6 @@
-package dev.perflab.benchmark.spring
+package io.github.christian_draeger.benchmark.spring
 
-import dev.perflab.ktserve.spring.KtServeWebServerFactory
+import io.github.christian_draeger.ktserve.spring.KtServeWebServerFactory
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory
 import org.springframework.boot.runApplication

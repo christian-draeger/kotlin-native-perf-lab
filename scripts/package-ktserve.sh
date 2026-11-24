@@ -4,6 +4,7 @@ set -euo pipefail
 binary="${1:?Usage: package-ktserve.sh EXECUTABLE VERSION OUTPUT_DIRECTORY}"
 version="${2:?Missing version}"
 output="${3:?Missing output directory}"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export LC_ALL=C
 
 if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]]; then
@@ -41,6 +42,7 @@ stage="$(mktemp -d "$output/.ktserve.XXXXXXXX")"
 trap 'rm -rf "$stage"' EXIT
 archive="ktserve-$version-$platform-$arch.tar.gz"
 install -m 0755 "$binary" "$stage/ktserve"
+install -m 0644 "$root/LICENSE" "$stage/LICENSE"
 cat > "$stage/compatibility.txt" <<EOF
 ktServe $version
 Target: $target
@@ -56,12 +58,12 @@ chmod 0644 "$stage/compatibility.txt"
   cd "$stage"
   if [[ "$platform" == linux ]]; then
     tar --format=ustar --mtime=@0 --owner=0 --group=0 --numeric-owner \
-      -cf - compatibility.txt ktserve | gzip -n > "$archive"
+      -cf - LICENSE compatibility.txt ktserve | gzip -n > "$archive"
     sha256sum "$archive" > "$archive.sha256"
   else
-    TZ=UTC touch -t 197001010000.00 compatibility.txt ktserve
+    TZ=UTC touch -t 197001010000.00 LICENSE compatibility.txt ktserve
     COPYFILE_DISABLE=1 tar -cf - --format ustar --uid 0 --gid 0 --uname root --gname wheel \
-      compatibility.txt ktserve | gzip -n > "$archive"
+      LICENSE compatibility.txt ktserve | gzip -n > "$archive"
     shasum -a 256 "$archive" > "$archive.sha256"
   fi
 )

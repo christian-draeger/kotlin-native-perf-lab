@@ -14,9 +14,9 @@ repositories {
 }
 
 dependencies {
-    implementation(if (stagedVersion == null) "dev.perflab:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
+    implementation(if (stagedVersion == null) "io.github.christian-draeger:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
 }
 
 application {
-    mainClass.set("dev.perflab.examples.hello.MainKt")
+    mainClass.set("io.github.christian_draeger.examples.hello.MainKt")
 }
