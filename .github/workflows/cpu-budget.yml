@@ -70,6 +70,7 @@ jobs:
           merge-multiple: true
           path: ${{ runner.temp }}/ktserve-arm-build
       - name: Build the three release servers and install the load tools
+        shell: bash
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
           sudo apt-get update -qq
