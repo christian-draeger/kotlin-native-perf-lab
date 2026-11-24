@@ -10,6 +10,7 @@ class Request internal constructor(
     val bodyLength: Int? = 0,
     private val rawHead: String? = null,
     private val decodedFields: List<HttpField> = emptyList(),
+    val version: String = "HTTP/1.1",
 ) {
     fun pathParameter(name: String): String? = parameters[name]
 
@@ -50,7 +51,7 @@ class Request internal constructor(
     }
 
     internal fun withParameters(values: Map<String, String>) =
-        Request(method, path, query, values, bodyLength, rawHead, decodedFields)
+        Request(method, path, query, values, bodyLength, rawHead, decodedFields, version)
 }
 
 class Response internal constructor(

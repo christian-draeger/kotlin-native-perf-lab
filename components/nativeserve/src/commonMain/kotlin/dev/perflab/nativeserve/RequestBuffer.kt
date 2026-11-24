@@ -145,7 +145,10 @@ private fun parseHead(head: String, consumed: Int, allowAnyRequestBody: Boolean)
     val path = head.substring(targetStart, queryStart)
     val query = if (queryStart == targetEnd) null else head.substring(queryStart + 1, targetEnd)
     return ParsedHead.Complete(
-        Request(head.substring(0, methodEnd), path, query, bodyLength = if (chunked) null else bodyLength, rawHead = head),
+        Request(
+            head.substring(0, methodEnd), path, query,
+            bodyLength = if (chunked) null else bodyLength, rawHead = head, version = version,
+        ),
         version,
         !close && (version == "HTTP/1.1" || keepAlive),
         consumed,
