@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-operation="${1:?Usage: publish-ktserve-maven.sh submit|verify VERSION BUNDLE|DEPLOYMENT_ID}"
+operation="${1:?Usage: publish-ktserve-maven.sh submit|verify|public VERSION [BUNDLE|DEPLOYMENT_ID]}"
 version="${2:?Provide the release version}"
-argument="${3:?Provide the signed bundle ZIP or deployment ID}"
-: "${MAVEN_CENTRAL_USERNAME:?Configure the Central Portal token username}"
-: "${MAVEN_CENTRAL_PASSWORD:?Configure the Central Portal token password}"
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || grep -iq -- '-snapshot$' <<< "$version"; then
   echo 'Provide a release version.' >&2
   exit 1
@@ -13,8 +10,13 @@ fi
 
 portal='https://central.sonatype.com/api/v1/publisher'
 repository='https://repo.maven.apache.org/maven2/codes/draeger'
-bearer="$(printf '%s:%s' "$MAVEN_CENTRAL_USERNAME" "$MAVEN_CENTRAL_PASSWORD" | base64 | tr -d '\n')"
-unset MAVEN_CENTRAL_USERNAME MAVEN_CENTRAL_PASSWORD
+
+if [[ "$operation" == submit || "$operation" == verify ]]; then
+  : "${MAVEN_CENTRAL_USERNAME:?Configure the Central Portal token username}"
+  : "${MAVEN_CENTRAL_PASSWORD:?Configure the Central Portal token password}"
+  bearer="$(printf '%s:%s' "$MAVEN_CENTRAL_USERNAME" "$MAVEN_CENTRAL_PASSWORD" | base64 | tr -d '\n')"
+  unset MAVEN_CENTRAL_USERNAME MAVEN_CENTRAL_PASSWORD
+fi
 portal_request() {
   printf 'header = "Authorization: Bearer %s"\n' "$bearer" |
     curl --config - --silent --show-error --fail --connect-timeout 15 --max-time 90 "$@"
@@ -29,7 +31,7 @@ deployment_id_pattern='^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigi
 
 case "$operation" in
   submit)
-    bundle="$argument"
+    bundle="${3:?Provide the signed bundle ZIP}"
     test -f "$bundle"
     status="$(central_status "$repository/ktserve/$version/ktserve-$version.pom")"
     if [[ "$status" != 404 ]]; then
@@ -52,36 +54,38 @@ case "$operation" in
     fi
     exit 0
     ;;
-  verify) deployment="$argument" ;;
-  *) echo 'Use submit or verify.' >&2; exit 1 ;;
+  verify) deployment="${3:?Provide the deployment ID returned by Central}" ;;
+  public) ;;
+  *) echo 'Use submit, verify or public.' >&2; exit 1 ;;
 esac
 
-if [[ ! "$deployment" =~ $deployment_id_pattern ]]; then
-  echo 'Provide the deployment ID returned by Central.' >&2
-  exit 1
-fi
-
-deadline=$((SECONDS + 45 * 60))
-previous_state=''
-while true; do
-  response="$(portal_request --retry 2 --retry-max-time 60 --request POST "$portal/status?id=$deployment")"
-  state="$(jq -er '.deploymentState' <<< "$response")"
-  if [[ "$state" != "$previous_state" ]]; then
-    echo "Central deployment $deployment: $state"
-    previous_state="$state"
-  fi
-  case "$state" in
-    PUBLISHED) break ;;
-    FAILED) jq -c '.errors // {}' <<< "$response" >&2; exit 1 ;;
-    PENDING|VALIDATING|VALIDATED|PUBLISHING) ;;
-    *) echo "Unexpected Central deployment status: $state" >&2; exit 1 ;;
-  esac
-  if (( SECONDS >= deadline )); then
-    echo "Central deployment $deployment is still $state. Rerun the failed verification job to resume checking it." >&2
+if [[ "$operation" == verify ]]; then
+  if [[ ! "$deployment" =~ $deployment_id_pattern ]]; then
+    echo 'Provide the deployment ID returned by Central.' >&2
     exit 1
   fi
-  sleep 20
-done
+  deadline=$((SECONDS + 45 * 60))
+  previous_state=''
+  while true; do
+    response="$(portal_request --retry 2 --retry-max-time 60 --request POST "$portal/status?id=$deployment")"
+    state="$(jq -er '.deploymentState' <<< "$response")"
+    if [[ "$state" != "$previous_state" ]]; then
+      echo "Central deployment $deployment: $state"
+      previous_state="$state"
+    fi
+    case "$state" in
+      PUBLISHED) exit 0 ;;
+      FAILED) jq -c '.errors // {}' <<< "$response" >&2; exit 1 ;;
+      PENDING|VALIDATING|VALIDATED|PUBLISHING) ;;
+      *) echo "Unexpected Central deployment status: $state" >&2; exit 1 ;;
+    esac
+    if (( SECONDS >= deadline )); then
+      echo "Central deployment $deployment is still $state. Rerun the failed verification job to resume checking it." >&2
+      exit 1
+    fi
+    sleep 20
+  done
+fi
 
 # PUBLISHED may precede propagation to the public CDN. Check metadata, binaries and signatures.
 deadline=$((SECONDS + 5 * 60))

@@ -44,7 +44,7 @@ Configure the GitHub `maven-central` environment for release tags matching `v*`.
 | `SIGNING_IN_MEMORY_KEY_ID` | The primary release key fingerprint. |
 | `SIGNING_IN_MEMORY_KEY_PASSWORD` | The release key passphrase when the key is protected. |
 
-If only verification fails, rerun the failed jobs to check the same deployment. If the upload step failed without returning an ID, check Central Portal before retrying the upload. Central versions are immutable. [Generate a Portal token](https://central.sonatype.org/publish/generate-portal-token/) · [Publisher API](https://central.sonatype.org/publish/publish-portal-api/)
+If only verification fails, rerun the failed jobs to check the same deployment. To repeat the public checks for an already published version, run **ktServe Maven staging** with that version and **Check an existing public release** selected. If the upload step failed without returning an ID, check Central Portal before retrying the upload. Central versions are immutable. [Generate a Portal token](https://central.sonatype.org/publish/generate-portal-token/) · [Publisher API](https://central.sonatype.org/publish/publish-portal-api/)
 
 ## Publish via the Central Portal
 
