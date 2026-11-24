@@ -17,12 +17,14 @@ if (!(rate > 0 && Number.isInteger(rate / 20) && duration > 0)) {
 const durations = {};
 const scenarios = {};
 for (const [name, config] of Object.entries(cases)) {
+  const arrivalsPerSecond = config.weight * rate / 100;
   durations[name] = new Trend(`bench_${name}_duration`, true);
   scenarios[name] = {
     executor: "constant-arrival-rate",
     duration: `${duration}s`,
-    rate: config.weight * rate / 100,
-    preAllocatedVUs: 16,
+    rate: arrivalsPerSecond,
+    // Allow for the frontend's 150 ms deadline and 50 ms of transfer or scheduling time.
+    preAllocatedVUs: Math.max(16, Math.ceil(arrivalsPerSecond * 0.2)),
     gracefulStop: "2s",
   };
 }

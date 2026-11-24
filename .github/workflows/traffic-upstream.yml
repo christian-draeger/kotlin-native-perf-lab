@@ -55,7 +55,11 @@ jobs:
           printf 'ci_run_id=%s\nci_run_attempt=%s\nci_event=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" > "$output/runner.txt"
           printf 'source_sha=%s\nrunner_image=%s\n' "$GITHUB_SHA" "${ImageVersion:-unknown}" >> "$output/runner.txt"
           python3 scripts/benchmark-upstream.py "$output/parity" --smoke-only
-          python3 scripts/benchmark-upstream.py "$output"
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            python3 scripts/benchmark-upstream.py "$output" --rates 800
+          else
+            python3 scripts/benchmark-upstream.py "$output"
+          fi
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with:

@@ -145,7 +145,12 @@ def load(port, rate, seconds, cpus, prefix):
 
 
 def measure(args, cpus, origin, origin_port, frontend, front_port, prefix, variant, rate, repetition):
-    _, warmed, *_ = load(front_port, rate, args.warmup, cpus, prefix.with_name(prefix.name + "-warmup"))
+    _, _, cold_dropped, cold_mismatches, _, _ = load(
+        front_port, rate, args.precondition, cpus, prefix.with_name(prefix.name + "-precondition"),
+    )
+    _, warmed, warm_dropped, warm_mismatches, _, _ = load(
+        front_port, rate, args.warmup, cpus, prefix.with_name(prefix.name + "-warmup"),
+    )
     before = origin_stats(origin_port)
     server_cpu, _, _ = proc(frontend)
     origin_cpu, _, _ = proc(origin)
@@ -157,6 +162,8 @@ def measure(args, cpus, origin, origin_port, frontend, front_port, prefix, varia
         "variant": variant, "offered_rate": rate, "run": repetition, "duration_s": args.duration,
         "valid": int(warmed and valid), "http_requests": requests, "dropped_arrivals": dropped,
         "response_mismatches": mismatches, "server_cpu_seconds": round(server_end - server_cpu, 6),
+        "precondition_dropped_arrivals": cold_dropped, "precondition_mismatches": cold_mismatches,
+        "warmup_valid": int(warmed), "warmup_dropped_arrivals": warm_dropped, "warmup_mismatches": warm_mismatches,
         "server_peak_rss_kib": server_peak, "origin_cpu_seconds": round(origin_end - origin_cpu, 6),
         "origin_peak_rss_kib": origin_peak, **generator,
     }
@@ -176,11 +183,13 @@ def main():
     parser.add_argument("--smoke-only", action="store_true")
     parser.add_argument("--variants", nargs="+", choices=VARIANTS, default=list(VARIANTS))
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800])
+    parser.add_argument("--precondition", type=int, default=15)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--duration", type=int, default=8)
     parser.add_argument("--repeats", type=int, default=3)
     args = parser.parse_args()
-    if any(rate < 20 or rate % 20 for rate in args.rates) or min(args.warmup, args.duration, args.repeats) < 1:
+    if (any(rate < 20 or rate % 20 for rate in args.rates)
+            or min(args.precondition, args.warmup, args.duration, args.repeats) < 1):
         parser.error("Use positive durations, repetitions and offered rates divisible by 20.")
     args.output.mkdir(parents=True, exist_ok=True)
     results = args.output / "upstream.csv"
@@ -195,7 +204,8 @@ def main():
         with (args.output / "environment.txt").open("w") as environment:
             print(f"machine={platform.machine()}\nkernel={platform.release()}", file=environment)
             print(f"server_cpus={server_cpus}\nload_cpus={load_cpus}\norigin_cpus={origin_cpus}", file=environment)
-            print(f"rates={args.rates} warmup={args.warmup} duration={args.duration} repeats={args.repeats}", file=environment)
+            print(f"rates={args.rates} precondition={args.precondition} warmup={args.warmup} "
+                  f"duration={args.duration} repeats={args.repeats}", file=environment)
             print("http_protocol=HTTP/1.1\norigin=loopback on the same host\nfrontend_deadline_ms=150", file=environment)
             environment.flush()
             for command in (["git", "rev-parse", "HEAD"], ["lscpu"], ["java", "-version"], ["gradle", "--version"],
