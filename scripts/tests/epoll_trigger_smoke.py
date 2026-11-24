@@ -6,7 +6,7 @@ import os
 import signal
 import sys
 
-from reactor_http_smoke import connect, response
+from ktserve_http_smoke import connect, response
 
 
 def main(port, pid):

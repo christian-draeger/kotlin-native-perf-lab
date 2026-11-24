@@ -66,30 +66,30 @@ jobs:
           ROOT="$PWD"
           source scripts/server-process.sh
           trap stop_server EXIT
-          log="$RUNNER_TEMP/nativeserve-workers.log"
-          for variant in nativeserve-workers-2 nativeserve-workers-2-reuseport; do
+          log="$RUNNER_TEMP/ktserve-workers.log"
+          for variant in ktserve-workers-2 ktserve-workers-2-reuseport; do
             start_server "$variant" "$log"
             ./scripts/smoke.sh "http://127.0.0.1:$PORT"
-            python3 scripts/tests/reactor_http_smoke.py "$PORT"
-            python3 scripts/tests/reactor_shutdown_smoke.py "$PORT" "$server_pid"
+            python3 scripts/tests/ktserve_http_smoke.py "$PORT"
+            python3 scripts/tests/ktserve_shutdown_smoke.py "$PORT" "$server_pid"
             wait "$server_pid"
             server_pid=''
             start_server "$variant" "$log"
             stop_server
           done
-      - name: Exercise reactor resource bounds
+      - name: Exercise ktServe resource bounds
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}
         run: |
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
-            fixture="$RUNNER_TEMP/arm-native/reactor-stress-fixture.kexe"
+            fixture="$RUNNER_TEMP/arm-native/ktserve-stress-fixture.kexe"
             chmod +x "$fixture"
           else
-            gradle -p components/nativeserve linkStressReleaseExecutableNative
-            fixture=components/nativeserve/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
+            gradle -p components/ktserve linkStressReleaseExecutableNative
+            fixture=components/ktserve/build/bin/native/stressReleaseExecutable/ktserve-stress-fixture.kexe
           fi
-          python3 scripts/tests/reactor_stress.py "$fixture"
-      - name: Verify the separate NativeServe consumer
+          python3 scripts/tests/ktserve_stress.py "$fixture"
+      - name: Verify the separate ktServe consumer
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}
         run: |
@@ -97,8 +97,8 @@ jobs:
             binary="$RUNNER_TEMP/arm-native/hello.kexe"
             chmod +x "$binary"
           else
-            example=components/nativeserve/examples/hello
-            ./components/nativeserve/gradlew -p "$example" linkReleaseExecutableNative
+            example=components/ktserve/examples/hello
+            ./components/ktserve/gradlew -p "$example" linkReleaseExecutableNative
             binary="$example/build/bin/native/releaseExecutable/hello.kexe"
           fi
           "$binary" 18080 &
@@ -106,26 +106,26 @@ jobs:
           trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
           base=http://127.0.0.1:18080
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health")" = ok
-          test "$(curl -fsS "$base/")" = 'Hello from NativeServe'
+          test "$(curl -fsS "$base/")" = 'Hello from ktServe'
           kill -0 "$pid"
-      - name: Verify and run the NativeServe release archive
+      - name: Verify and run the ktServe release archive
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}
         run: |
-          binary=components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+          binary=components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
           version="snapshot-${GITHUB_SHA:0:12}"
-          archive="nativeserve-$version-linux-$EXPECTED_ARCH.tar.gz"
-          package="$RUNNER_TEMP/nativeserve-release"
-          second_build="$RUNNER_TEMP/nativeserve-repack"
-          ./scripts/package-nativeserve.sh "$binary" "$version" "$package"
-          ./scripts/package-nativeserve.sh "$binary" "$version" "$second_build"
+          archive="ktserve-$version-linux-$EXPECTED_ARCH.tar.gz"
+          package="$RUNNER_TEMP/ktserve-release"
+          second_build="$RUNNER_TEMP/ktserve-repack"
+          ./scripts/package-ktserve.sh "$binary" "$version" "$package"
+          ./scripts/package-ktserve.sh "$binary" "$version" "$second_build"
           cmp "$package/$archive" "$second_build/$archive"
-          unpacked="$RUNNER_TEMP/nativeserve-unpacked"
+          unpacked="$RUNNER_TEMP/ktserve-unpacked"
           mkdir "$unpacked"
           (cd "$package" && sha256sum --strict -c "$archive.sha256")
           tar -xzf "$package/$archive" -C "$unpacked"
-          cmp "$binary" "$unpacked/nativeserve"
-          PORT=18081 "$unpacked/nativeserve" &
+          cmp "$binary" "$unpacked/ktserve"
+          PORT=18081 "$unpacked/ktserve" &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
           base=http://127.0.0.1:18081
@@ -134,6 +134,6 @@ jobs:
           kill -0 "$pid"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: nativeserve-linux-${{ inputs.arch }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/nativeserve-release
+          name: ktserve-linux-${{ inputs.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ktserve-release
           if-no-files-found: error

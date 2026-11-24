@@ -65,10 +65,10 @@ jobs:
           sudo apt-get install -y wrk time
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo build --manifest-path competitors/rust-axum/Cargo.toml --release --locked
-          project=components/nativeserve
-          binary="$project/build/bin/native/releaseExecutable/nativeserve.kexe"
+          project=components/ktserve
+          binary="$project/build/bin/native/releaseExecutable/ktserve.kexe"
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
-            install -D "$RUNNER_TEMP/ktserve-arm-build/nativeserve.kexe" "$binary"
+            install -D "$RUNNER_TEMP/ktserve-arm-build/ktserve.kexe" "$binary"
           else
             bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
           fi
@@ -94,7 +94,7 @@ jobs:
             rustc -Vv
             cargo --version
             mvn --version
-            grep -m1 'kotlin("multiplatform") version' components/nativeserve/build.gradle.kts
+            grep -m1 'kotlin("multiplatform") version' components/ktserve/build.gradle.kts
           } > "$result/build-environment.txt"
           bash scripts/benchmark-cpu-budget.sh "$result"
           cat "$result/summary.md" >> "$GITHUB_STEP_SUMMARY"

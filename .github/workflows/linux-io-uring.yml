@@ -1,14 +1,14 @@
-name: NativeServe Linux io_uring
+name: ktServe Linux io_uring
 
 on:
   pull_request:
     paths:
-      - 'components/nativeserve/experiments/linux-io-uring/**'
-      - 'components/nativeserve/src/commonMain/**'
-      - 'components/nativeserve/src/nativeMain/**'
-      - 'components/nativeserve/src/nativeShared/**'
-      - 'components/nativeserve/src/nativeStress/**'
-      - 'scripts/tests/reactor_*'
+      - 'components/ktserve/experiments/linux-io-uring/**'
+      - 'components/ktserve/src/commonMain/**'
+      - 'components/ktserve/src/nativeMain/**'
+      - 'components/ktserve/src/nativeShared/**'
+      - 'components/ktserve/src/nativeStress/**'
+      - 'scripts/tests/ktserve_*'
       - 'scripts/benchmark.sh'
       - 'scripts/benchmark-variants.sh'
       - 'scripts/run-server.sh'
@@ -36,7 +36,7 @@ jobs:
       - run: |
           sudo apt-get update -qq
           sudo apt-get install -y liburing-dev
-          source="$GITHUB_WORKSPACE/components/nativeserve/experiments/linux-io-uring/src/nativeInterop/cinterop/uring_transport.c"
+          source="$GITHUB_WORKSPACE/components/ktserve/experiments/linux-io-uring/src/nativeInterop/cinterop/uring_transport.c"
           cd "$RUNNER_TEMP"
           test "$(dpkg --print-architecture)" = arm64
           mkdir sdk
@@ -75,9 +75,9 @@ jobs:
           sudo apt-get install -y liburing-dev
           dpkg-query -W liburing-dev
           cat "$RUNNER_TEMP/arm-sdk/liburing-version.txt"
-          project=components/nativeserve/experiments/linux-io-uring
-          server="$project/build/bin/native/releaseExecutable/nativeserve-io-uring.kexe"
-          fixture="$project/build/bin/native/stressReleaseExecutable/nativeserve-io-uring-stress.kexe"
+          project=components/ktserve/experiments/linux-io-uring
+          server="$project/build/bin/native/releaseExecutable/ktserve-io-uring.kexe"
+          fixture="$project/build/bin/native/stressReleaseExecutable/ktserve-io-uring-stress.kexe"
           cc -D_GNU_SOURCE -Wall -Wextra -Werror -O3 -fPIC \
             -c "$project/src/nativeInterop/cinterop/uring_transport.c" -o "$RUNNER_TEMP/uring.o"
           gradle -p "$project" -Pbenchmark.targetArch=x86_64 -Pliburing.shim="$RUNNER_TEMP/uring.o" \
@@ -123,7 +123,7 @@ jobs:
           path: ${{ runner.temp }}/io-uring-arm
       - run: |
           chmod +x "$RUNNER_TEMP/io-uring-arm/"{server,fixture}
-          bash components/nativeserve/experiments/linux-io-uring/smoke.sh \
+          bash components/ktserve/experiments/linux-io-uring/smoke.sh \
             "$RUNNER_TEMP/io-uring-arm/server" "$RUNNER_TEMP/io-uring-arm/fixture"
 
   benchmark:
@@ -157,7 +157,7 @@ jobs:
           sudo apt-get install -y wrk
           chmod +x "$RUNNER_TEMP/candidate/server"
           export LIBURING_VERSION="$(awk 'NR == 1 { print $NF }' "$RUNNER_TEMP/candidate/liburing-version.txt")"
-          bash components/nativeserve/experiments/linux-io-uring/benchmark.sh \
+          bash components/ktserve/experiments/linux-io-uring/benchmark.sh \
             "$RUNNER_TEMP/candidate/server" "$RUNNER_TEMP/io-pair"
           while IFS= read -r -d '' summary; do cat "$summary" >> "$GITHUB_STEP_SUMMARY"; done \
             < <(find "$RUNNER_TEMP/io-pair" -name summary.md -print0)

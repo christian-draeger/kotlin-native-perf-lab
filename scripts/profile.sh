@@ -47,7 +47,7 @@ if [[ "${BENCHMARK_SUITE:-core}" == application ]]; then endpoint=/catalog/123; 
   sha256sum competitors/ktor/build/jvmDist/app.jar competitors/ktor/build/jvmDist/lib/*.jar \
     competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe \
     competitors/rust-axum/target/release/axum-baseline \
-    components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe
+    components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
 ) > "$out/binaries.sha256"
 
 check_load() {
@@ -56,7 +56,7 @@ check_load() {
     return 1
   fi
 }
-for variant in ktor-jvm ktor-native rust-axum kotlin-reactor; do
+for variant in ktor-jvm ktor-native rust-axum ktserve; do
   base="http://$BIND_HOST:$PORT"
   url="$base$endpoint"
   prefix="$out/$variant"

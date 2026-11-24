@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/epoll-trigger.yml'
-      - 'components/nativeserve/src/nativeMain/kotlin/dev/perflab/nativeserve/transport/EpollTransport.kt'
+      - 'components/ktserve/src/nativeMain/kotlin/dev/perflab/ktserve/transport/EpollTransport.kt'
       - 'scripts/benchmark-epoll-trigger.sh'
       - 'scripts/tests/epoll_trigger_smoke.py'
   workflow_dispatch:
@@ -61,14 +61,14 @@ jobs:
           test "$(uname -m)" = "$EXPECTED_ARCH"
           sudo apt-get update -qq
           sudo apt-get install -y wrk time
-          project=components/nativeserve
-          fixture="$RUNNER_TEMP/reactor-stress-fixture.kexe"
+          project=components/ktserve
+          fixture="$RUNNER_TEMP/ktserve-stress-fixture.kexe"
           if [[ "$EXPECTED_ARCH" == aarch64 ]]; then
-            install -D -m 755 "$RUNNER_TEMP/epoll-arm-build/nativeserve.kexe" "$project/build/bin/native/releaseExecutable/nativeserve.kexe"
-            install -m 755 "$RUNNER_TEMP/epoll-arm-build/reactor-stress-fixture.kexe" "$fixture"
+            install -D -m 755 "$RUNNER_TEMP/epoll-arm-build/ktserve.kexe" "$project/build/bin/native/releaseExecutable/ktserve.kexe"
+            install -m 755 "$RUNNER_TEMP/epoll-arm-build/ktserve-stress-fixture.kexe" "$fixture"
           else
             gradle -p "$project" linkReleaseExecutableNative linkStressReleaseExecutableNative
-            install -m 755 "$project/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe" "$fixture"
+            install -m 755 "$project/build/bin/native/stressReleaseExecutable/ktserve-stress-fixture.kexe" "$fixture"
           fi
       - name: Check queues, cancellation and shutdown, then measure both modes
         id: measure
@@ -78,17 +78,17 @@ jobs:
           DURATION: ${{ github.event_name == 'pull_request' && '2' || '5' }}
         run: |
           result="$RUNNER_TEMP/epoll-trigger"
-          bash scripts/benchmark-epoll-trigger.sh "$result" "$RUNNER_TEMP/reactor-stress-fixture.kexe"
+          bash scripts/benchmark-epoll-trigger.sh "$result" "$RUNNER_TEMP/ktserve-stress-fixture.kexe"
           cat "$result/summary.md" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify coroutine wake-ups in both peer modes
         run: |
           for trigger in level edge; do
             KTSERVE_EPOLL_APPLICATION_WAKEUP=eventfd KTSERVE_EPOLL_TRIGGER="$trigger" \
-              python3 scripts/tests/reactor_stress.py "$RUNNER_TEMP/reactor-stress-fixture.kexe"
+              python3 scripts/tests/ktserve_stress.py "$RUNNER_TEMP/ktserve-stress-fixture.kexe"
           done
       - name: Check eventfd close and descriptor reuse
         if: matrix.arch == 'x86_64' && github.event_name == 'pull_request'
-        run: gradle -p components/nativeserve nativeTest
+        run: gradle -p components/ktserve nativeTest
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ !cancelled() && (steps.measure.outcome == 'success' || steps.measure.outcome == 'failure') }}
         with:

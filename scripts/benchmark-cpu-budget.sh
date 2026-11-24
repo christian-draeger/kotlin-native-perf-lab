@@ -14,7 +14,7 @@ mkdir -p "$out"
 [[ ! -e "$out/results.csv" ]]
 unset LOAD_SSH BENCHMARK_SUITE
 export LC_ALL=C BIND_HOST=127.0.0.1 NO_PROXY=127.0.0.1 no_proxy=127.0.0.1
-export NATIVESERVE_WORKER_LISTENER=shared TOKIO_WORKER_THREADS=2
+export KTSERVE_WORKER_LISTENER=shared TOKIO_WORKER_THREADS=2
 base_java_opts="${JAVA_OPTS:-}"
 runs="${RUNS:-3}"
 warmup="${WARMUP:-15}"
@@ -70,7 +70,7 @@ git_sha="$(git -C "$ROOT" rev-parse HEAD)"
 } > "$out/environment.txt" 2>&1
 (
   cd "$ROOT"
-  sha256sum components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe \
+  sha256sum components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe \
     competitors/rust-axum/target/release/axum-baseline \
     competitors/kotlin-jvm/micronaut/target/app.jar \
     competitors/kotlin-jvm/micronaut/target/lib/*.jar
@@ -83,11 +83,11 @@ verify_workers() {
   done > "$prefix.tasks.txt"
   case "$variant" in
     ktserve-1-worker)
-      grep -Fxq 'NativeServe backend=epoll tcp=ipv4' "$prefix.server.txt"
+      grep -Fxq 'ktServe backend=epoll tcp=ipv4' "$prefix.server.txt"
       ;;
     ktserve-2-workers)
-      grep -Fxq 'NativeServe backend=epoll tcp=ipv4 workers=2' "$prefix.server.txt"
-      grep -Fxq 'NativeServe worker_listener=shared' "$prefix.server.txt"
+      grep -Fxq 'ktServe backend=epoll tcp=ipv4 workers=2' "$prefix.server.txt"
+      grep -Fxq 'ktServe worker_listener=shared' "$prefix.server.txt"
       ;;
     micronaut-*)
       expected=1
@@ -121,10 +121,10 @@ for ((run = 1; run <= runs; run++)); do
     export JAVA_OPTS="$base_java_opts"
     case "$variant" in
       ktserve-1-worker)
-        export NATIVESERVE_WORKERS=1
+        export KTSERVE_WORKERS=1
         launcher=ktserve
         ;;
-      ktserve-2-workers) launcher=nativeserve-workers-2 ;;
+      ktserve-2-workers) launcher=ktserve-workers-2 ;;
       axum-2-tokio-workers) launcher=rust-axum ;;
       micronaut-*)
         count=1

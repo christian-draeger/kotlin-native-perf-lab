@@ -14,7 +14,7 @@ const variants = {
   "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "kotlin" },
   "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "kotlin" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
-  "kotlin-reactor": { label: "ktServe", detail: "Kotlin/Native · HTTP server", color: "reactor" },
+  "ktserve": { label: "ktServe", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },
@@ -30,13 +30,13 @@ const variants = {
   http4k: { label: "http4k", detail: "Kotlin · Jetty", color: "kotlin" },
   javalin: { label: "Javalin", detail: "Kotlin · Jetty", color: "kotlin" },
   "ktor-native-cio": { label: "Ktor with CIO", detail: "Kotlin/Native", color: "kotlin" },
-  "ktor-native-ktserve": { label: "Ktor with ktServe", detail: "Kotlin/Native · epoll", color: "reactor" },
-  "ktor-native-ktserve-eventfd": { label: "Ktor with ktServe eventfd", detail: "Kotlin/Native · epoll", color: "reactor" },
+  "ktor-native-ktserve": { label: "Ktor with ktServe", detail: "Kotlin/Native · epoll", color: "ktserve" },
+  "ktor-native-ktserve-eventfd": { label: "Ktor with ktServe eventfd", detail: "Kotlin/Native · epoll", color: "ktserve" },
   "ktor-jvm-cio": { label: "Ktor with CIO", detail: "JVM", color: "kotlin" },
   "ktor-jvm-netty": { label: "Ktor with Netty", detail: "JVM", color: "kotlin" },
-  "ktor-jvm-ktserve": { label: "Ktor with ktServe", detail: "JVM · JDK NIO", color: "reactor" },
+  "ktor-jvm-ktserve": { label: "Ktor with ktServe", detail: "JVM · JDK NIO", color: "ktserve" },
   "spring-webflux-reactor-netty": { label: "WebFlux with Reactor Netty", detail: "Spring Boot · JVM", color: "kotlin" },
-  "spring-webflux-ktserve": { label: "WebFlux with ktServe", detail: "Spring Boot · JVM · JDK NIO", color: "reactor" },
+  "spring-webflux-ktserve": { label: "WebFlux with ktServe", detail: "Spring Boot · JVM · JDK NIO", color: "ktserve" },
 };
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium", timeStyle: "short",
@@ -295,7 +295,7 @@ function drawTimeChart(canvas, datasets, metric, { ranges = false, selectedTime 
 }
 
 function drawHistory(canvas, points, metric) {
-  const accent = palette("--reactor-accent");
+  const accent = palette("--ktserve-accent");
   drawTimeChart(canvas, [{
     label: "ktServe",
     data: points.map(({ run, values }) => chartPoint(run, values)),
@@ -353,7 +353,7 @@ function startHistory(runs) {
     element("history-workload").textContent = workloadLabel(profile);
     points = profile.runs.filter((entry) => entry.endpoints.includes(endpointSelect.value)).map((entry) => {
       const run = byId.get(entry.id);
-      const group = run.groups.find((item) => item.variant === "kotlin-reactor" && item.endpoint === endpointSelect.value);
+      const group = run.groups.find((item) => item.variant === "ktserve" && item.endpoint === endpointSelect.value);
       return { run, group, values: group.stats[metric] };
     });
     element("history-empty").hidden = Boolean(points.length);
@@ -419,7 +419,7 @@ function startHistory(runs) {
 
 function drawFrameworkHistory(canvas, samples, series, metric, selectedRun, highlighted) {
   const datasets = series.map(({ name, color, dash }) => {
-    const own = name === "kotlin-reactor";
+    const own = name === "ktserve";
     const visibleColor = highlighted && highlighted !== name ? color + "42" : color;
     return {
       label: variantInfo(name).label,
@@ -514,7 +514,7 @@ function startFrameworkHistory(runs) {
       new Option(utcDateFormat.format(new Date(run.date)) + " · " + groups.size + " stacks", run.id)));
     runSelect.value = latestFirst.reduce((best, sample) => sample.groups.size > best.groups.size ? sample : best).run.id;
     const buttons = [...endpoint.names].sort((a, b) =>
-      Number(b === "kotlin-reactor") - Number(a === "kotlin-reactor") || variantInfo(a).label.localeCompare(variantInfo(b).label));
+      Number(b === "ktserve") - Number(a === "ktserve") || variantInfo(a).label.localeCompare(variantInfo(b).label));
     series = buttons.map((name) => {
       const info = variantInfo(name);
       const button = make("button", "", "framework-button " + info.color);
@@ -538,7 +538,7 @@ function startFrameworkHistory(runs) {
     });
     element("framework-series").replaceChildren(...series.map(({ button }) => button));
     for (const entry of series) entry.color = getComputedStyle(entry.button).getPropertyValue("--series").trim();
-    visibility.hidden = !endpoint.names.has("kotlin-reactor") || series.length < 2;
+    visibility.hidden = !endpoint.names.has("ktserve") || series.length < 2;
     element("framework-caveat").textContent =
       (samples.some(({ run }) => run.ci_run_id) ? "Exploratory CI on matching runner CPU models. " : "")
       + "Points show measured medians. Each line connects that framework’s measured runs.";
@@ -564,7 +564,7 @@ function startFrameworkHistory(runs) {
   visibility.addEventListener("click", () => {
     const showAll = series.some(({ button }) => button.getAttribute("aria-pressed") === "false");
     for (const { name, button } of series) {
-      button.setAttribute("aria-pressed", String(showAll || name === "kotlin-reactor"));
+      button.setAttribute("aria-pressed", String(showAll || name === "ktserve"));
     }
     draw();
   });
@@ -668,7 +668,7 @@ function start() {
   element("run-picker").hidden = false;
   element("dashboard").hidden = false;
   element("details").hidden = false;
-  element("reactor-history").hidden = false;
+  element("ktserve-history").hidden = false;
   startFrameworkHistory(runs);
   startHistory(runs);
 }

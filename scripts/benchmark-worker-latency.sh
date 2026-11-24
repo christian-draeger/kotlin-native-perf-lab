@@ -12,7 +12,7 @@ mkdir -p "$out"
 python3 "$ROOT/scripts/worker-topology.py" "$SERVER_CPUS" "$LOAD_CPUS" > "$out/topology.json"
 {
   git -C "$ROOT" rev-parse HEAD
-  printf 'reference_sha=%s\nserver_cpus=%s\nload_cpus=%s\n' "$NATIVESERVE_REFERENCE_SHA" "$SERVER_CPUS" "$LOAD_CPUS"
+  printf 'reference_sha=%s\nserver_cpus=%s\nload_cpus=%s\n' "$KTSERVE_REFERENCE_SHA" "$SERVER_CPUS" "$LOAD_CPUS"
   printf '%s\n' 'Exploratory same-host comparison. HTTP/1.1 /json, at most 64 connections, 4s warm-up, 5s measured.'
   printf '%s\n' 'Client sample records user/system CPU, wall time and peak RSS. Compare requested rate, actual rate and HTTP 200 counts in the report.'
   vegeta -version
@@ -31,12 +31,12 @@ with socket.socket() as sock:
 PY
 }
 
-unset NATIVESERVE_WORKER_DIAGNOSTICS
-variants=(nativeserve-reference kotlin-reactor nativeserve-workers-2 rust-axum)
-diagnostic_variants=(nativeserve-workers-2)
+unset KTSERVE_WORKER_DIAGNOSTICS
+variants=(ktserve-reference ktserve ktserve-workers-2 rust-axum)
+diagnostic_variants=(ktserve-workers-2)
 if [[ "${COMPARE_WORKER_LISTENERS:-false}" == true ]]; then
-  variants+=(nativeserve-workers-2-reuseport)
-  diagnostic_variants+=(nativeserve-workers-2-reuseport)
+  variants+=(ktserve-workers-2-reuseport)
+  diagnostic_variants+=(ktserve-workers-2-reuseport)
 fi
 for rate in 20000 40000; do
   for run in 1 2 3; do
@@ -65,10 +65,10 @@ for rate in 20000 40000; do
   done
 done
 
-export NATIVESERVE_WORKER_DIAGNOSTICS=1
+export KTSERVE_WORKER_DIAGNOSTICS=1
 for variant in "${diagnostic_variants[@]}"; do
   prefix="$out/worker-distribution"
-  if [[ "$variant" == nativeserve-workers-2-reuseport ]]; then prefix="$prefix-reuseport"; fi
+  if [[ "$variant" == ktserve-workers-2-reuseport ]]; then prefix="$prefix-reuseport"; fi
   PORT="$(available_port)"
   export PORT
   start_server "$variant" "$prefix.server.txt"
@@ -77,6 +77,6 @@ for variant in "${diagnostic_variants[@]}"; do
       -connections=64 -max-connections=64 -timeout=2s -http2=false -max-body=0 |
     vegeta report -type=json > "$prefix.load.json"
   stop_server
-  grep -E '^NativeServe worker=[0-9]+ accepted=[0-9]+ requests=[0-9]+$' "$prefix.server.txt" > "$prefix.txt"
+  grep -E '^ktServe worker=[0-9]+ accepted=[0-9]+ requests=[0-9]+$' "$prefix.server.txt" > "$prefix.txt"
   test "$(wc -l < "$prefix.txt")" -eq 2
 done

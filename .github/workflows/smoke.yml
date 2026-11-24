@@ -20,8 +20,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - run: ./scripts/check-fast.sh --static
 
-  reactor_unit:
-    name: NativeServe JVM tests (${{ matrix.arch }})
+  ktserve_unit:
+    name: ktServe JVM tests (${{ matrix.arch }})
     strategy:
       fail-fast: false
       matrix:
@@ -38,20 +38,20 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
-      - run: ./components/nativeserve/gradlew -p components/nativeserve jvmTest
+      - run: ./components/ktserve/gradlew -p components/ktserve jvmTest
       - name: Verify a separate JVM consumer
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
-          example=components/nativeserve/examples/hello-jvm
-          ./components/nativeserve/gradlew -p "$example" installDist
-          "$example/build/install/nativeserve-hello-jvm/bin/nativeserve-hello-jvm" 18080 &
+          example=components/ktserve/examples/hello-jvm
+          ./components/ktserve/gradlew -p "$example" installDist
+          "$example/build/install/ktserve-hello-jvm/bin/ktserve-hello-jvm" 18080 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
           base=http://127.0.0.1:18080
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health")" = ok
-          test "$(curl -fsS "$base/")" = 'Hello from NativeServe on the JVM'
+          test "$(curl -fsS "$base/")" = 'Hello from ktServe on the JVM'
 
   x86_smoke:
     uses: ./.github/workflows/smoke-linux.yml

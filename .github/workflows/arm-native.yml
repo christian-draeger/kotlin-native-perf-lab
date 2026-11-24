@@ -88,18 +88,18 @@ jobs:
         run: |
           test "$(uname -m)" = x86_64
           gradle -p competitors/ktor -Pbenchmark.targetArch=aarch64 jvmDist linkReleaseExecutableNative
-          gradle -p components/nativeserve -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+          gradle -p components/ktserve -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
           mkdir "$RUNNER_TEMP/arm-native"
-          for executable in competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe; do
+          for executable in competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe; do
             readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
             cp "$executable" "$RUNNER_TEMP/arm-native/"
           done
           cp -R competitors/ktor/build/jvmDist "$RUNNER_TEMP/arm-native/"
           if [[ "$INCLUDE_SMOKE_FIXTURES" == true ]]; then
-            gradle -p components/nativeserve -Pbenchmark.targetArch=aarch64 linkStressReleaseExecutableNative
-            gradle -p components/nativeserve/examples/hello -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
-            fixture=components/nativeserve/build/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
-            hello=components/nativeserve/examples/hello/build/bin/native/releaseExecutable/hello.kexe
+            gradle -p components/ktserve -Pbenchmark.targetArch=aarch64 linkStressReleaseExecutableNative
+            gradle -p components/ktserve/examples/hello -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+            fixture=components/ktserve/build/bin/native/stressReleaseExecutable/ktserve-stress-fixture.kexe
+            hello=components/ktserve/examples/hello/build/bin/native/releaseExecutable/hello.kexe
             for executable in "$fixture" "$hello"; do
               readelf -h "$executable" | grep -E 'Machine:[[:space:]]+AArch64$'
               cp "$executable" "$RUNNER_TEMP/arm-native/"
