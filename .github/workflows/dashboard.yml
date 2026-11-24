@@ -30,9 +30,9 @@ on:
         options: ['3', '5']
         default: '5'
       suite:
-        description: Complete ranking or quicker ktServe, Ktor and Axum feedback
+        description: Complete ranking, core feedback, application JSON, or worker experiments
         type: choice
-        options: [expanded, core, workers]
+        options: [expanded, core, application, workers]
         default: expanded
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
@@ -62,23 +62,17 @@ jobs:
   benchmark:
     needs: arm_native
     if: ${{ !cancelled() && needs.arm_native.result != 'skipped' }}
-    name: benchmark (${{ matrix.arch }}, ${{ matrix.endpoint }})
+    name: benchmark (${{ matrix.arch }}, ${{ matrix.route }})
     strategy:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-        route: [health, json, users]
+        route: ${{ fromJSON(inputs.suite == 'application' && '["catalog"]' || '["health","json","users"]') }}
         include:
           - arch: x86_64
             runner: ubuntu-24.04
           - arch: aarch64
             runner: ubuntu-24.04-arm
-          - route: health
-            endpoint: /health
-          - route: json
-            endpoint: /json
-          - route: users
-            endpoint: /users/123
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     permissions:
@@ -90,7 +84,7 @@ jobs:
       EXPECTED_ARCH: ${{ matrix.arch }}
       BENCHMARK_SUITE: ${{ inputs.suite }}
       COMPARE_WORKER_LISTENERS: ${{ inputs.compare_worker_listeners }}
-      BENCHMARK_ENDPOINT: ${{ matrix.endpoint }}
+      BENCHMARK_ENDPOINT: ${{ matrix.route == 'catalog' && '/catalog/123' || matrix.route == 'users' && '/users/123' || format('/{0}', matrix.route) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -292,7 +286,7 @@ jobs:
               grep -Fxq "ci_run_id=$SOURCE_RUN" "$metadata"
               grep -Fxq "ci_run_attempt=$SOURCE_ATTEMPT" "$metadata"
             else
-              [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users)$ ]]
+              [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users|catalog)$ ]]
             fi
             series_count=$((series_count + 1))
             if [[ -e "results/$series" ]]; then

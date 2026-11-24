@@ -3,6 +3,7 @@ set -euo pipefail
 python3 - "${1:-http://127.0.0.1:8080}" <<'PY_CHECK'
 import http.client
 import json
+import os
 import sys
 from urllib.parse import urlsplit
 
@@ -11,13 +12,26 @@ connection_type = {"http": http.client.HTTPConnection, "https": http.client.HTTP
 connection = connection_type(base.netloc, timeout=5)
 connection.connect()
 socket = connection.sock
+cases = [
+    ("/health", 200, "text/plain", b"ok"),
+    ("/json", 200, "application/json", b'{"id":42,"name":"benchmark-user","active":true}'),
+    ("/users/123", 200, "application/json", b'{"id":123,"name":"benchmark-user","active":true}'),
+]
+if os.environ.get("BENCHMARK_SUITE") == "application":
+    for catalog_id in (123, 987):
+        items = [
+            {"sku": f"{catalog_id}-{index}", "name": f"Café item {index}",
+             "description": "Roasted in München and packed for delivery.",
+             "stock": {"available": index > 0, "units": index * 3}}
+            for index in range(32)
+        ]
+        body = json.dumps({"id": catalog_id, "items": items}, ensure_ascii=False, separators=(",", ":")).encode()
+        cases.append((f"/catalog/{catalog_id}", 200, "application/json", body))
+    cases.append(("/catalog/invalid", 400, None, None))
+cases.append(("/users/invalid", 400, None, None))
+
 try:
-    for path, expected_status, media_type, expected_body in (
-        ("/health", 200, "text/plain", b"ok"),
-        ("/json", 200, "application/json", b'{"id":42,"name":"benchmark-user","active":true}'),
-        ("/users/123", 200, "application/json", b'{"id":123,"name":"benchmark-user","active":true}'),
-        ("/users/invalid", 400, None, None),
-    ):
+    for path, expected_status, media_type, expected_body in cases:
         connection.request("GET", base.path.rstrip("/") + path)
         with connection.getresponse() as response:
             body = response.read()

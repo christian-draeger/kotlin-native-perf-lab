@@ -17,7 +17,7 @@ for variant in "${variants[@]}"; do
     cat "$log" >&2
     exit 1
   fi
-  if [[ "$variant" == kotlin-reactor ]]; then
+  if [[ "$variant" == kotlin-reactor && "${BENCHMARK_SUITE:-core}" != application ]]; then
     python3 "$ROOT/scripts/tests/reactor_http_smoke.py" "$PORT"
     python3 "$ROOT/scripts/tests/reactor_shutdown_smoke.py" "$PORT" "$server_pid"
     wait "$server_pid"

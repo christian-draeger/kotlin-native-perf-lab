@@ -57,6 +57,8 @@ jobs:
           ./scripts/build-all.sh
       - name: Check HTTP parity
         run: ./scripts/smoke-all.sh
+      - name: Verify the optional application workload
+        run: BENCHMARK_SUITE=application ./scripts/smoke-all.sh
       - name: Check epoll worker parity and shutdown
         env:
           PORT: '18079'
