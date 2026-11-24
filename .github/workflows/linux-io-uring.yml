@@ -1,0 +1,108 @@
+name: NativeServe Linux io_uring
+
+on:
+  pull_request:
+    paths:
+      - 'components/nativeserve/experiments/linux-io-uring/**'
+      - 'components/nativeserve/src/commonMain/**'
+      - 'components/nativeserve/src/nativeMain/**'
+      - 'components/nativeserve/src/nativeShared/**'
+      - 'components/nativeserve/src/nativeStress/**'
+      - 'scripts/tests/reactor_*'
+      - '.github/workflows/linux-io-uring.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm_sdk:
+    name: Prepare the Ubuntu ARM64 liburing SDK
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y liburing-dev
+          source="$GITHUB_WORKSPACE/components/nativeserve/experiments/linux-io-uring/src/nativeInterop/cinterop/uring_transport.c"
+          cd "$RUNNER_TEMP"
+          test "$(dpkg --print-architecture)" = arm64
+          mkdir sdk
+          cc -D_GNU_SOURCE -Wall -Wextra -Werror -O3 -fPIC -c "$source" -o sdk/uring.o
+          cp /usr/lib/aarch64-linux-gnu/liburing.a sdk/
+          cp /usr/share/doc/liburing-dev/copyright sdk/LICENSE.liburing
+          dpkg-query -W liburing-dev | tee sdk/liburing-version.txt
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: io-uring-sdk-arm64
+          path: ${{ runner.temp }}/sdk
+          if-no-files-found: error
+
+  build:
+    name: Build x86_64 and ARM64 and exercise x86_64
+    needs: arm_sdk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: io-uring-sdk-arm64
+          path: ${{ runner.temp }}/arm-sdk
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y liburing-dev
+          dpkg-query -W liburing-dev
+          cat "$RUNNER_TEMP/arm-sdk/liburing-version.txt"
+          project=components/nativeserve/experiments/linux-io-uring
+          server="$project/build/bin/native/releaseExecutable/nativeserve-io-uring.kexe"
+          fixture="$project/build/bin/native/stressReleaseExecutable/nativeserve-io-uring-stress.kexe"
+          cc -D_GNU_SOURCE -Wall -Wextra -Werror -O3 -fPIC \
+            -c "$project/src/nativeInterop/cinterop/uring_transport.c" -o "$RUNNER_TEMP/uring.o"
+          gradle -p "$project" -Pbenchmark.targetArch=x86_64 -Pliburing.shim="$RUNNER_TEMP/uring.o" \
+            -Pliburing.archive=/usr/lib/x86_64-linux-gnu/liburing.a linkReleaseExecutableNative linkStressReleaseExecutableNative
+          bash "$project/smoke.sh" "$server" "$fixture"
+          gradle -p "$project" -Pbenchmark.targetArch=aarch64 -Pliburing.shim="$RUNNER_TEMP/arm-sdk/uring.o" \
+            -Pliburing.archive="$RUNNER_TEMP/arm-sdk/liburing.a" \
+            linkReleaseExecutableNative linkStressReleaseExecutableNative
+          readelf -h "$server" | grep -E 'Machine:[[:space:]]+AArch64$'
+          readelf -h "$fixture" | grep -E 'Machine:[[:space:]]+AArch64$'
+          mkdir "$RUNNER_TEMP/io-uring-arm"
+          install -m 755 "$server" "$RUNNER_TEMP/io-uring-arm/server"
+          install -m 755 "$fixture" "$RUNNER_TEMP/io-uring-arm/fixture"
+          cp "$RUNNER_TEMP/arm-sdk/LICENSE.liburing" "$RUNNER_TEMP/io-uring-arm/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: io-uring-arm64
+          path: ${{ runner.temp }}/io-uring-arm
+          if-no-files-found: error
+
+  arm_smoke:
+    name: Exercise real ARM64 io_uring sockets
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: io-uring-arm64
+          path: ${{ runner.temp }}/io-uring-arm
+      - run: |
+          chmod +x "$RUNNER_TEMP/io-uring-arm/"{server,fixture}
+          bash components/nativeserve/experiments/linux-io-uring/smoke.sh \
+            "$RUNNER_TEMP/io-uring-arm/server" "$RUNNER_TEMP/io-uring-arm/fixture"

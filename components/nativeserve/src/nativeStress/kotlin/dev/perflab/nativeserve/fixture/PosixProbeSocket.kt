@@ -2,9 +2,11 @@
 
 package dev.perflab.nativeserve.fixture
 
+import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.ipv4SocketAddress
 import dev.perflab.nativeserve.transport.openPlatformTransport
 import kotlinx.cinterop.ByteVar
+import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
@@ -20,9 +22,11 @@ import platform.posix.send
 import platform.posix.sockaddr_in
 import platform.posix.socket
 
-internal fun probeTransport(port: Int): Unit = memScoped {
+internal fun probeTransport(port: Int) = probeTransport(port, MemScope::openPlatformTransport)
+
+internal fun probeTransport(port: Int, open: MemScope.(String, Int, Int) -> StreamTransport): Unit = memScoped {
     val address = ipv4SocketAddress("127.0.0.1", port)
-    val transport = openPlatformTransport("127.0.0.1", port, connectionLimit = 2)
+    val transport = open("127.0.0.1", port, 2)
     probeTransport(transport) {
         val fd = socket(AF_INET, SOCK_STREAM, 0)
         check(fd >= 0)

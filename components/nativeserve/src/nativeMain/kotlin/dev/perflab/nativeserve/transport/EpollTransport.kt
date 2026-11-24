@@ -126,9 +126,10 @@ internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
     return address
 }
 
-private fun MemScope.openListener(host: String, port: Int): Int {
+internal fun MemScope.openListener(host: String, port: Int, nonBlocking: Boolean = true): Int {
     val address = ipv4SocketAddress(host, port)
-    val listener = checked(socket(AF_INET, SOCK_STREAM or SOCK_NONBLOCK or SOCK_CLOEXEC, 0), "socket")
+    val mode = if (nonBlocking) SOCK_NONBLOCK else 0
+    val listener = checked(socket(AF_INET, SOCK_STREAM or mode or SOCK_CLOEXEC, 0), "socket")
     try {
         val reuse = alloc<IntVar>()
         reuse.value = 1

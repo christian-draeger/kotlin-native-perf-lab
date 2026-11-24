@@ -17,10 +17,12 @@ import kotlin.native.runtime.NativeRuntimeApi
 private const val BODY_BYTES = 8 * 1024 * 1024
 private const val STREAM_BYTES = BODY_BYTES - 3
 
+fun main(args: Array<String>) = runFixture(args, ::probeTransport)
+
 @OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class, ExperimentalAtomicApi::class)
-fun main(args: Array<String>) {
+internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
     if (args.firstOrNull() == "--transport") {
-        probeTransport(args[1].toInt())
+        transportProbe(args[1].toInt())
         return
     }
     val limits = ServerLimits(
