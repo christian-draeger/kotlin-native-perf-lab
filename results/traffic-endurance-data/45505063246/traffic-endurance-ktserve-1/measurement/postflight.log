@@ -1,0 +1,8 @@
+/health HTTP/1.1 200 Content-Type='text/plain; charset=UTF-8' Content-Length='2' Transfer-Encoding=None body_bytes=2
+/json HTTP/1.1 200 Content-Type='application/json' Content-Length='47' Transfer-Encoding=None body_bytes=47
+/users/123 HTTP/1.1 200 Content-Type='application/json' Content-Length='48' Transfer-Encoding=None body_bytes=48
+/catalog/123 HTTP/1.1 200 Content-Type='application/json' Content-Length='4445' Transfer-Encoding=None body_bytes=4445
+/catalog/987 HTTP/1.1 200 Content-Type='application/json' Content-Length='4445' Transfer-Encoding=None body_bytes=4445
+/catalog/invalid HTTP/1.1 400 Content-Type='' Content-Length='0' Transfer-Encoding=None body_bytes=0
+/users/invalid HTTP/1.1 400 Content-Type='' Content-Length='0' Transfer-Encoding=None body_bytes=0
+Application mix passed (suspension, streamed bytes, bounded and validated uploads)
