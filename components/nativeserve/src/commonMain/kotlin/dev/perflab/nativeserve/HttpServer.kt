@@ -12,15 +12,22 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlin.time.TimeSource
 
+internal class HttpServerCounters {
+    var accepted = 0L
+    var requests = 0L
+}
+
 internal class HttpServer(
     private val transport: StreamTransport,
     private val routes: Routes,
     private val limits: ServerLimits,
+    private val counters: HttpServerCounters? = null,
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
     private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     private val dispatcher: () -> CoroutineScope = { handlerScope.value }
+    private val countRequest: (() -> Unit)? = counters?.let { totals -> { totals.requests++ } }
     private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
         if (routes.hasSuspendingGets || routes.applicationHandler != null) {
             { run -> SuspendedGet(handlerScope.value, run) }
@@ -70,7 +77,8 @@ internal class HttpServer(
             return
         }
         val time = completionTime()
-        val client = HttpConnection(time, limits, dispatcher)
+        counters?.let { it.accepted++ }
+        val client = HttpConnection(time, limits, dispatcher, countRequest)
         clients[connection] = client
         advance(connection, client, time)
         acceptNext()
