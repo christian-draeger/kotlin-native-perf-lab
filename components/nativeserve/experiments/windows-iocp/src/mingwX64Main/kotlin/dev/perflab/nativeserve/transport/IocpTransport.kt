@@ -116,7 +116,14 @@ private class IocpTransport(
         val peer = peers[connection] ?: return
         if (peer.closed) return
         peer.closed = true
-        ns_close_socket(peer.socket)
+        if (peer.writing) {
+            releaseSocket(peer)
+        } else {
+            // Flush completed sends before retiring a concurrent monitor read.
+            ns_shutdown_send(peer.socket)
+            val read = pending.values.firstOrNull { it is Transfer && it.peer === peer && !it.writing }
+            if (read != null) ns_cancel_io(state, peer.socket, read.io)
+        }
         retire(peer)
     }
 
@@ -201,7 +208,16 @@ private class IocpTransport(
     }
 
     private fun retire(peer: Peer) {
-        if (peer.closed && !peer.reading && !peer.writing) peers.remove(peer.id)
+        if (peer.closed && !peer.reading && !peer.writing) {
+            releaseSocket(peer)
+            peers.remove(peer.id)
+        }
+    }
+
+    private fun releaseSocket(peer: Peer) {
+        if (peer.socketReleased) return
+        peer.socketReleased = true
+        ns_close_socket(peer.socket)
     }
 
     override fun close() {
@@ -217,6 +233,7 @@ private class IocpTransport(
         for ((operation, _) in failures) release(operation)
         failures.clear()
         acceptOperation = null
+        peers.values.forEach(::releaseSocket)
         peers.clear()
         ns_close_iocp(state)
     }
@@ -228,6 +245,7 @@ private class IocpTransport(
 
     private class Peer(val id: ConnectionId, val socket: ULong) {
         var closed = false
+        var socketReleased = false
         var reading = false
         var writing = false
     }

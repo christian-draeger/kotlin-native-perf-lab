@@ -35,6 +35,8 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     private var stream: PendingStream? = null
     private var handler: PendingHandler? = null
     val awaitingHandler: Boolean get() = handler != null
+    var bodyBlocked = false
+        private set
     var readPending = false
     var writePending = false
     private var monitor: ByteArray? = null
@@ -77,8 +79,12 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         val pending = handler ?: return false
         val response = pending.call.takeResponse() ?: return false
         handler = null
+        if (incoming != null) {
+            closeRequest()
+            draining = true
+        }
         lastActivity = now
-        queue(response, pending.version, pending.keepAlive)
+        queue(response, pending.version, pending.keepAlive, pending.headOnly)
         return true
     }
 
@@ -88,9 +94,10 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         start: ((suspend () -> Response) -> SuspendedGet)? = null,
     ): Boolean {
         if (output != null) return true
-        if (awaitingHandler) return false
         incoming?.let { return consumeBody(it) }
-        when (val head = input.parse()) {
+        if (awaitingHandler) return false
+        val application = routes.applicationHandler
+        when (val head = input.parse(allowAnyRequestBody = application != null)) {
             ParsedHead.Incomplete -> {
                 // Pipelined bytes start their deadline when the previous response lets us parse them.
                 if (input.size > 0 && headStarted == null) headStarted = now
@@ -103,6 +110,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
             is ParsedHead.Complete -> {
                 input.consume(head.consumed)
                 headStarted = null
+                if (application != null) return prepareApplication(head, now, checkNotNull(start), application)
                 if (head.request.method == "POST") return preparePost(routes, head, now)
                 val launch: ((suspend () -> Response) -> Unit)? = start?.let {
                     { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now) }
@@ -112,6 +120,31 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
             }
         }
         return true
+    }
+
+    private fun prepareApplication(
+        head: ParsedHead.Complete,
+        now: Long,
+        start: (suspend () -> Response) -> SuspendedGet,
+        application: suspend (Request, RequestContent) -> Response,
+    ): Boolean {
+        val length = head.request.bodyLength
+        if (length != null && length > limits.requestBodyBytes) {
+            queue(emptyResponse(413), head.version, keepAlive = false)
+            return true
+        }
+        val content = RequestContent()
+        handler = PendingHandler(
+            start { application(head.request, content) }, head.version, head.keepAlive, now,
+            headOnly = head.request.method == "HEAD",
+        )
+        if (length == 0) {
+            content.finish()
+            return false
+        }
+        val body = IncomingBody(decoder(length), head.version, head.keepAlive, now, content = content)
+        incoming = body
+        return consumeBody(body)
     }
 
     private fun preparePost(routes: Routes, head: ParsedHead.Complete, now: Long): Boolean {
@@ -126,31 +159,45 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
                 true
             }
             is PostBody.Open -> {
-                val decoder = if (length == null) ChunkedBody(limits.requestBodyBytes, limits.headerBytes)
-                else FixedLengthBody(length)
-                val body = IncomingBody(post.sink, decoder, head.version, head.keepAlive, now)
+                val body = IncomingBody(decoder(length), head.version, head.keepAlive, now, sink = post.sink)
                 incoming = body
                 consumeBody(body)
             }
         }
     }
 
+    private fun decoder(length: Int?): RequestBodyDecoder =
+        if (length == null) ChunkedBody(limits.requestBodyBytes, limits.headerBytes) else FixedLengthBody(length)
+
     private fun consumeBody(body: IncomingBody): Boolean {
+        bodyBlocked = false
         try {
-            when (val progress = body.decoder.consume(input, body.sink)) {
+            when (val progress = body.decoder.consume(input, body.input)) {
                 BodyProgress.INCOMPLETE -> return false
+                BodyProgress.BLOCKED -> {
+                    bodyBlocked = true
+                    return false
+                }
                 BodyProgress.COMPLETE -> {
-                    val response = body.sink.complete()
+                    val content = body.content
+                    if (content != null) {
+                        incoming = null
+                        content.finish()
+                        return false
+                    }
+                    val response = checkNotNull(body.sink).complete()
                     closeRequest()
                     queue(response, body.version, body.keepAlive)
                 }
                 else -> {
                     closeRequest()
+                    cancelHandler()
                     queue(emptyResponse(progress.status), body.version, keepAlive = false)
                 }
             }
         } catch (_: Exception) {
             closeRequest()
+            cancelHandler()
             queue(emptyResponse(500), body.version, keepAlive = false)
         }
         return true
@@ -212,8 +259,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     }
 
     fun close() {
-        handler?.call?.cancel()
-        handler = null
+        cancelHandler()
         closeRequest()
         closeResponse()
     }
@@ -221,14 +267,21 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     private fun closeRequest() {
         val body = incoming ?: return
         incoming = null
-        body.sink.release()
+        bodyBlocked = false
+        body.sink?.release()
+        body.content?.cancel()
     }
 
-    private fun queue(response: Response, version: String, keepAlive: Boolean) {
+    private fun cancelHandler() {
+        handler?.call?.cancel()
+        handler = null
+    }
+
+    private fun queue(response: Response, version: String, keepAlive: Boolean, headOnly: Boolean = false) {
         val stream = response.stream
         val chunked = stream != null && stream.length == null
         if ((stream?.length ?: response.body.size) > limits.responseBodyBytes ||
-            response.applicationHeaderBytes > limits.responseHeaderBytes || chunked && version != "HTTP/1.1"
+            response.applicationHeaderBytes > limits.responseHeaderBytes || chunked && version != "HTTP/1.1" && !headOnly
         ) {
             stream?.source?.release()
             closeAfterWrite = true
@@ -237,28 +290,42 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         }
         val persistent = keepAlive && !draining
         closeAfterWrite = !persistent
-        if (stream == null) {
+        if (headOnly) {
+            stream?.source?.release()
+            val length = if (chunked) OMIT_RESPONSE_LENGTH else stream?.length ?: response.body.size
+            setOutput(response.encodeHead(version, persistent, length))
+        } else if (stream == null) {
             setOutput(response.encode(version, persistent))
         } else {
             val length = stream.length
             this.stream = PendingStream(stream.source, length ?: limits.responseBodyBytes, chunked)
-            setOutput(response.encodeHead(version, persistent, length ?: -1))
+            setOutput(response.encodeHead(version, persistent, length ?: CHUNKED_RESPONSE_LENGTH))
         }
     }
 
     private class IncomingBody(
-        val sink: RequestBodySink,
         val decoder: RequestBodyDecoder,
         val version: String,
         val keepAlive: Boolean,
         val started: Long,
-    )
+        val sink: RequestBodySink? = null,
+        val content: RequestContent? = null,
+    ) {
+        val input = BodyInput { bytes, length ->
+            if (content != null) content.offer(bytes, length)
+            else {
+                checkNotNull(sink).accept(bytes, length)
+                true
+            }
+        }
+    }
 
     private class PendingHandler(
         val call: SuspendedGet,
         val version: String,
         val keepAlive: Boolean,
         val started: Long,
+        val headOnly: Boolean = false,
     )
 
     private fun setOutput(bytes: ByteArray, length: Int = bytes.size) {

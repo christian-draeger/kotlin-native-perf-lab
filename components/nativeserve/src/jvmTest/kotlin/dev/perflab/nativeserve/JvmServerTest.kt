@@ -20,6 +20,71 @@ import kotlin.test.assertTrue
 
 class JvmServerTest {
     @Test
+    fun streamsApplicationBodiesAcrossBackpressureAndAcceptsNonPostMethods() {
+        val reading = CompletableDeferred<Unit>()
+        val entered = CompletableFuture<Unit>()
+        val body = "x".repeat(24 * 1024)
+        withServer(ServerLimits(headerBytes = 4096), routes = {
+            application { request, content ->
+                when (request.path) {
+                    "/health" -> text("ok")
+                    "/upload" -> {
+                        entered.complete(Unit)
+                        reading.await()
+                        var bytes = 0
+                        while (true) {
+                            val chunk = content.readChunk() ?: break
+                            check(chunk.all { it == 'x'.code.toByte() })
+                            bytes += chunk.size
+                        }
+                        text("${request.method}:$bytes")
+                    }
+                    else -> text("missing", status = 404)
+                }
+            }
+        }) { port, _ ->
+            client(port).use { socket ->
+                socket.send("PUT /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n")
+                entered.get(5, TimeUnit.SECONDS)
+                socket.send("${body.length.toString(16)}\r\n$body\r\n0\r\n\r\n")
+                socket.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                client(port).use { other ->
+                    other.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    assertEquals("ok", other.getInputStream().buffered().response())
+                }
+                reading.complete(Unit)
+                val input = socket.getInputStream().buffered()
+                assertEquals("PUT:${body.length}", input.response())
+                assertEquals("ok", input.response())
+                assertEquals(-1, input.read())
+            }
+        }
+    }
+
+    @Test
+    fun anEarlyApplicationResponseClosesTheSocketAndHeadOmitsTheBody() {
+        withServer(ServerLimits(), routes = {
+            application { request, _ ->
+                if (request.path == "/health") text("ok") else text("denied", status = 403)
+            }
+        }) { port, _ ->
+            client(port).use { socket ->
+                socket.send("PATCH /denied HTTP/1.1\r\nHost: localhost\r\nContent-Length: 64\r\n\r\nx")
+                val input = socket.getInputStream().buffered()
+                assertEquals("denied", input.response(status = 403))
+                assertEquals(-1, input.read())
+            }
+            client(port).use { socket ->
+                socket.send("HEAD /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                val actual = socket.getInputStream().readBytes().decodeToString()
+                assertTrue(actual.startsWith("HTTP/1.1 200 "))
+                assertTrue(actual.contains("Content-Length: 2\r\n"))
+                assertTrue(actual.endsWith("\r\n\r\n"))
+            }
+        }
+    }
+
+    @Test
     fun resumesSuspendedHandlerAndPreservesRequestOrder() {
         val entered = CompletableFuture<Unit>()
         val ready = CompletableDeferred<Unit>()
@@ -159,8 +224,8 @@ class JvmServerTest {
         val worker = thread(name = "nativeserve-test-loop", isDaemon = true) {
             try {
                 serve(port = port, limits = limits, stopRequested = stop::get) {
-                    get("/health") { text("ok") }
                     routes()
+                    if (applicationHandler == null) get("/health") { text("ok") }
                 }
                 finished.complete(Unit)
             } catch (cause: Throwable) {
@@ -198,7 +263,7 @@ class JvmServerTest {
         getOutputStream().write(value.encodeToByteArray())
     }
 
-    private fun BufferedInputStream.response(): String {
+    private fun BufferedInputStream.response(status: Int = 200): String {
         val reader = this
         fun line(): String = buildString {
             while (true) {
@@ -209,7 +274,7 @@ class JvmServerTest {
             }
         }.removeSuffix("\r")
 
-        assertTrue(line().startsWith("HTTP/1.1 200 "))
+        assertTrue(line().startsWith("HTTP/1.1 $status "))
         var length: Int? = null
         while (true) {
             val header = line()

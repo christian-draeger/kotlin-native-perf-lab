@@ -57,6 +57,7 @@ fun serveH2c(
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     val routes = Routes().apply(configure)
+    require(routes.applicationHandler == null) { "The h2c experiment does not support a standalone application handler" }
     val transport = openPlatformTransport(host, port, limits.connections)
     try {
         println("NativeServe backend=epoll protocol=h2c")

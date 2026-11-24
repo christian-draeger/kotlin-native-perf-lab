@@ -9,6 +9,8 @@ import dev.perflab.nativeserve.streamResponse
 import dev.perflab.nativeserve.text
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.delay
+import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.native.runtime.GC
@@ -23,6 +25,10 @@ fun main(args: Array<String>) = runFixture(args, ::probeTransport)
 internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
     if (args.firstOrNull() == "--transport") {
         transportProbe(args[1].toInt())
+        return
+    }
+    if (args.firstOrNull() == "--application") {
+        runApplication(args[1].toInt())
         return
     }
     val limits = ServerLimits(
@@ -113,4 +119,31 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
     }
     check(openStreams == 0) { "Shutdown left $openStreams response sources open" }
     check(openRequests == 0) { "Shutdown left $openRequests request sinks open" }
+}
+
+@OptIn(ExperimentalAtomicApi::class)
+private fun runApplication(port: Int) {
+    val stop = AtomicBoolean(false)
+    serve(port = port, limits = ServerLimits(headerBytes = 4096), stopRequested = stop::load) {
+        application { request, content ->
+            when (request.path) {
+                "/health" -> text("ok")
+                "/stop" -> {
+                    stop.store(true)
+                    text("ok")
+                }
+                "/upload" -> {
+                    delay(100)
+                    var bytes = 0
+                    while (true) {
+                        val chunk = content.readChunk() ?: break
+                        check(chunk.all { it == 'a'.code.toByte() })
+                        bytes += chunk.size
+                    }
+                    text("${request.method}:$bytes")
+                }
+                else -> text("missing", status = 404)
+            }
+        }
+    }
 }

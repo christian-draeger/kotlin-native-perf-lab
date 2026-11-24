@@ -245,19 +245,45 @@ def ephemeral_port():
         return probe.getsockname()[1]
 
 
+def wait_for_fixture(port, server):
+    def ready():
+        assert server.poll() is None, "Fixture exited at startup"
+        try:
+            return fetch(port, "/health") == (200, b"ok")
+        except ConnectionRefusedError:
+            return False
+
+    wait_until(ready, "Fixture never became ready")
+
+
+def test_application(binary):
+    port = ephemeral_port()
+    with subprocess.Popen([binary, "--application", str(port)]) as server:
+        try:
+            wait_for_fixture(port, server)
+            with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+                conn.sendall(b"PATCH /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n")
+                conn.sendall(b"6000\r\n" + b"a" * (24 * 1024) + b"\r\n0\r\n\r\n")
+                conn.sendall(request("/health"))
+                assert fetch(port, "/health") == (200, b"ok")
+                with conn.makefile("rb") as stream:
+                    assert response(stream)[2] == b"PATCH:24576"
+                    assert response(stream)[2] == b"ok"
+            assert fetch(port, "/stop") == (200, b"ok")
+            assert server.wait(timeout=5) == 0
+        finally:
+            if server.poll() is None:
+                server.terminate()
+            server.wait(timeout=5)
+    print("Suspending application checks passed (request backpressure, pipeline, drain)")
+
+
 def main(binary):
     subprocess.run([binary, "--transport", str(ephemeral_port())], check=True, timeout=10)
     port = ephemeral_port()
     with subprocess.Popen([binary, str(port)]) as server:
         try:
-            def ready():
-                assert server.poll() is None, "Fixture exited at startup"
-                try:
-                    return fetch(port, "/health") == (200, b"ok")
-                except ConnectionRefusedError:
-                    return False
-
-            wait_until(ready, "Fixture never became ready")
+            wait_for_fixture(port, server)
             test_limits(port, server.pid)
             test_request_bodies(port)
             test_suspended_handlers(port)
@@ -266,6 +292,7 @@ def main(binary):
             if server.poll() is None:
                 server.terminate()
             server.wait(timeout=5)
+    test_application(binary)
 
 
 if __name__ == "__main__":
