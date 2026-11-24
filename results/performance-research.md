@@ -162,7 +162,22 @@ The isolated release probe measured the same constructors and `kotlinx.serializa
 
 CPU and heap columns report medians from separate runs. The complete catalog trial had a median of 486 and 490 GC cycles on x86_64 and ARM64, respectively. Timings include any GC activity inside the sampled block. The separate heap estimate comes from occupied managed heap growth within an uninterrupted diagnostic epoch. Each phase has its own setup and GC behavior, so use the measured complete operation for total cost.
 
-String serialization dominated isolated CPU for both payloads. The previous Kotlin sink paid for a copy into the contiguous HTTP response, and gathered writes showed no consistent gain for the small fixtures. A byte-oriented candidate merits HTTP measurement if it removes an intermediate allocation or copy through response completion. The remaining comparison needs matching small and catalog requests at common offered rates, plus cancellation and slow-client resource bounds. [Sink experiment #84](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/84) · [Gathered writes #120](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/120) · [JSON work #133](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/133)
+String serialization dominated isolated CPU for both payloads. The previous Kotlin sink flattened its segments to a byte array before building the contiguous HTTP response. Gathered writes showed measurable variation and no consistent gain for the small fixtures. [Sink experiment #84](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/84) · [Gathered writes #120](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/120)
+
+### Bounded JSON sink over HTTP
+
+The Linux diagnostic compares the existing contiguous response, the String encoder over the known-length response stream, and `Json.encodeToSink` over that same stream. The sink caps the collected response and transfers segments into the HTTP stream, which copies data into its existing transport buffer. This avoids a JSON String and a separate flattened byte array. The stream releases its segments on completion or cancellation. The preflight checks exact UTF-8 bytes, persistent HTTP/1.1 responses, an oversized body, and repeated small-window clients that disconnect with pipelined replies pending. The sink dependency and modes live only in the diagnostic compilation. [Fixture](../components/ktserve/src/nativeJsonProbe/kotlin/codes/draeger/ktserve/example/JsonHttpProbe.kt) · [Reproducer](../scripts/profile-json-http.py)
+
+All 36 hosted trials passed the warm-up, exact status, request count and generator CPU checks. The same release executable rotates the three modes with one epoll worker, `TCP_NODELAY` enabled, a ceiling of 16 connections and a five-second warm-up and measurement. Vegeta offers 20,000 req/s for `/json` and 4,000 req/s for `/catalog/123`. The hosts used the Intel Xeon 6975P-C and ARM Neoverse-N2 on Ubuntu 24.04. The server and load generator share the VM with separate logical CPU masks. The figures below are medians of three trials. [Raw run and request traces](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45486703242) · [Archived trial rows and metadata](typed-json-http/)
+
+| Linux | Payload | CPU s/M, contiguous / String stream / sink stream | p99 ms, contiguous / String stream / sink stream | Peak RSS KiB, contiguous / String stream / sink stream |
+| --- | --- | ---: | ---: | ---: |
+| x86_64 | `/json` | 10.60 / 13.30 / 13.70 | 0.533 / 0.538 / 0.546 | 16,844 / 16,792 / 17,056 |
+| x86_64 | `/catalog/123` | 57.01 / 59.00 / 69.50 | 0.364 / 0.369 / 0.415 | 17,320 / 17,348 / 16,804 |
+| ARM64 | `/json` | 15.90 / 19.00 / 21.40 | 0.487 / 0.558 / 0.556 | 15,908 / 15,908 / 16,036 |
+| ARM64 | `/catalog/123` | 93.01 / 98.50 / 119.00 | 0.569 / 0.589 / 0.736 | 16,420 / 16,420 / 15,908 |
+
+The sink used more CPU than the contiguous reference in every hosted pair. Paired median CPU increases ranged from 24% to 32% across the four cases. The sink also raised catalog p99 on both architectures while saving about 0.5 MiB of peak RSS for that payload. The single local ARM64 container pilot reported lower catalog CPU with the sink and higher p99. The CPU reduction did not reproduce in the hosted trials. Keep the existing Kotlin serializer and contiguous response in production. The pilot supports this decision for the tested payloads and offered rates. [JSON investigation #133](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/133)
 
 ### Level- and edge-triggered epoll
 
