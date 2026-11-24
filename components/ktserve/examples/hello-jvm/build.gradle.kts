@@ -4,10 +4,11 @@ plugins {
 }
 
 val stagedVersion = providers.gradleProperty("ktserve.version").orNull
+val useMavenCentral = providers.gradleProperty("ktserve.publicRepository").orNull == "true"
 
 repositories {
     mavenCentral()
-    if (stagedVersion != null) exclusiveContent {
+    if (stagedVersion != null && !useMavenCentral) exclusiveContent {
         forRepository { maven { url = uri("../../build/maven-staging/$stagedVersion") } }
         filter { includeGroup("codes.draeger") }
     }

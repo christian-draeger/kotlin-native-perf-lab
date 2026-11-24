@@ -1,47 +1,56 @@
 name: ktServe Maven staging
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'LICENSE'
+      - 'components/ktserve/**'
+      - '.github/workflows/ktserve-maven.yml'
+      - 'scripts/*-ktserve-maven.*'
   pull_request:
     paths:
       - 'LICENSE'
-      - 'components/ktserve/build.gradle.kts'
-      - 'components/ktserve/gradle/**'
-      - 'components/ktserve/gradle.properties'
-      - 'components/ktserve/src/**'
-      - 'components/ktserve/examples/hello/**'
-      - 'components/ktserve/examples/hello-jvm/**'
+      - 'components/ktserve/**'
       - '.github/workflows/ktserve-maven.yml'
-      - 'scripts/package-ktserve-maven.py'
-      - 'scripts/publish-ktserve-maven.sh'
+      - 'scripts/*-ktserve-maven.*'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: ktServe version to stage
-        required: true
-        default: '0.2.0-preview.2'
+        description: ktServe version to stage (defaults to components/ktserve/VERSION)
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ktserve-maven-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'release' }}
+  group: ktserve-maven-${{ github.event_name }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  stage:
-    runs-on: macos-15
-    timeout-minutes: 25
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    permissions:
+      actions: read
+      contents: read
     outputs:
       version: ${{ steps.version.outputs.version }}
+      stage_run_id: ${{ steps.reuse.outputs.run_id }}
+      artifact_id: ${{ steps.reuse.outputs.artifact_id }}
+      artifact_digest: ${{ steps.reuse.outputs.artifact_digest }}
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - name: Resolve the staging version
         id: version
         env:
-          STAGING_VERSION: ${{ inputs.version || '0.2.0-preview.2' }}
+          STAGING_VERSION: ${{ inputs.version }}
         run: |
-          version="$STAGING_VERSION"
+          version="${STAGING_VERSION:-$(cat components/ktserve/VERSION)}"
           if [[ "$GITHUB_EVENT_NAME" == release ]]; then
             if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
               echo 'Use a GitHub release tag such as v0.2.0-preview.2.' >&2
@@ -49,12 +58,31 @@ jobs:
             fi
             version="${GITHUB_REF#refs/tags/v}"
           fi
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || grep -iq -- '-snapshot$' <<< "$version"; then
             echo 'Use a version such as 0.2.0-preview.2.' >&2
             exit 1
           fi
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
-          printf 'KTSERVE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
+      - name: Look for tested artifacts from this release commit
+        if: github.event_name == 'release' && github.repository == 'christian-draeger/kotlin-native-perf-lab'
+        id: reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: bash scripts/find-ktserve-maven.sh "$RELEASE_VERSION"
+
+  stage:
+    name: Stage Maven artifacts
+    needs: plan
+    if: needs.plan.outputs.artifact_id == ''
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      KTSERVE_VERSION: ${{ needs.plan.outputs.version }}
+    outputs:
+      artifact_id: ${{ steps.maven.outputs.artifact-id }}
+      artifact_digest: ${{ steps.maven.outputs.artifact-digest }}
+    steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
@@ -102,19 +130,24 @@ jobs:
             cp "$native/build/bin/native/releaseExecutable/hello.kexe" "$RUNNER_TEMP/ktserve-linux-consumers/$arch"
           done
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        id: maven
         with:
           name: ktserve-maven-${{ env.KTSERVE_VERSION }}
           path: components/ktserve/build/maven-staging/${{ env.KTSERVE_VERSION }}/
           if-no-files-found: error
+          overwrite: true
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: ktserve-maven-linux-consumers
           path: ${{ runner.temp }}/ktserve-linux-consumers/
           if-no-files-found: error
+          overwrite: true
 
   linux-consumer:
+    name: Test Linux consumer (${{ matrix.arch }})
     needs: stage
     strategy:
+      fail-fast: false
       matrix:
         include:
           - arch: x86_64
@@ -138,21 +171,42 @@ jobs:
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18082/health)" = ok
 
   publish:
-    if: github.event_name == 'release' && github.repository == 'christian-draeger/kotlin-native-perf-lab'
-    needs: [stage, linux-consumer]
+    if: >-
+      ${{ !cancelled() && github.event_name == 'release' &&
+      github.repository == 'christian-draeger/kotlin-native-perf-lab' &&
+      needs.plan.result == 'success' &&
+      ((needs.plan.outputs.artifact_id != '' && needs.stage.result == 'skipped' && needs.linux-consumer.result == 'skipped') ||
+       (needs.stage.result == 'success' && needs.linux-consumer.result == 'success')) }}
+    needs: [plan, stage, linux-consumer]
     environment: maven-central
+    permissions:
+      actions: read
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
-      RELEASE_VERSION: ${{ needs.stage.outputs.version }}
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+    outputs:
+      deployment: ${{ steps.submit.outputs.deployment }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
-        with:
-          name: ktserve-maven-${{ env.RELEASE_VERSION }}
-          path: ${{ runner.temp }}/ktserve-maven-staged
+      - name: Download and verify the tested Maven archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGE_RUN_ID: ${{ needs.plan.outputs.stage_run_id || github.run_id }}
+          ARTIFACT_ID: ${{ needs.plan.outputs.artifact_id || needs.stage.outputs.artifact_id }}
+          ARTIFACT_DIGEST: ${{ needs.plan.outputs.artifact_digest || needs.stage.outputs.artifact_digest }}
+        run: |
+          set -euo pipefail
+          [[ "$ARTIFACT_ID" =~ ^[0-9]+$ && "$ARTIFACT_DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          zip="$RUNNER_TEMP/ktserve-maven-staged.zip"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" > "$zip"
+          printf '%s  %s\n' "$ARTIFACT_DIGEST" "$zip" | sha256sum --check --strict
+          unzip -q "$zip" -d "$RUNNER_TEMP/ktserve-maven-staged"
+          printf 'Signed inputs: [staging run %s](%s/%s/actions/runs/%s), archive SHA-256 `%s`.\n' \
+            "$STAGE_RUN_ID" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$STAGE_RUN_ID" "$ARTIFACT_DIGEST" >> "$GITHUB_STEP_SUMMARY"
       - name: Sign the tested Maven artifacts
         env:
           SIGNING_IN_MEMORY_KEY: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
@@ -173,8 +227,42 @@ jobs:
           unset SIGNING_IN_MEMORY_KEY
           python3 scripts/package-ktserve-maven.py "$RUNNER_TEMP/ktserve-maven-staged" "$RELEASE_VERSION" \
             "$SIGNING_IN_MEMORY_KEY_ID!" "$RUNNER_TEMP/ktserve-central.zip"
-      - name: Publish and verify the Central deployment
+      - name: Submit the Central deployment for automatic publication
+        id: submit
         env:
           MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-        run: bash scripts/publish-ktserve-maven.sh "$RELEASE_VERSION" "$RUNNER_TEMP/ktserve-central.zip"
+        run: bash scripts/publish-ktserve-maven.sh submit "$RELEASE_VERSION" "$RUNNER_TEMP/ktserve-central.zip"
+
+  verify:
+    name: Verify the public Maven release
+    needs: [plan, publish]
+    environment: maven-central
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Wait for Maven Central and check all public variants
+        env:
+          DEPLOYMENT_ID: ${{ needs.publish.outputs.deployment }}
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: bash scripts/publish-ktserve-maven.sh verify "$RELEASE_VERSION" "$DEPLOYMENT_ID"
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Run a JVM consumer resolved only from Maven Central
+        run: |
+          project=components/ktserve
+          jvm="$project/examples/hello-jvm"
+          "$project/gradlew" -p "$jvm" "-Pktserve.version=$RELEASE_VERSION" -Pktserve.publicRepository=true installDist
+          "$jvm/build/install/ktserve-hello-jvm/bin/ktserve-hello-jvm" 18080 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18080/health)" = ok
