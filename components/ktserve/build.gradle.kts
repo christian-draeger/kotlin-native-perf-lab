@@ -1,3 +1,4 @@
+import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinNativeTarget

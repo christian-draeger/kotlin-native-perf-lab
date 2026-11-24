@@ -50,8 +50,9 @@ jobs:
           for pom in "$group"/*/"$KTSERVE_VERSION"/*.pom; do
             grep -Fq '<name>Apache License, Version 2.0</name>' "$pom"
           done
-          jvm_jar="$group/ktserve-jvm/$KTSERVE_VERSION/ktserve-jvm-$KTSERVE_VERSION.jar"
-          unzip -p "$jvm_jar" META-INF/LICENSE | cmp - LICENSE
+          for jar in "$group"/*/"$KTSERVE_VERSION"/*.jar; do
+            unzip -p "$jar" META-INF/LICENSE | cmp - LICENSE
+          done
       - name: Run the published JVM consumer on JDK 21
         run: |
           project=components/ktserve
