@@ -109,10 +109,17 @@ fun interface ResponseSource : AutoCloseable {
 
 internal sealed class ResponseStream(val length: Int?) {
     class Pull(length: Int?, val source: ResponseSource) : ResponseStream(length)
-    class Produce(length: Int?, val producer: suspend ResponseWriter.() -> Unit) : ResponseStream(length)
+    class Produce(
+        length: Int?,
+        val onClose: () -> Unit,
+        val producer: suspend ResponseWriter.() -> Unit,
+    ) : ResponseStream(length)
 
     fun discard() {
-        if (this is Pull) source.release()
+        when (this) {
+            is Pull -> source.release()
+            is Produce -> closeProducer(onClose)
+        }
     }
 }
 
@@ -145,11 +152,20 @@ fun streamSuspending(
     contentType: String? = null,
     status: Int = 200,
     producer: suspend ResponseWriter.() -> Unit,
+): Response = streamSuspending(length, contentType, status, onClose = {}, producer = producer)
+
+/** Supply a release hook for resources acquired before the response producer can start. */
+fun streamSuspending(
+    length: Int? = null,
+    contentType: String? = null,
+    status: Int = 200,
+    onClose: () -> Unit,
+    producer: suspend ResponseWriter.() -> Unit,
 ): Response {
     require(length == null || length >= 0) { "Response length must be nonnegative" }
     require(status != 204 && status != 205 && status != 304) { "This response status forbids content" }
     requireContentType(contentType)
-    return Response(status, contentType, ByteArray(0), ResponseStream.Produce(length, producer), allowedMethods = null)
+    return Response(status, contentType, ByteArray(0), ResponseStream.Produce(length, onClose, producer), allowedMethods = null)
 }
 
 fun text(value: String, status: Int = 200): Response =
