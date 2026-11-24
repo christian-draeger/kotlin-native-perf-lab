@@ -179,6 +179,24 @@ jobs:
           rustup toolchain install 1.100.0 --profile minimal
           cargo +1.100.0 build --manifest-path competitors/rust-axum/Cargo.toml \
             --release --locked --features http2 --target-dir "$RUNNER_TEMP/axum-h2c"
+      - name: Build the pinned TLS load client
+        if: inputs.tls_ingress
+        run: |
+          sudo apt-get install -y cmake g++-14 libev-dev libssl-dev ninja-build pkg-config zlib1g-dev
+          stage="$(mktemp -d "$RUNNER_TEMP/h2load.XXXXXX")"
+          cd "$stage"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/nghttp2/nghttp2/releases/download/v1.71.0/nghttp2-1.71.0.tar.xz \
+            --output nghttp2-1.71.0.tar.xz
+          printf '%s  %s\n' c0f55121d88650e4b9227aec28cebaf664d2417ca60fe70be0f8d38829f52116 \
+            nghttp2-1.71.0.tar.xz | sha256sum --check
+          tar -xf nghttp2-1.71.0.tar.xz
+          cmake -S nghttp2-1.71.0 -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DENABLE_APP=ON \
+            -DENABLE_EXAMPLES=OFF -DENABLE_HPACK_TOOLS=OFF -DENABLE_DOC=OFF -DBUILD_TESTING=OFF
+          cmake --build build --target h2load --parallel 2
+          build/src/h2load --version
+          printf '%s\n' "$stage/build/src" >> "$GITHUB_PATH"
       - name: Compare the same HTTP/2 JSON workload
         env:
           TLS_INGRESS: ${{ inputs.tls_ingress }}
