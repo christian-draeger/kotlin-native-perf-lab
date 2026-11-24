@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -71,7 +72,7 @@ def build_bundle(repository, version, signing_key, output):
                 for checksum, contents in checksums:
                     bundle.writestr(checksum.as_posix(), contents)
         # A retry must not replace an existing release bundle or leave a partial ZIP.
-        output.hardlink_to(candidate)
+        os.link(candidate, output)
     print(f"Signed {len(files)} artifacts and created {output}")
 
 
