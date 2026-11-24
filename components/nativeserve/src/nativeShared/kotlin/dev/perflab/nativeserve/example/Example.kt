@@ -9,9 +9,12 @@ import kotlinx.serialization.Serializable
 @Serializable
 private data class User(val id: Int, val name: String, val active: Boolean)
 
-internal fun Routes.parityRoutes() {
+private fun sampleJson() = json(User(42, "benchmark-user", true))
+
+internal fun Routes.parityRoutes(suspendJson: Boolean = false) {
     get("/health") { text("ok") }
-    get("/json") { json(User(42, "benchmark-user", true)) }
+    if (suspendJson) getSuspending("/json") { sampleJson() }
+    else get("/json") { sampleJson() }
     get("/users/{id}") { request ->
         val id = request.pathInt("id") ?: return@get badRequest()
         json(User(id, "benchmark-user", true))

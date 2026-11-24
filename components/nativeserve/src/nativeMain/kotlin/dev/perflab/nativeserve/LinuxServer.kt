@@ -23,7 +23,7 @@ fun serve(
     stopRequested: () -> Boolean = { false },
     onListening: () -> Unit,
     configure: Routes.() -> Unit,
-): Unit = serveEpoll(port, host, limits, 1, stopRequested, onListening, configure)
+): Unit = serveEpoll(port, host, limits, 1, stopRequested, onListening, configure = configure)
 
 internal fun serveEpoll(
     port: Int,
@@ -32,10 +32,12 @@ internal fun serveEpoll(
     workers: Int,
     stopRequested: () -> Boolean,
     onListening: () -> Unit = {},
+    wakeHandlerCompletions: Boolean = false,
     configure: Routes.() -> Unit,
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     require(workers in 1..limits.connections) { "Worker count must be between 1 and the connection limit" }
+    require(!wakeHandlerCompletions || workers == 1) { "Handler wakeup experiment requires one worker" }
     val backend = getenv("NATIVESERVE_BACKEND")?.toKString() ?: "epoll"
     require(backend == "epoll") { "Unsupported NativeServe backend: $backend" }
     val routes = Routes().apply(configure)
@@ -43,11 +45,11 @@ internal fun serveEpoll(
         runEpollWorkers(host, port, workers, limits, routes, stopRequested)
         return@memScoped
     }
-    val transport = openPlatformTransport(host, port, limits.connections)
+    val transport = openPlatformTransport(host, port, limits.connections, wakeHandlerCompletions)
     try {
         println("NativeServe backend=$backend tcp=ipv4")
         onListening()
-        HttpServer(transport, routes, limits).run(stopRequested)
+        HttpServer(transport, routes, limits, notifyHandlerCompletion = transport.notifyHandlerCompletion).run(stopRequested)
     } finally {
         transport.close()
     }

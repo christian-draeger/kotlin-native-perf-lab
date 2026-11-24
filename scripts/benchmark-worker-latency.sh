@@ -6,13 +6,14 @@ source "$ROOT/scripts/server-process.sh"
 out="${1:?Usage: benchmark-worker-latency.sh OUTPUT_DIRECTORY}"
 : "${SERVER_CPUS:?Specify server CPU affinity}"
 : "${LOAD_CPUS:?Specify load CPU affinity}"
-export BENCHMARK_SUITE=workers
+export BENCHMARK_SUITE="${BENCHMARK_SUITE:-workers}"
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
 mkdir -p "$out"
 python3 "$ROOT/scripts/worker-topology.py" "$SERVER_CPUS" "$LOAD_CPUS" > "$out/topology.json"
 {
   git -C "$ROOT" rev-parse HEAD
-  printf 'reference_sha=%s\nserver_cpus=%s\nload_cpus=%s\n' "$NATIVESERVE_REFERENCE_SHA" "$SERVER_CPUS" "$LOAD_CPUS"
+  printf 'suite=%s\nreference_sha=%s\nserver_cpus=%s\nload_cpus=%s\n' \
+    "$BENCHMARK_SUITE" "${NATIVESERVE_REFERENCE_SHA:-}" "$SERVER_CPUS" "$LOAD_CPUS"
   printf '%s\n' 'Exploratory same-host comparison. HTTP/1.1 /json, at most 64 connections, 4s warm-up, 5s measured.'
   vegeta -version
 } > "$out/environment.txt"
@@ -32,6 +33,9 @@ PY
 
 unset NATIVESERVE_WORKER_DIAGNOSTICS
 variants=(nativeserve-reference kotlin-reactor nativeserve-workers-2 rust-axum)
+if [[ "$BENCHMARK_SUITE" == handlers ]]; then
+  variants=(kotlin-reactor nativeserve-handler-dispatcher nativeserve-handler-eventfd rust-axum)
+fi
 for rate in 20000 40000; do
   for run in 1 2 3; do
     for offset in "${!variants[@]}"; do
@@ -55,6 +59,8 @@ for rate in 20000 40000; do
     done
   done
 done
+
+if [[ "$BENCHMARK_SUITE" != workers ]]; then exit 0; fi
 
 PORT="$(available_port)"
 export PORT NATIVESERVE_WORKER_DIAGNOSTICS=1

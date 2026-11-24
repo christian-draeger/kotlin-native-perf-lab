@@ -57,6 +57,12 @@ Dashboard benchmarks on `main` reuse the ARM64 release artifact when a successfu
 
 Review the actual delivered rate and failures before comparing p99 at fixed load. Keep the one-worker result alongside the prior release to spot regressions in the default path. Use the two-host setup to decide on a new default.
 
+## Compare coroutine handler completion
+
+The exploratory `handlers` suite runs `/json` with one NativeServe worker. It interleaves an inline route, the same route dispatched through `getSuspending` with completion polling, and the suspending route with Linux eventfd notification. Each variant serializes the same Kotlin object and emits the same response. The regular Core baselines run alongside the saturation trials. The fixed-rate trials include Axum.
+
+Choose the `handlers` suite in the dashboard workflow to run both Linux architectures with one runner per architecture, disjoint two-vCPU masks, and raw artifacts. Its scope is the handoff cost of a small handler. A workload that suspends at an actual dependency needs its own matched series before making claims about application performance.
+
 ## Local harness and limitations
 
 - The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.

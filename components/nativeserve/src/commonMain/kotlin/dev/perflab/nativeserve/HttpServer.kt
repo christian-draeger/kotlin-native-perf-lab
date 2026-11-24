@@ -22,6 +22,7 @@ internal class HttpServer(
     private val routes: Routes,
     private val limits: ServerLimits,
     private val counters: HttpServerCounters? = null,
+    private val notifyHandlerCompletion: (suspend () -> Unit)? = null,
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
@@ -30,7 +31,7 @@ internal class HttpServer(
     private val countRequest: (() -> Unit)? = counters?.let { totals -> { totals.requests++ } }
     private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
         if (routes.hasSuspendingGets || routes.applicationHandler != null) {
-            { run -> SuspendedGet(handlerScope.value, run) }
+            { run -> SuspendedGet(handlerScope.value, run, notifyHandlerCompletion) }
         } else null
     private val clock = TimeSource.Monotonic.markNow()
     private var nextOperation = 1L
@@ -59,7 +60,9 @@ internal class HttpServer(
             val deadline = drainDeadline
             if (deadline != null && (clients.isEmpty() || beforePoll >= deadline)) break
             var timeout = if (deadline == null) 250 else minOf(250L, deadline - beforePoll).toInt()
-            if (suspended.isNotEmpty()) timeout = minOf(timeout, 2)
+            if (suspended.isNotEmpty() && needsHandlerPolling()) {
+                timeout = minOf(timeout, 2)
+            }
             batchTime = -1L
             transport.poll(timeout, this)
             val afterPoll = completionTime()
@@ -70,6 +73,10 @@ internal class HttpServer(
             finishHandlers(afterPoll)
         }
     }
+
+    private fun needsHandlerPolling(): Boolean =
+        notifyHandlerCompletion == null || routes.applicationHandler != null ||
+            suspended.any { clients[it]?.awaitingProducer == true }
 
     override fun accepted(operation: OperationId, connection: ConnectionId) {
         if (drainDeadline != null) {

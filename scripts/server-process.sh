@@ -25,6 +25,8 @@ start_server() {
         }
       fi
       case "$variant" in
+        nativeserve-handler-*)
+          grep -qFx "NativeServe benchmark_handler=${variant#nativeserve-handler-}" "$log" || return 1 ;;
         nativeserve-epoll) grep -qFx 'NativeServe backend=epoll tcp=ipv4' "$log" || return 1 ;;
         nativeserve-io-uring) grep -q '^NativeServe backend=io_uring tcp=ipv4 features=0x' "$log" || return 1 ;;
       esac

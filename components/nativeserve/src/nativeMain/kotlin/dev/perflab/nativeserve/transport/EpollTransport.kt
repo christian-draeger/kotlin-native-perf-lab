@@ -60,6 +60,7 @@ import platform.posix.socket
 
 private const val BATCH_SIZE = 64
 private const val LISTENER_TOKEN = 0UL
+private const val COMPLETION_SIGNAL_TOKEN = ULong.MAX_VALUE
 // EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
 private const val EPOLL_EXCLUSIVE = 0x1000_0000U
 
@@ -67,7 +68,8 @@ internal fun MemScope.openPlatformTransport(
     host: String,
     port: Int,
     connectionLimit: Int,
-): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN) { openListener(host, port) }
+    wakeHandlerCompletions: Boolean = false,
+): EpollTransport = openEpollTransport(connectionLimit, EPOLLIN, wakeHandlerCompletions) { openListener(host, port) }
 
 internal fun MemScope.openSharedEpollTransports(
     host: String,
@@ -95,8 +97,9 @@ internal fun MemScope.openSharedEpollTransports(
 private fun MemScope.openEpollTransport(
     connectionLimit: Int,
     listenerEvents: UInt,
+    wakeHandlerCompletions: Boolean = false,
     open: () -> Int,
-): StreamTransport {
+): EpollTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
     val change = alloc<epoll_event>()
     memset(change.ptr, 0, sizeOf<epoll_event>().convert())
@@ -107,7 +110,14 @@ private fun MemScope.openEpollTransport(
         close(listener)
         error("epoll_create1 failed (errno $cause)")
     }
-    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents)
+    val transport = EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents)
+    try {
+        if (wakeHandlerCompletions) transport.enableHandlerWakeups()
+        return transport
+    } catch (cause: Throwable) {
+        transport.close()
+        throw cause
+    }
 }
 
 internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
@@ -148,7 +158,7 @@ private fun checked(result: Int, operation: String): Int {
     return result
 }
 
-private class EpollTransport(
+internal class EpollTransport(
     private var listener: Int,
     private var poller: Int,
     private val events: CPointer<epoll_event>,
@@ -163,6 +173,15 @@ private class EpollTransport(
     private var listenerWatched = false
     private var acceptOperation: OperationId? = null
     private var acceptCancelled = false
+    private var completionSignal: EpollCompletionSignal? = null
+    val notifyHandlerCompletion: (suspend () -> Unit)?
+        get() = completionSignal?.let { it::signal }
+
+    fun enableHandlerWakeups() {
+        val signal = EpollCompletionSignal()
+        completionSignal = signal
+        checked(watch(EPOLL_CTL_ADD, signal.descriptor, COMPLETION_SIGNAL_TOKEN, EPOLLIN), "register eventfd")
+    }
 
     override fun accept(operation: OperationId): Submission {
         if (listener < 0) return Submission.CLOSED
@@ -259,11 +278,13 @@ private class EpollTransport(
             if (poller < 0) return
             val event = events[index]
             val token = event.data.u64
-            if (token == LISTENER_TOKEN) {
-                acceptReady(completions)
-            } else {
-                val peer = peers[ConnectionId(token.toLong())] ?: continue
-                if (!peer.queued) process(peer, event.events, completions)
+            when (token) {
+                LISTENER_TOKEN -> acceptReady(completions)
+                COMPLETION_SIGNAL_TOKEN -> checkNotNull(completionSignal).consume()
+                else -> {
+                    val peer = peers[ConnectionId(token.toLong())] ?: continue
+                    if (!peer.queued) process(peer, event.events, completions)
+                }
             }
         }
     }
@@ -417,6 +438,8 @@ private class EpollTransport(
         acceptCancelled = false
         close(poller)
         poller = -1
+        completionSignal?.close()
+        completionSignal = null
     }
 
     private class Peer(val id: ConnectionId, var fd: Int) {

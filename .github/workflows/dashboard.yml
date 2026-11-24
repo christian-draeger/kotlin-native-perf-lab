@@ -26,9 +26,9 @@ on:
         options: ['3', '5']
         default: '5'
       suite:
-        description: Complete ranking or quicker NativeServe, Ktor and Axum feedback
+        description: Ranking, Core feedback or an exploratory scheduling experiment
         type: choice
-        options: [expanded, core, workers]
+        options: [expanded, core, workers, handlers]
         default: expanded
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
@@ -42,11 +42,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || 'benchmark-dashboard-publish' }}
+  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || ((inputs.suite == 'workers' || inputs.suite == 'handlers') && format('experiment-{0}-{1}', inputs.suite, github.ref)) || 'benchmark-dashboard-publish' }}
 
 jobs:
   arm_native:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers')
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers' || inputs.suite == 'handlers')
     uses: ./.github/workflows/arm-native.yml
     with:
       reuse_smoke: true
@@ -54,24 +54,13 @@ jobs:
   benchmark:
     needs: arm_native
     if: ${{ !cancelled() && needs.arm_native.result != 'skipped' }}
-    name: benchmark (${{ matrix.arch }}, ${{ matrix.endpoint }})
+    name: benchmark (${{ matrix.arch }}, ${{ matrix.route == 'users' && '/users/123' || format('/{0}', matrix.route) }})
     strategy:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-        route: [health, json, users]
-        include:
-          - arch: x86_64
-            runner: ubuntu-24.04
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-          - route: health
-            endpoint: /health
-          - route: json
-            endpoint: /json
-          - route: users
-            endpoint: /users/123
-    runs-on: ${{ matrix.runner }}
+        route: ${{ fromJSON(inputs.suite == 'handlers' && '["json"]' || '["health","json","users"]') }}
+    runs-on: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     timeout-minutes: 35
     permissions:
       actions: read
@@ -81,7 +70,7 @@ jobs:
       RUSTUP_TOOLCHAIN: '1.100.0'
       EXPECTED_ARCH: ${{ matrix.arch }}
       BENCHMARK_SUITE: ${{ inputs.suite }}
-      BENCHMARK_ENDPOINT: ${{ matrix.endpoint }}
+      BENCHMARK_ENDPOINT: ${{ matrix.route == 'users' && '/users/123' || format('/{0}', matrix.route) }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -114,7 +103,7 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: ${{ runner.temp }}/arm-native
-      - name: Prepare the worker reference and CPU affinity
+      - name: Prepare the worker reference
         if: inputs.suite == 'workers'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -134,11 +123,14 @@ jobs:
           archive="nativeserve-snapshot-${sha:0:12}-linux-$EXPECTED_ARCH.tar.gz"
           (cd "$reference"; sha256sum --strict -c "$archive.sha256"; tar -xzf "$archive" nativeserve)
           printf 'NATIVESERVE_REFERENCE_BINARY=%s/nativeserve\nNATIVESERVE_REFERENCE_SHA=%s\n' "$reference" "$sha" >> "$GITHUB_ENV"
+      - name: Select disjoint CPU masks
+        if: inputs.suite == 'workers' || inputs.suite == 'handlers'
+        run: |
           python3 - <<'PY' >> "$GITHUB_ENV"
           import os
           cpus = sorted(os.sched_getaffinity(0))
           if len(cpus) < 4:
-              raise SystemExit("The workers suite needs at least four available logical CPUs.")
+              raise SystemExit("The scheduling experiments need at least four available logical CPUs.")
           print("SERVER_CPUS=" + ",".join(map(str, cpus[:2])))
           print("LOAD_CPUS=" + ",".join(map(str, cpus[2:4])))
           PY
@@ -163,13 +155,13 @@ jobs:
           WARMUP: 10
           DURATION: 5
           THREADS: 2
-          CONNECTIONS: ${{ inputs.suite == 'workers' && '64' || '16' }}
+          CONNECTIONS: ${{ (inputs.suite == 'workers' || inputs.suite == 'handlers') && '64' || '16' }}
           BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
         run: |
           export BENCHMARK_RESULTS_DIR="$RUNNER_TEMP/benchmark-results"
           ./scripts/benchmark.sh
       - name: Measure worker tail latency at matched offered load
-        if: inputs.suite == 'workers' && matrix.route == 'json'
+        if: (inputs.suite == 'workers' || inputs.suite == 'handlers') && matrix.route == 'json'
         run: |
           case "$EXPECTED_ARCH" in
             x86_64) arch=amd64; checksum=e8759ce45c14e18374bdccd3ba6068197bc3a9f9b7e484db3837f701b9d12e61 ;;
@@ -181,7 +173,7 @@ jobs:
           tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" vegeta
           export PATH="$RUNNER_TEMP:$PATH"
           ./scripts/benchmark-worker-latency.sh "$RUNNER_TEMP/worker-latency/default"
-          if [[ "$EXPECTED_ARCH" == x86_64 ]]; then
+          if [[ "$EXPECTED_ARCH" == x86_64 && "$BENCHMARK_SUITE" == workers ]]; then
             alternate="$(python3 scripts/worker-topology.py --alternative "$SERVER_CPUS" "$LOAD_CPUS")"
             if [[ -n "$alternate" ]]; then
               read -r alternate_server alternate_load <<<"$alternate"
@@ -190,10 +182,10 @@ jobs:
             fi
           fi
       - name: Upload matched-load raw results
-        if: ${{ !cancelled() && inputs.suite == 'workers' && matrix.route == 'json' }}
+        if: ${{ !cancelled() && (inputs.suite == 'workers' || inputs.suite == 'handlers') && matrix.route == 'json' }}
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
-          name: worker-latency-${{ matrix.arch }}-${{ github.run_attempt }}
+          name: ${{ inputs.suite == 'handlers' && 'handler' || 'worker' }}-latency-${{ matrix.arch }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/worker-latency
           if-no-files-found: warn
       - name: Record CI provenance and retain available logs
@@ -201,7 +193,7 @@ jobs:
         if: ${{ !cancelled() && steps.measure.outcome != 'skipped' }}
         env:
           BENCHMARK_OUTCOME: ${{ steps.measure.outcome }}
-          RUNNER_LABEL: ${{ matrix.runner }}
+          RUNNER_LABEL: ${{ matrix.arch == 'aarch64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
           ROUTE: ${{ matrix.route }}
           NATIVE_BUILD_RUN: ${{ matrix.arch == 'aarch64' && needs.arm_native.outputs.artifact_run_id || github.run_id }}
         run: |
@@ -225,7 +217,7 @@ jobs:
 
   store:
     needs: benchmark
-    if: ${{ !cancelled() && inputs.suite != 'workers' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
+    if: ${{ !cancelled() && inputs.suite != 'workers' && inputs.suite != 'handlers' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

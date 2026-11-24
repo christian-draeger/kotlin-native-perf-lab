@@ -74,6 +74,22 @@ jobs:
           wait "$server_pid"
           server_pid=''
           start_server kotlin-reactor "$log"
+      - name: Verify threaded handler completion modes
+        env:
+          BENCHMARK_SUITE: handlers
+          PORT: '18082'
+        run: |
+          ROOT="$PWD"
+          source scripts/server-process.sh
+          trap stop_server EXIT
+          for variant in nativeserve-handler-dispatcher nativeserve-handler-eventfd; do
+            start_server "$variant" "$RUNNER_TEMP/$variant.log"
+            ./scripts/smoke.sh "http://127.0.0.1:$PORT"
+            python3 scripts/tests/reactor_http_smoke.py "$PORT" --handler-pipeline
+            python3 scripts/tests/reactor_shutdown_smoke.py "$PORT" "$server_pid"
+            wait "$server_pid"
+            server_pid=''
+          done
       - name: Exercise reactor resource bounds
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}

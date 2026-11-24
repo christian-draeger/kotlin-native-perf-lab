@@ -4,8 +4,9 @@ competitor_variants=(go-http hono-node elysia-bun fastapi spring-boot aspnet-cor
 case "${BENCHMARK_SUITE:-core}" in
   core) variants=("${core_variants[@]}") ;;
   workers) variants=(nativeserve-reference kotlin-reactor nativeserve-workers-2 "${core_variants[@]:0:3}") ;;
+  handlers) variants=("${core_variants[@]}" nativeserve-handler-dispatcher nativeserve-handler-eventfd) ;;
   io-backends) variants=(nativeserve-epoll nativeserve-io-uring) ;;
   expanded) variants=("${core_variants[@]}" "${competitor_variants[@]}") ;;
   competitors) variants=("${competitor_variants[@]}") ;;
-  *) echo 'BENCHMARK_SUITE must be core, expanded, competitors, workers or io-backends.' >&2; exit 2 ;;
+  *) echo 'BENCHMARK_SUITE must be core, expanded, competitors, workers, handlers or io-backends.' >&2; exit 2 ;;
 esac

@@ -27,7 +27,7 @@ def connect(port):
     return socket.create_connection((os.environ.get("BIND_HOST", "127.0.0.1"), port), timeout=5)
 
 
-def main(port):
+def main(port, handler_pipeline=False):
     with connect(port) as conn, conn.makefile("rb") as stream:
         conn.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\n\r")
         conn.sendall(b"\nGET /users/123 HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
@@ -52,8 +52,24 @@ def main(port):
 
     with ThreadPoolExecutor(max_workers=8) as pool:
         list(pool.map(check_client, range(24)))
+
+    if handler_pipeline:
+        request = b"GET /json HTTP/1.1\r\nHost: localhost\r\n"
+
+        def check_pipeline(index):
+            with connect(port) as conn, conn.makefile("rb") as stream:
+                conn.sendall(request + b"\r\n" + request + b"Connection: close\r\n\r\n")
+                if index % 3 == 0:
+                    return
+                for _ in range(2):
+                    status, _, body = response(stream)
+                    assert status == 200 and body == b'{"id":42,"name":"benchmark-user","active":true}'
+                assert stream.read(1) == b""
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            list(pool.map(check_pipeline, range(24)))
     print("NativeServe stream smoke passed")
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]))
+    main(int(sys.argv[1]), "--handler-pipeline" in sys.argv[2:])
