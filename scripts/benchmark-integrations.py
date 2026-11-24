@@ -80,6 +80,21 @@ def check_responses(port, mixed):
             require_response(port, f"/catalog/{catalog_id}", "application/json", {"id": catalog_id, "items": items})
 
 
+def check_cancelled_transfers(port):
+    with socket.create_connection(("127.0.0.1", port), timeout=2) as upload:
+        upload.sendall(b"POST /upload HTTP/1.1\r\nHost: localhost\r\n"
+                       b"Content-Type: application/octet-stream\r\nContent-Length: 24576\r\n\r\n" + b"x" * 1024)
+    download = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+    try:
+        download.request("GET", "/download")
+        with download.getresponse() as response:
+            if response.status != 200 or response.read(16 * 1024) != DOWNLOAD[:16 * 1024]:
+                raise RuntimeError("Interrupted download did not start with the expected chunk")
+    finally:
+        download.close()
+    require_response(port, "/health", "text/plain", b"ok")
+
+
 def wait_until_ready(process, port, log, expected_engine):
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline and process.poll() is None:
@@ -158,6 +173,8 @@ def server(args, engine, affinity, log, trace=()):
             check_responses(port, args.load_tool == "k6")
             if args.family == APPLICATION_MIX:
                 require_response(port, "/wait", "text/plain", b"ready")
+                if args.application_profile != "persistent":
+                    check_cancelled_transfers(port)
             yield process, port
         finally:
             stop_server(process, port, args.family)
@@ -186,7 +203,13 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
         ]
         if args.family == APPLICATION_MIX:
             workload[1] = workload[1].replace("json:40%", "json:30%,wait:10%")
-            workload.append("wait_delay_ms=20")
+            workload.extend(["wait_delay_ms=20", f"application_mix_profile={args.application_profile}"])
+            if args.application_profile == "churn":
+                workload += ["integration_experiment=application-mix-churn",
+                             "connection_reuse=disabled", "latency_includes_tcp_connect=yes"]
+            if args.application_profile == "overload":
+                workload += ["integration_experiment=application-mix-overload",
+                             "overload_warmup_max_rate=800", "success_budget_ms=100"]
     else:
         load_version = subprocess.run(
             ["wrk", "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -255,7 +278,7 @@ def load(args, affinity, port, endpoint, duration, log):
         ], stdout=output, stderr=subprocess.STDOUT, timeout=duration + 15, check=True)
 
 
-def read_k6_summary(path, offered, duration):
+def read_k6_summary(path, offered, duration, profile="persistent"):
     summary = json.loads(path.read_text())
     metrics = summary["metrics"]
 
@@ -283,7 +306,7 @@ def read_k6_summary(path, offered, duration):
         and count("iterations") == requests and abs(requests - offered) <= max(len(rates), offered / 100)
         and bool(rates) and sum(rates.values()) * duration == offered and operation_counts_match
     )
-    return {
+    row = {
         "valid": int(valid), "requests": requests, "successful_responses": successful,
         "failed_responses": failed, "dropped_iterations": dropped, "offered_requests": offered,
         "rps": round(successful / duration, 3),
@@ -291,6 +314,25 @@ def read_k6_summary(path, offered, duration):
         **{f"p{quantile}_us": round(latency[f"p({quantile})"] * 1000, 3) if successful else ""
            for quantile in (50, 95, 99)},
     }
+    if profile == "churn":
+        row["new_connections"] = count("perflab_new_connections")
+        row["valid"] = int(valid and row["new_connections"] == requests)
+    if profile == "overload":
+        on_time = count("perflab_success_within_100ms")
+        timeouts = count("perflab_timeouts")
+        accounted = (
+            bool(rates) and sum(rates.values()) * duration == offered
+            and count("iterations") == requests == successful + failed
+            and abs(requests + dropped - offered) <= max(len(rates), offered / 100)
+            and sum(count(f"perflab_{name}_duration") for name in rates) == successful
+            and sum(count(f"perflab_{name}_failed") for name in rates) == failed
+            and 0 <= on_time <= successful and 0 <= timeouts <= failed
+        )
+        row.update({
+            "accounted": int(accounted), "timeouts": timeouts, "within_budget_responses": on_time,
+            "within_budget_rps": round(on_time / duration, 3),
+        })
+    return row
 
 
 def load_k6(args, affinity, port, rate, duration, prefix):
@@ -302,6 +344,7 @@ def load_k6(args, affinity, port, rate, duration, prefix):
         "PERFLAB_RATE": str(rate), "PERFLAB_DURATION": str(duration),
         "PERFLAB_VUS": str(args.vus), "PERFLAB_SUMMARY": str(summary),
         "PERFLAB_APPLICATION_MIX": "true" if args.family == APPLICATION_MIX else "false",
+        "PERFLAB_APPLICATION_PROFILE": args.application_profile,
     })
     with log.open("w") as output:
         subprocess.run([
@@ -309,21 +352,44 @@ def load_k6(args, affinity, port, rate, duration, prefix):
             "perflab_load elapsed_s=%e user_s=%U system_s=%S peak_rss_kib=%M",
             "k6", "run", "--no-usage-report", "--quiet", "--no-color", str(SCRIPTS / "k6-integration.js"),
         ], env=env, stdout=output, stderr=subprocess.STDOUT, timeout=duration + 20, check=True)
-    return {**read_k6_summary(summary, rate * duration, duration), **read_load_timing(log)}
+    return {
+        **read_k6_summary(summary, rate * duration, duration, args.application_profile),
+        **read_load_timing(log),
+    }
+
+
+def k6_results_path(args):
+    return args.output / ("overload.csv" if args.application_profile == "overload" else "results.csv")
 
 
 def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
     variant = engine if args.family == APPLICATION_MIX else f"{args.family}-{engine}"
     stem = args.output / f"{variant}-mixed-{rate}-{run}"
     metrics = (sys.executable, SCRIPTS / "proc_metrics.py")
+    overload = args.application_profile == "overload"
+    warmup_rate = min(rate, 800) if overload else rate
     with server(args, engine, server_affinity, stem.with_suffix(".server.log")) as (process, port):
-        cold = load_k6(args, load_affinity, port, rate, args.precondition, stem.with_name(stem.name + "-cold"))
-        warmup = load_k6(args, load_affinity, port, rate, args.warmup, stem.with_name(stem.name + "-warmup"))
-        before, _, _ = run_output(*metrics, str(process.pid)).split()
+        cold = load_k6(args, load_affinity, port, warmup_rate, args.precondition, stem.with_name(stem.name + "-cold"))
+        warmup = load_k6(args, load_affinity, port, warmup_rate, args.warmup, stem.with_name(stem.name + "-warmup"))
+        before, _, before_rss = run_output(*metrics, str(process.pid)).split()
         row = load_k6(args, load_affinity, port, rate, args.duration, stem)
         after, peak, rss = run_output(*metrics, str(process.pid)).split()
+        if overload:
+            try:
+                require_response(port, "/health", "text/plain", b"ok")
+                require_response(port, "/download", "application/octet-stream", DOWNLOAD)
+                recovered = True
+            except (OSError, ValueError, http.client.HTTPException):
+                recovered = False
     cpu = float(after) - float(before)
-    valid = row["valid"] and warmup["valid"] and cold["failed_responses"] == 0 and cpu >= 0
+    preconditioned = warmup["valid"] and cold["failed_responses"] == 0 and cpu >= 0
+    valid = row["valid"] and preconditioned
+    if overload:
+        row.update({
+            "accounted": int(row["accounted"] and preconditioned and recovered),
+            "recovered": int(recovered), "measurement_start_rss_kib": before_rss,
+        })
+    cost = cpu / row["successful_responses"] * 1_000_000 if row["successful_responses"] else None
     row.update({
         "variant": variant, "endpoint": f"Mixed · {rate} req/s", "run": run, "valid": int(valid),
         "connections": "", "threads": "", "offered_rate": rate, "vus_per_scenario": args.vus,
@@ -331,10 +397,10 @@ def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
         "precondition_failed_responses": cold["failed_responses"], "warmup_dropped_iterations": warmup["dropped_iterations"],
         "warmup_s": args.warmup, "target_duration_s": args.duration,
         "cpu_seconds": round(cpu, 6),
-        "cpu_seconds_per_million_requests": round(cpu / row["successful_responses"] * 1_000_000, 3) if valid else "",
+        "cpu_seconds_per_million_requests": round(cost, 3) if (valid or row.get("accounted")) and cost is not None else "",
         "peak_rss_kib": peak, "end_rss_kib": rss, "git_sha": git_sha,
     })
-    path = args.output / "results.csv"
+    path = k6_results_path(args)
     existed = path.exists()
     with path.open("a", newline="") as output:
         writer = csv.DictWriter(output, fieldnames=row)
@@ -342,7 +408,8 @@ def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
             writer.writeheader()
         writer.writerow(row)
     print(f"{variant} {rate} offered req/s trial {run}: {row['rps']:.1f} successful req/s; "
-          f"{row['failed_responses']} failed, {row['dropped_iterations']} dropped, valid={bool(valid)}", flush=True)
+          f"{row['failed_responses']} failed, {row['dropped_iterations']} dropped, valid={bool(valid)}"
+          + (f", overload accounting and recovery passed={bool(row['accounted'])}" if overload else ""), flush=True)
 
 
 def trial(args, git_sha, engine, endpoint, run, server_affinity, load_affinity):
@@ -450,8 +517,10 @@ def benchmark(args):
             for engine in engines[offset:] + engines[:offset]:
                 measure(args, git_sha, engine, workload, run, server_affinity, load_affinity)
 
-    with (args.output / "results.csv").open() as results:
-        invalid = [row for row in csv.DictReader(results) if row["valid"] != "1"]
+    result_path = k6_results_path(args)
+    result_field = "accounted" if args.application_profile == "overload" else "valid"
+    with result_path.open() as results:
+        invalid = [row for row in csv.DictReader(results) if row[result_field] != "1"]
     if invalid:
         raise SystemExit(f"{len(invalid)} integration trials failed. See raw logs in {args.output}")
 
@@ -471,6 +540,8 @@ def main():
     parser.add_argument("--trace-native-nodelay", action="store_true",
                         help="Capture separate loopback diagnostics with strace and sudo tcpdump")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800], help="Mixed requests per second for k6")
+    parser.add_argument("--application-profile", choices=("persistent", "churn", "overload"), default="persistent",
+                        help="Use fresh connections or retain bounded overload diagnostics instead of the default mix")
     parser.add_argument("--vus", type=int, default=16, help="k6 virtual users per scenario")
     parser.add_argument("--precondition", type=int, default=15, help="k6 cold load before steady-state validation")
     parser.add_argument("--connections", type=int, default=16)
@@ -493,9 +564,12 @@ def main():
         parser.error("Packet traces require the native TCP_NODELAY experiment")
     if args.family == APPLICATION_MIX and args.load_tool != "k6":
         parser.error("The application mix needs the k6 load tool")
+    if args.application_profile != "persistent" and args.family != APPLICATION_MIX:
+        parser.error("Churn and overload profiles need the application-mix family")
     args.output.mkdir(parents=True, exist_ok=True)
-    if (args.output / "results.csv").exists():
-        parser.error("Output directory already contains results.csv")
+    result_path = k6_results_path(args)
+    if any((args.output / name).exists() for name in ("results.csv", "overload.csv")):
+        parser.error(f"Use a new output directory for {result_path.name}")
     if args.smoke_only:
         for engine in ENGINES[args.family]:
             with server(args, engine, [], args.output / f"{args.family}-{engine}.server.log"):

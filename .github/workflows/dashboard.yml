@@ -34,6 +34,11 @@ on:
         type: choice
         options: [expanded, core, application, application-mix, workers]
         default: expanded
+      application_mix_profile:
+        description: Connection or overload profile for the application-mix suite
+        type: choice
+        options: [persistent, churn, overload]
+        default: persistent
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
         type: string
@@ -50,13 +55,13 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || 'benchmark-dashboard-publish' }}
+  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || (inputs.suite == 'application-mix' && github.ref_name != 'main' && format('application-mix-{0}-{1}', github.ref, inputs.application_mix_profile)) || 'benchmark-dashboard-publish' }}
   # Keep queued measurements and archive imports when a main push adds a Pages build.
   queue: max
 
 jobs:
   arm_native:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers')
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers' || inputs.suite == 'application-mix')
     uses: ./.github/workflows/arm-native.yml
     with:
       reuse_smoke: true
@@ -76,7 +81,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 35
+    timeout-minutes: ${{ inputs.suite == 'application-mix' && inputs.application_mix_profile == 'overload' && 50 || 35 }}
     permissions:
       actions: read
       contents: read
@@ -181,6 +186,7 @@ jobs:
           WARMUP: 10
           DURATION: 5
           THREADS: 2
+          APPLICATION_PROFILE: ${{ inputs.application_mix_profile || 'persistent' }}
           CONNECTIONS: ${{ inputs.suite == 'workers' && '64' || '16' }}
           BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
         run: |
@@ -190,9 +196,14 @@ jobs:
             mkdir -p "$result"
             grep '^PRETTY_NAME=' /etc/os-release > "$result/environment.txt"
             printf 'kotlin_version=%s\n' "$(sed -n 's/.*kotlin("multiplatform") version "\([^"]*\)".*/\1/p' components/ktserve/build.gradle.kts)" >> "$result/environment.txt"
+            profile_args=(--application-profile "$APPLICATION_PROFILE")
+            if [[ "$APPLICATION_PROFILE" == overload ]]; then
+              profile_args+=(--rates 800 3200 6400 --vus 48)
+              DURATION=10
+            fi
             python3 scripts/benchmark-integrations.py --family application-mix --executable scripts/run-server.sh \
               --output "$result" --repeats "$RUNS" --warmup "$WARMUP" --precondition "$WARMUP" \
-              --duration "$DURATION" --threads "$THREADS"
+              --duration "$DURATION" --threads "$THREADS" "${profile_args[@]}"
           else
             ./scripts/benchmark.sh
           fi
@@ -255,7 +266,7 @@ jobs:
     needs: benchmark
     if: >-
       ${{ !cancelled() && (
-        (github.event_name == 'workflow_dispatch' && inputs.suite != 'workers'
+        (github.event_name == 'workflow_dispatch' && github.ref_name == 'main' && inputs.suite != 'workers'
           && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure'))
         || (github.event_name == 'workflow_run'
           && github.event.workflow_run.event == 'workflow_dispatch'
