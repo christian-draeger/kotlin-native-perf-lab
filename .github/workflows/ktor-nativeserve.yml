@@ -9,6 +9,7 @@ on:
       - 'components/nativeserve/src/nativeMain/**'
       - 'components/nativeserve/src/jvmMain/**'
       - 'scripts/ci-gradle.sh'
+      - 'scripts/ci-maven-central-mirror.gradle'
       - '.github/workflows/ktor-nativeserve.yml'
   workflow_dispatch:
 
