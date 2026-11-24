@@ -29,6 +29,8 @@ if suite in ("application", "application-mix"):
         body = json.dumps({"id": catalog_id, "items": items}, ensure_ascii=False, separators=(",", ":")).encode()
         cases.append((f"/catalog/{catalog_id}", 200, "application/json", body))
     cases.append(("/catalog/invalid", 400, None, None))
+if suite == "http2-stream":
+    cases.append(("/stream", 200, "application/octet-stream", b"x" * (80 * 1024)))
 cases.append(("/users/invalid", 400, None, None))
 
 def check_application_mix():

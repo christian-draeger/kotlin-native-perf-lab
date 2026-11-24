@@ -18,6 +18,11 @@ on:
         description: Put each origin behind the same Caddy TLS configuration when running the pilot
         type: boolean
         default: false
+      pilot_workload:
+        description: Response fixture to measure in the HTTP/2 pilot
+        type: choice
+        options: [json, stream]
+        default: json
 
 permissions:
   contents: read
@@ -197,9 +202,10 @@ jobs:
           cmake --build build --target h2load --parallel 2
           build/src/h2load --version
           printf '%s\n' "$stage/build/src" >> "$GITHUB_PATH"
-      - name: Compare the same HTTP/2 JSON workload
+      - name: Compare the matched HTTP/2 workload
         env:
           TLS_INGRESS: ${{ inputs.tls_ingress }}
+          WORKLOAD: ${{ inputs.pilot_workload }}
         run: |
           args=()
           if [[ "$TLS_INGRESS" == true ]]; then
@@ -214,7 +220,7 @@ jobs:
           python3 components/ktserve/experiments/http2-nghttp2/benchmark.py \
             --ktserve "$RUNNER_TEMP/ktserve-h2c/ktserve-h2c" \
             --axum "$RUNNER_TEMP/axum-h2c/release/axum-baseline" \
-            --output "$RUNNER_TEMP/h2-results" "${args[@]}"
+            --output "$RUNNER_TEMP/h2-results" --workload "$WORKLOAD" "${args[@]}"
       - name: Record toolchain versions
         if: ${{ always() && !cancelled() }}
         run: |
@@ -227,6 +233,6 @@ jobs:
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ always() && !cancelled() }}
         with:
-          name: ${{ inputs.tls_ingress && 'h2-tls' || 'h2c' }}-pilot-${{ matrix.arch }}-${{ github.run_attempt }}
+          name: ${{ inputs.tls_ingress && 'h2-tls' || 'h2c' }}-pilot${{ inputs.pilot_workload == 'stream' && '-stream' || '' }}-${{ matrix.arch }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/h2-results
           if-no-files-found: warn

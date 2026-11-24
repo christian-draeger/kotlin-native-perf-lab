@@ -61,6 +61,8 @@ jobs:
         run: BENCHMARK_SUITE=application ./scripts/smoke-all.sh
       - name: Verify the matched application mix endpoints
         run: BENCHMARK_SUITE=application-mix ./scripts/smoke-all.sh
+      - name: Verify the streaming fixture in all baseline servers
+        run: BENCHMARK_SUITE=http2-stream ./scripts/smoke-all.sh
       - name: Check epoll worker parity and shutdown
         env:
           PORT: '18079'

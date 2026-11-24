@@ -2,7 +2,11 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/server-process.sh"
-source "$ROOT/scripts/benchmark-variants.sh"
+if [[ "${BENCHMARK_SUITE:-core}" == http2-stream ]]; then
+  variants=(ktor-jvm ktor-native rust-axum)
+else
+  source "$ROOT/scripts/benchmark-variants.sh"
+fi
 ports=()
 if [[ -z "${PORT:-}" ]]; then
   # A previous server's HTTP socket can remain in TIME_WAIT after shutdown.

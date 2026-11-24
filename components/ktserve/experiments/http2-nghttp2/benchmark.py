@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run matching exploratory HTTP/2 /json trials for ktServe and Axum on Linux."""
+"""Run matching exploratory HTTP/2 trials for ktServe and Axum on Linux."""
 
 import argparse
 import csv
@@ -19,7 +19,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[4]
-EXPECTED = '{"id":42,"name":"benchmark-user","active":true}\n2 200 application/json'
+WORKLOADS = {
+    "json": ("/json", b'{"id":42,"name":"benchmark-user","active":true}', b"application/json"),
+    "stream": ("/stream", b"x" * (80 * 1024), b"application/octet-stream"),
+}
 CONNECTIONS = 16
 STREAM_COUNTS = (1, 8)
 VARIANTS = ("ktserve", "ktserve-nodelay", "axum")
@@ -30,21 +33,23 @@ def command_output(*command):
     return subprocess.check_output(command, stderr=subprocess.STDOUT, text=True).strip()
 
 
-def wait_for_json(server, url, path, certificate=None):
+def wait_for_response(server, base, path, workload, certificate=None):
+    endpoint, body, media_type = WORKLOADS[workload]
+    expected = body + b"\n2 200 " + media_type
     protocol = ["--http2", "--cacert", str(certificate)] if certificate else ["--http2-prior-knowledge"]
     deadline = time.monotonic() + 10
     while server.poll() is None and time.monotonic() < deadline:
         response = subprocess.run([
             "curl", "--noproxy", "*", *protocol, "-fsS", "--max-time", "1",
-            "--write-out", "\n%{http_version} %{http_code} %{content_type}", url,
-        ], capture_output=True, text=True)
+            "--write-out", "\n%{http_version} %{http_code} %{content_type}", base + endpoint,
+        ], capture_output=True)
         if response.returncode == 0:
-            path.write_text(response.stdout + "\n")
-            if response.stdout == EXPECTED:
+            path.write_bytes(response.stdout + b"\n")
+            if response.stdout == expected:
                 return
-            raise ValueError(f"Expected HTTP/2 200 and the exact JSON payload. See {path}")
+            raise ValueError(f"Expected HTTP/2 200 and the exact {endpoint} payload. See {path}")
         time.sleep(0.1)
-    raise RuntimeError(f"Server never returned /json. See the server log next to {path}")
+    raise RuntimeError(f"Server never returned {endpoint}. See the server log next to {path}")
 
 
 def load(log, prefix, url, streams, duration, requests=None):
@@ -133,8 +138,7 @@ def verify_socket_options(args):
             server = subprocess.Popen([*trace, *launcher(args, variant, port)],
                                       stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
             try:
-                url = f"http://127.0.0.1:{port}/json"
-                wait_for_json(server, url, path.with_suffix(".preflight.log"))
+                wait_for_response(server, f"http://127.0.0.1:{port}", path.with_suffix(".preflight.log"), "json")
             finally:
                 if server.poll() is None:
                     os.killpg(server.pid, signal.SIGTERM)
@@ -205,18 +209,22 @@ def trial(args, variant, streams, repetition, server_cpus, load_cpus, tls):
     label = args.output / f"{variant}-{streams}streams-{repetition}"
     port = reserve_port()
     command = launcher(args, variant, port)
-    env = {**os.environ, "BIND_HOST": "127.0.0.1", "PORT": str(port), "TOKIO_WORKER_THREADS": "2"}
+    endpoint = WORKLOADS[args.workload][0]
+    env = {
+        **os.environ, "BIND_HOST": "127.0.0.1", "PORT": str(port), "TOKIO_WORKER_THREADS": "2",
+        "BENCHMARK_SUITE": "http2-stream" if args.workload == "stream" else "core",
+    }
     metrics = [sys.executable, str(ROOT / "scripts/proc_metrics.py")]
     with label.with_suffix(".server.log").open("w") as output:
         server = subprocess.Popen(["taskset", "-c", server_cpus, *command],
                                   stdout=output, stderr=subprocess.STDOUT, env=env)
         try:
             preflight = ".origin-preflight.log" if tls else ".preflight.log"
-            wait_for_json(server, f"http://127.0.0.1:{port}/json", label.with_suffix(preflight))
+            wait_for_response(server, f"http://127.0.0.1:{port}", label.with_suffix(preflight), args.workload)
             with ingress(args, port, server_cpus, label.with_suffix(".ingress.log"), tls) as (proxy, base):
-                url = base + "/json"
                 if proxy:
-                    wait_for_json(proxy, url, label.with_suffix(".preflight.log"), tls[0])
+                    wait_for_response(proxy, base, label.with_suffix(".preflight.log"), args.workload, tls[0])
+                url = base + endpoint
                 warmup = load(label.with_suffix(".warmup.log"), load_cpus, url, streams, args.warmup)
                 negotiated_protocol(warmup, tls is not None)
                 before, *_ = command_output(*metrics, str(server.pid)).split()
@@ -234,7 +242,7 @@ def trial(args, variant, streams, repetition, server_cpus, load_cpus, tls):
         finally:
             stop(server)
     return {
-        "variant": variant, "endpoint": "/json", "connections": CONNECTIONS, "streams": streams,
+        "variant": variant, "endpoint": endpoint, "connections": CONNECTIONS, "streams": streams,
         "run": repetition, "warmup_s": args.warmup, "target_duration_s": args.duration, "port": port,
         "tls_mode": "caddy-termination" if tls else "off",
         "tcp_nodelay": "on" if variant == "ktserve-nodelay" else "default",
@@ -248,6 +256,7 @@ def main():
     for name in ("ktserve", "axum", "output"):
         parser.add_argument(f"--{name}", type=lambda value: Path(value).resolve(), required=True)
     parser.add_argument("--caddy", type=lambda value: Path(value).resolve(), help="Run over a shared HTTPS ingress configuration")
+    parser.add_argument("--workload", choices=WORKLOADS, default="json")
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--duration", type=int, default=3)
     parser.add_argument("--repeats", type=int, default=3)
@@ -268,11 +277,13 @@ def main():
     args.output.mkdir(parents=True, exist_ok=False)
     sha = command_output("git", "-C", str(ROOT), "rev-parse", "HEAD")
     status = command_output("git", "-C", str(ROOT), "status", "--porcelain")
+    endpoint, body, _ = WORKLOADS[args.workload]
     metadata = (
         f"git_sha={sha}\ngit_worktree={'dirty' if status else 'clean'}\nmode=exploratory; same VM\n"
         f"protocol={'HTTP/2 ALPN with h2c upstream' if args.caddy else 'h2c prior knowledge'}\n"
         f"TLS={'Caddy termination' if args.caddy else 'off'}\nserver_cpus={server_cpus}\nload_cpus={load_cpus}\n"
         f"load_threads={LOAD_THREADS}\nTOKIO_WORKER_THREADS=2\n"
+        f"endpoint={endpoint}\nexpected_body_bytes={len(body)}\n"
         "ktserve_launch=PORT\nktserve_nodelay_launch=PORT --tcp-nodelay\n"
         "axum_launch=PORT environment variable with http2 Cargo feature\n"
     )
