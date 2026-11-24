@@ -1,4 +1,4 @@
 headers = winsock_probe.h iocp_transport.h
 headerFilter = winsock_probe.h iocp_transport.h
-package = io.github.christian_draeger.ktserve.probe
+package = codes.draeger.ktserve.probe
 linkerOpts = -lws2_32

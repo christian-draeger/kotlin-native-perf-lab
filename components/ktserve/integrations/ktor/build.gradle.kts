@@ -7,7 +7,7 @@ plugins {
 
 repositories { mavenCentral() }
 
-group = "io.github.christian-draeger"
+group = "codes.draeger"
 version = "0.1.0-preview"
 
 kotlin {
@@ -31,12 +31,12 @@ kotlin {
     native.binaries.executable(buildTypes = listOf(RELEASE)) {
         compilation = example
         baseName = "ktserve-ktor-example"
-        entryPoint = "io.github.christian_draeger.ktserve.ktor.example.main"
+        entryPoint = "codes.draeger.ktserve.ktor.example.main"
     }
     sourceSets {
         commonMain.dependencies {
             api("io.ktor:ktor-server-core:3.6.1")
-            api("io.github.christian-draeger:ktserve")
+            api("codes.draeger:ktserve")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
         }
         jvmTest {

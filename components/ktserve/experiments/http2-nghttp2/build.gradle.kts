@@ -27,12 +27,12 @@ kotlin {
     }
     native.binaries.executable {
         baseName = "ktserve-http2-session-probe"
-        entryPoint = "io.github.christian_draeger.ktserve.http2.main"
+        entryPoint = "codes.draeger.ktserve.http2.main"
         linkerOpts(file(nghttp2Archive.get()).absolutePath)
     }
     native.binaries.executable("h2c", listOf(RELEASE)) {
         baseName = "ktserve-h2c"
-        entryPoint = "io.github.christian_draeger.ktserve.http2.h2cMain"
+        entryPoint = "codes.draeger.ktserve.http2.h2cMain"
         linkerOpts(file(nghttp2Archive.get()).absolutePath)
     }
     sourceSets.commonMain {
@@ -43,7 +43,7 @@ kotlin {
         }
     }
     sourceSets.getByName("nativeMain") {
-        kotlin.srcDir("../../src/nativeMain/kotlin/io/github/christian_draeger/ktserve/transport")
+        kotlin.srcDir("../../src/nativeMain/kotlin/codes/draeger/ktserve/transport")
         kotlin.srcDir("../../src/nativeShared/kotlin")
     }
 }

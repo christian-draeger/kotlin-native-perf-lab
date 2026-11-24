@@ -11,7 +11,7 @@ import tempfile
 import zipfile
 
 
-GROUP_PATH = Path("io/github/christian-draeger")
+GROUP_PATH = Path("codes/draeger")
 MODULES = {
     "ktserve": ".jar",
     "ktserve-jvm": ".jar",

@@ -14,7 +14,7 @@ ktServe is licensed under the [Apache License 2.0](LICENSE). Third-party assets 
 | A Ktor application with the ktServe engine | [Ktor JVM example](components/ktserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/ktserve/integrations/ktor/README.md) |
 | A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/ktserve/examples/spring-webflux) · [Starter guide](components/ktserve/integrations/spring-boot-starter/README.md) |
 
-The library uses the Maven coordinate `io.github.christian-draeger:ktserve` and the Kotlin package `io.github.christian_draeger.ktserve`. [Maven release guide](components/ktserve/RELEASING.md)
+The library uses the Maven coordinate `codes.draeger:ktserve` and the Kotlin package `codes.draeger.ktserve`. [Maven release guide](components/ktserve/RELEASING.md)
 
 ktServe replaces the NativeServe preview identifiers in packages, build coordinates and configuration. Historical benchmark results remain available. [Upgrade from the preview](components/ktserve/README.md#upgrade-from-the-preview)
 

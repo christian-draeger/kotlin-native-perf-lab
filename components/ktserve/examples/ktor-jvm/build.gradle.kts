@@ -5,6 +5,6 @@ plugins {
 
 repositories { mavenCentral() }
 
-dependencies { implementation("io.github.christian-draeger:ktserve-ktor") }
+dependencies { implementation("codes.draeger:ktserve-ktor") }
 
-application { mainClass.set("io.github.christian_draeger.examples.ktor.MainKt") }
+application { mainClass.set("codes.draeger.examples.ktor.MainKt") }

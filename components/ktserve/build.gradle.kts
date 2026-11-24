@@ -10,7 +10,7 @@ plugins {
 
 repositories { mavenCentral() }
 
-group = "io.github.christian-draeger"
+group = "codes.draeger"
 val publicationVersion = providers.gradleProperty("ktserve.version").orNull
 val projectUrl = "https://github.com/christian-draeger/kotlin-native-perf-lab"
 if (publicationVersion != null) {
@@ -45,9 +45,9 @@ kotlin {
             getByName("nativeMain").kotlin.setSrcDirs(emptyList<String>())
             getByName("linuxMain").kotlin.apply {
                 srcDir("src/nativeMain/kotlin")
-                exclude("io/github/christian_draeger/ktserve/example/**")
+                exclude("codes/draeger/ktserve/example/**")
             }
-            getByName("macosMain").kotlin.exclude("io/github/christian_draeger/ktserve/example/**")
+            getByName("macosMain").kotlin.exclude("codes/draeger/ktserve/example/**")
         }
     } else {
         jvm()
@@ -64,7 +64,7 @@ kotlin {
         native.useKtServeInterop(macos = targetOs == "macos")
         native.binaries.executable {
             baseName = "ktserve"
-            entryPoint = "io.github.christian_draeger.ktserve.example.main"
+            entryPoint = "codes.draeger.ktserve.example.main"
         }
         val stressCompilation = native.compilations.create("stress") {
             associateWith(native.compilations.getByName("main"))
@@ -72,7 +72,7 @@ kotlin {
         native.binaries.executable("stress", listOf(RELEASE)) {
             compilation = stressCompilation
             baseName = "ktserve-stress-fixture"
-            entryPoint = "io.github.christian_draeger.ktserve.fixture.main"
+            entryPoint = "codes.draeger.ktserve.fixture.main"
         }
         sourceSets {
             getByName("nativeMain") {

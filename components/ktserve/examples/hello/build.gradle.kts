@@ -8,7 +8,7 @@ repositories {
     mavenCentral()
     if (stagedVersion != null) exclusiveContent {
         forRepository { maven { url = uri("../../build/maven-staging/$stagedVersion") } }
-        filter { includeGroup("io.github.christian-draeger") }
+        filter { includeGroup("codes.draeger") }
     }
 }
 
@@ -28,11 +28,11 @@ kotlin {
     }
     native.binaries.executable {
         baseName = "hello"
-        entryPoint = "io.github.christian_draeger.examples.hello.main"
+        entryPoint = "codes.draeger.examples.hello.main"
     }
     sourceSets.named("nativeMain") {
         dependencies {
-            implementation(if (stagedVersion == null) "io.github.christian-draeger:ktserve" else "io.github.christian-draeger:ktserve:$stagedVersion")
+            implementation(if (stagedVersion == null) "codes.draeger:ktserve" else "codes.draeger:ktserve:$stagedVersion")
         }
     }
 }

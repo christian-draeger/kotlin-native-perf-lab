@@ -5,13 +5,13 @@ plugins {
 
 repositories { mavenCentral() }
 
-group = "io.github.christian-draeger"
+group = "codes.draeger"
 version = "0.1.0-preview"
 
 dependencies {
     api(platform("org.springframework.boot:spring-boot-dependencies:4.2.0"))
     api("org.springframework:spring-web")
-    api("io.github.christian-draeger:ktserve")
+    api("codes.draeger:ktserve")
     implementation("io.projectreactor:reactor-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.11.0")
 

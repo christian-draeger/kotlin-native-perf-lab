@@ -1,6 +1,6 @@
-package io.github.christian_draeger.benchmark.spring
+package codes.draeger.benchmark.spring
 
-import io.github.christian_draeger.ktserve.spring.KtServeWebServerFactory
+import codes.draeger.ktserve.spring.KtServeWebServerFactory
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory
 import org.springframework.boot.runApplication

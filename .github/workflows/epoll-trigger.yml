@@ -4,7 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/epoll-trigger.yml'
-      - 'components/ktserve/src/nativeMain/kotlin/io/github/christian_draeger/ktserve/transport/EpollTransport.kt'
+      - 'components/ktserve/src/nativeMain/kotlin/codes/draeger/ktserve/transport/EpollTransport.kt'
       - 'scripts/benchmark-epoll-trigger.sh'
       - 'scripts/tests/epoll_trigger_smoke.py'
   workflow_dispatch:

@@ -5,6 +5,6 @@ plugins {
 
 repositories { mavenCentral() }
 
-dependencies { implementation("io.github.christian-draeger:ktserve-spring-boot-starter") }
+dependencies { implementation("codes.draeger:ktserve-spring-boot-starter") }
 
-application { mainClass.set("io.github.christian_draeger.benchmark.spring.BenchmarkKt") }
+application { mainClass.set("codes.draeger.benchmark.spring.BenchmarkKt") }
