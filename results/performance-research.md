@@ -144,6 +144,19 @@ The earlier coroutine trial measured an immediately returning handler. The Ktor 
 | x86_64 | 3,315 / 9,192 / 6,293 | 8.776 / 6.362 / 6.012 |
 | ARM64 | 3,374 / 10,806 / 6,843 | 7.912 / 5.263 / 6.454 |
 
+The corresponding `/download` pilot streamed 32 KiB plus three bytes with a 50 ms delay between chunks. All 18 HTTP/1.1 trials passed. Each architecture used one release binary, 16 persistent connections, ten seconds of warm-up, five measured seconds, and disjoint server and load CPU masks in the same hosted VM. The table shows three-trial medians. [Raw trials and host metadata](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45457170690) · [Engine dashboard](https://christian-draeger.github.io/kotlin-native-perf-lab/#integration-benchmarks)
+
+| Linux | Wake-up mode | Successful req/s | p99 ms | CPU s / million | Peak RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: |
+| x86_64 | ktServe polling | 294.1 | 91.371 | 299.52 | 38.19 |
+| x86_64 | ktServe eventfd | 311.1 | 90.538 | 295.06 | 38.72 |
+| x86_64 | CIO | 313.3 | 53.571 | 535.71 | 150.38 |
+| ARM64 | ktServe polling | 285.3 | 94.773 | 420.46 | 35.82 |
+| ARM64 | ktServe eventfd | 305.5 | 91.264 | 484.29 | 36.32 |
+| ARM64 | CIO | 313.5 | 53.192 | 746.17 | 123.39 |
+
+Eventfd brought download throughput close to CIO and left a median p99 gap of about 37–38 ms. The x86_64 eventfd trials ranged from 54.440 to 90.947 ms p99. On ARM64, eventfd used about 15% more CPU per response than polling. Keep the current default pending independently driven measurements. In the next diagnostic, test accepted-socket `TCP_NODELAY` separately and correlate send and acknowledgement timing with the application producer's wake-ups. [Ktor Native streaming investigation #130](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/130)
+
 JVM ktServe now uses `Selector.wakeup()` as handler output and body buffers become ready. In the exploratory WebFlux `/json` comparison, throughput moved from 9,284 to 58,965 req/s on x86_64 and from 20,581 to 22,410 on ARM64. The Reactor Netty medians in the new run were 85,948 and 12,383 req/s respectively. Reactor Netty retained its upload throughput lead on both architectures. The existing WebFlux adapter copies outbound Spring buffers before handing them to the bounded coroutine queue. A narrower fixed-length publisher path is a separate hypothesis. It must preserve cancellation, demand, buffer release and flush behavior. [JVM implementation](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/137) · [Before](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45384009996) · [After](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45391876507) · [WebFlux comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/45)
 
 ### Mixed application traffic with k6
