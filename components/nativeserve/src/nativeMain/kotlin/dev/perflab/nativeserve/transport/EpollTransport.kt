@@ -110,7 +110,7 @@ private fun MemScope.openEpollTransport(
     return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents)
 }
 
-private fun MemScope.openListener(host: String, port: Int): Int {
+internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
     val address = alloc<sockaddr_in>()
     memset(address.ptr, 0, sizeOf<sockaddr_in>().convert())
     address.sin_family = AF_INET.convert()
@@ -123,7 +123,11 @@ private fun MemScope.openListener(host: String, port: Int): Int {
         (value shl 8) or number.toUInt()
     }
     address.sin_addr.s_addr = htonl(ipv4)
+    return address
+}
 
+private fun MemScope.openListener(host: String, port: Int): Int {
+    val address = ipv4SocketAddress(host, port)
     val listener = checked(socket(AF_INET, SOCK_STREAM or SOCK_NONBLOCK or SOCK_CLOEXEC, 0), "socket")
     try {
         val reuse = alloc<IntVar>()

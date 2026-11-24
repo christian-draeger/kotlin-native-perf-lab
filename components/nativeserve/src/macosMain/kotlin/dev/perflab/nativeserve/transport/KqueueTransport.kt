@@ -2,16 +2,13 @@
 
 package dev.perflab.nativeserve.transport
 
-import dev.perflab.nativeserve.kqueue.EVFILT_READ
-import dev.perflab.nativeserve.kqueue.EVFILT_WRITE
-import dev.perflab.nativeserve.kqueue.EV_ADD
-import dev.perflab.nativeserve.kqueue.EV_DELETE
-import dev.perflab.nativeserve.kqueue.EV_ERROR
-import dev.perflab.nativeserve.kqueue.EV_ONESHOT
-import dev.perflab.nativeserve.kqueue.kevent64
-import dev.perflab.nativeserve.kqueue.kevent64_s
-import dev.perflab.nativeserve.kqueue.kqueue
+import dev.perflab.nativeserve.kqueue.NATIVESERVE_EVENT_BATCH_SIZE
+import dev.perflab.nativeserve.kqueue.nativeserve_kqueue_open
 import dev.perflab.nativeserve.kqueue.nativeserve_kqueue_poll
+import dev.perflab.nativeserve.kqueue.nativeserve_kqueue_watch
+import dev.perflab.nativeserve.kqueue.nativeserve_network_ipv4
+import dev.perflab.nativeserve.kqueue.nativeserve_network_port
+import dev.perflab.nativeserve.kqueue.nativeserve_ready_event
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.MemScope
@@ -20,7 +17,6 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.get
-import kotlinx.cinterop.pointed
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.sizeOf
@@ -44,8 +40,6 @@ import platform.posix.bind
 import platform.posix.close
 import platform.posix.errno
 import platform.posix.fcntl
-import platform.posix.htonl
-import platform.posix.htons
 import platform.posix.listen
 import platform.posix.memset
 import platform.posix.recv
@@ -54,15 +48,14 @@ import platform.posix.setsockopt
 import platform.posix.sockaddr_in
 import platform.posix.socket
 
-private const val BATCH_SIZE = 64
-private const val WATCH_ONCE = EV_ADD or EV_ONESHOT
+private const val BATCH_SIZE = NATIVESERVE_EVENT_BATCH_SIZE
 
-internal fun MemScope.openPlatformTransport(host: String, port: Int, connectionLimit: Int): StreamTransport {
+internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
     val address = alloc<sockaddr_in>()
     memset(address.ptr, 0, sizeOf<sockaddr_in>().convert())
     address.sin_len = sizeOf<sockaddr_in>().convert()
     address.sin_family = AF_INET.convert()
-    address.sin_port = htons(port.toUShort())
+    address.sin_port = nativeserve_network_port(port.toUShort())
     val octets = host.split('.')
     require(octets.size == 4) { "Expected a numeric IPv4 bind address" }
     val ipv4 = octets.fold(0U) { value, octet ->
@@ -70,13 +63,15 @@ internal fun MemScope.openPlatformTransport(host: String, port: Int, connectionL
         require(number != null && octet.all { it in '0'..'9' }) { "Expected a numeric IPv4 bind address" }
         (value shl 8) or number.toUInt()
     }
-    address.sin_addr.s_addr = htonl(ipv4)
+    address.sin_addr.s_addr = nativeserve_network_ipv4(ipv4)
+    return address
+}
 
+internal fun MemScope.openPlatformTransport(host: String, port: Int, connectionLimit: Int): StreamTransport {
+    val address = ipv4SocketAddress(host, port)
     val enabled = alloc<IntVar>()
     enabled.value = 1
-    val events = allocArray<kevent64_s>(BATCH_SIZE)
-    val change = alloc<kevent64_s>()
-    memset(change.ptr, 0, sizeOf<kevent64_s>().convert())
+    val events = allocArray<nativeserve_ready_event>(BATCH_SIZE)
     val listener = checked(socket(AF_INET, SOCK_STREAM, 0), "socket")
     try {
         checked(fcntl(listener, F_SETFL, O_NONBLOCK), "set listener nonblocking")
@@ -84,13 +79,13 @@ internal fun MemScope.openPlatformTransport(host: String, port: Int, connectionL
         checked(setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, enabled.ptr, sizeOf<IntVar>().convert()), "set SO_REUSEADDR")
         checked(bind(listener, address.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()), "bind $host:$port")
         checked(listen(listener, 256), "listen")
-        val poller = checked(kqueue(), "kqueue")
+        val poller = checked(nativeserve_kqueue_open(), "kqueue")
         if (fcntl(poller, F_SETFD, FD_CLOEXEC) < 0) {
             val cause = errno
             close(poller)
             error("set kqueue close-on-exec failed (errno $cause)")
         }
-        return KqueueTransport(listener, poller, events, change.ptr, enabled.ptr, connectionLimit)
+        return KqueueTransport(listener, poller, events, enabled.ptr, connectionLimit)
     } catch (cause: Throwable) {
         close(listener)
         throw cause
@@ -105,8 +100,7 @@ private fun checked(result: Int, operation: String): Int {
 private class KqueueTransport(
     private var listener: Int,
     private var poller: Int,
-    private val events: CPointer<kevent64_s>,
-    private val change: CPointer<kevent64_s>,
+    private val events: CPointer<nativeserve_ready_event>,
     private val enabled: CPointer<IntVar>,
     private val connectionLimit: Int,
 ) : StreamTransport {
@@ -126,21 +120,20 @@ private class KqueueTransport(
     }
 
     override fun read(connection: ConnectionId, operation: OperationId, bytes: ByteArray, offset: Int, length: Int): Submission =
-        submit(connection, operation, bytes, offset, length, EVFILT_READ)
+        submit(connection, operation, bytes, offset, length, writing = false)
 
     override fun write(connection: ConnectionId, operation: OperationId, bytes: ByteArray, offset: Int, length: Int): Submission =
-        submit(connection, operation, bytes, offset, length, EVFILT_WRITE)
+        submit(connection, operation, bytes, offset, length, writing = true)
 
     private fun submit(
-        connection: ConnectionId, operation: OperationId, bytes: ByteArray, offset: Int, length: Int, filter: Int,
+        connection: ConnectionId, operation: OperationId, bytes: ByteArray, offset: Int, length: Int, writing: Boolean,
     ): Submission {
         val peer = peers[connection] ?: return Submission.CLOSED
         if (peer.fd < 0) return Submission.CLOSED
-        val read = filter == EVFILT_READ
-        if ((if (read) peer.read else peer.write) != null) return Submission.AT_CAPACITY
+        if ((if (writing) peer.write else peer.read) != null) return Submission.AT_CAPACITY
         require(offset >= 0 && length > 0 && offset <= bytes.size - length)
-        val transfer = Transfer(peer, filter, bytes, offset, length)
-        if (read) peer.read = operation else peer.write = operation
+        val transfer = Transfer(peer, writing, bytes, offset, length)
+        if (writing) peer.write = operation else peer.read = operation
         transfers[operation] = transfer
         armTransfer(operation, transfer)
         return Submission.ACCEPTED
@@ -148,13 +141,13 @@ private class KqueueTransport(
 
     override fun cancel(operation: OperationId) {
         if (acceptOperation == operation && acceptFailure == null) {
-            if (listener >= 0) removeWatch(listener, EVFILT_READ, operation)
+            if (listener >= 0) removeWatch(listener, writing = false, operation)
             acceptFailure = TransportFailure.CANCELLED
             return
         }
         val transfer = transfers[operation] ?: return
         if (transfer.failure != null) return
-        if (transfer.peer.fd >= 0) removeWatch(transfer.peer.fd, transfer.filter, operation)
+        if (transfer.peer.fd >= 0) removeWatch(transfer.peer.fd, transfer.writing, operation)
         fail(operation, transfer, TransportFailure.CANCELLED)
     }
 
@@ -199,8 +192,8 @@ private class KqueueTransport(
         repeat(count) { index ->
             if (poller < 0) return
             val event = events[index]
-            val operation = OperationId(event.udata.toLong())
-            val failed = event.flags.toInt() and EV_ERROR != 0
+            val operation = OperationId(event.operation.toLong())
+            val failed = event.failed != 0
             if (operation == acceptOperation && acceptFailure == null) {
                 if (failed) acceptFailure = TransportFailure.IO_FAILURE else acceptReady(operation, completions)
             } else {
@@ -237,7 +230,7 @@ private class KqueueTransport(
     }
 
     private fun transferReady(operation: OperationId, transfer: Transfer, completions: TransportCompletions) {
-        val writing = transfer.filter == EVFILT_WRITE
+        val writing = transfer.writing
         val count = transfer.bytes.usePinned { pinned ->
             val start = pinned.addressOf(transfer.offset)
             if (writing) send(transfer.peer.fd, start, transfer.length.convert(), 0)
@@ -254,7 +247,7 @@ private class KqueueTransport(
 
     private fun finish(operation: OperationId, transfer: Transfer, count: Int, completions: TransportCompletions) {
         val peer = transfer.peer
-        val writing = transfer.filter == EVFILT_WRITE
+        val writing = transfer.writing
         transfers.remove(operation)
         if (writing) peer.write = null else peer.read = null
         retirePeer(peer)
@@ -277,29 +270,24 @@ private class KqueueTransport(
     }
 
     private fun armAccept(operation: OperationId) {
-        if (watch(listener, EVFILT_READ, operation, WATCH_ONCE) < 0) acceptFailure = TransportFailure.IO_FAILURE
+        if (watch(listener, writing = false, operation, add = true) < 0) acceptFailure = TransportFailure.IO_FAILURE
     }
 
     private fun armTransfer(operation: OperationId, transfer: Transfer) {
-        if (watch(transfer.peer.fd, transfer.filter, operation, WATCH_ONCE) < 0) {
+        if (watch(transfer.peer.fd, transfer.writing, operation, add = true) < 0) {
             fail(operation, transfer, TransportFailure.IO_FAILURE)
         }
     }
 
-    private fun removeWatch(fd: Int, filter: Int, operation: OperationId) {
-        val result = watch(fd, filter, operation, EV_DELETE)
+    private fun removeWatch(fd: Int, writing: Boolean, operation: OperationId) {
+        val result = watch(fd, writing, operation, add = false)
         if (result < 0 && errno != ENOENT) checked(result, "remove kqueue filter")
     }
 
-    private fun watch(fd: Int, filter: Int, operation: OperationId, flags: Int): Int {
-        val event = change.pointed
-        event.ident = fd.toULong()
-        event.filter = filter.toShort()
-        event.flags = flags.toUShort()
-        event.udata = operation.value.toULong()
+    private fun watch(fd: Int, writing: Boolean, operation: OperationId, add: Boolean): Int {
         var result: Int
         do {
-            result = kevent64(poller, change, 1, null, 0, 0U, null)
+            result = nativeserve_kqueue_watch(poller, fd, if (writing) 1 else 0, operation.value.toULong(), if (add) 1 else 0)
         } while (result < 0 && errno == EINTR)
         return result
     }
@@ -322,7 +310,7 @@ private class KqueueTransport(
         var write: OperationId? = null
     }
 
-    private class Transfer(val peer: Peer, val filter: Int, val bytes: ByteArray, val offset: Int, val length: Int) {
+    private class Transfer(val peer: Peer, val writing: Boolean, val bytes: ByteArray, val offset: Int, val length: Int) {
         var failure: TransportFailure? = null
     }
 }

@@ -8,9 +8,9 @@ import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.Submission
 import dev.perflab.nativeserve.transport.TransportCompletions
 import dev.perflab.nativeserve.transport.TransportFailure
+import dev.perflab.nativeserve.transport.ipv4SocketAddress
 import dev.perflab.nativeserve.transport.openPlatformTransport
 import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.alloc
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
@@ -21,9 +21,6 @@ import platform.posix.AF_INET
 import platform.posix.SOCK_STREAM
 import platform.posix.close
 import platform.posix.connect
-import platform.posix.htonl
-import platform.posix.htons
-import platform.posix.memset
 import platform.posix.send
 import platform.posix.sockaddr_in
 import platform.posix.socket
@@ -38,11 +35,7 @@ internal fun probeTransport(port: Int): Unit = memScoped {
         val fd = socket(AF_INET, SOCK_STREAM, 0)
         check(fd >= 0)
         sockets += fd
-        val address = alloc<sockaddr_in>()
-        memset(address.ptr, 0, sizeOf<sockaddr_in>().convert())
-        address.sin_family = AF_INET.convert()
-        address.sin_port = htons(port.toUShort())
-        address.sin_addr.s_addr = htonl(0x7f000001U)
+        val address = ipv4SocketAddress("127.0.0.1", port)
         check(connect(fd, address.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0)
         transport.await(completions) { completions.accepts.containsKey(OperationId(operation)) }
         return completions.accepts.getValue(OperationId(operation))
