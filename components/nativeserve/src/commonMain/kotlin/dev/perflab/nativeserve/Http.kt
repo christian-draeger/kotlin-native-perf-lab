@@ -7,12 +7,13 @@ class Request internal constructor(
     val path: String,
     val query: String?,
     private val parameters: Map<String, String> = emptyMap(),
+    val bodyLength: Int = 0,
 ) {
     fun pathParameter(name: String): String? = parameters[name]
 
     fun pathInt(name: String): Int? = pathParameter(name)?.toIntOrNull()
 
-    internal fun withParameters(values: Map<String, String>) = Request(method, path, query, values)
+    internal fun withParameters(values: Map<String, String>) = Request(method, path, query, values, bodyLength)
 }
 
 class Response internal constructor(
@@ -20,10 +21,22 @@ class Response internal constructor(
     internal val contentType: String?,
     internal val body: ByteArray,
     internal val stream: ResponseStream? = null,
+    internal val allowedMethods: String = "GET",
 ) {
     init {
         require(status in 200..599) { "Response status must be between 200 and 599" }
     }
+}
+
+/** A bounded request body consumed incrementally on the connection's I/O loop. */
+interface RequestBodySink : AutoCloseable {
+    /** Consume [length] bytes from index zero, then release all references to [buffer]. */
+    fun accept(buffer: ByteArray, length: Int)
+
+    /** Produce the response after the declared request body has arrived in full. */
+    fun complete(): Response
+
+    override fun close() {}
 }
 
 /** A response body pulled synchronously on the connection's I/O loop. */
@@ -74,6 +87,8 @@ fun badRequest(): Response = emptyResponse(400)
 
 internal fun emptyResponse(status: Int): Response = Response(status, null, ByteArray(0))
 
+internal fun methodNotAllowed(methods: String): Response = Response(405, null, ByteArray(0), allowedMethods = methods)
+
 internal fun Response.encode(version: String, keepAlive: Boolean): ByteArray {
     val payload = if (status == 204 || status == 304) ByteArray(0) else body
     return encodeHead(version, keepAlive, payload.size) + payload
@@ -98,7 +113,7 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
     return buildString {
         append(version).append(' ').append(status).append(' ').append(reason).append("\r\n")
         contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
-        if (status == 405) append("Allow: GET\r\n")
+        if (status == 405) append("Allow: ").append(allowedMethods).append("\r\n")
         if (status != 204 && status != 304) {
             if (length < 0) append("Transfer-Encoding: chunked\r\n")
             else append("Content-Length: ").append(length).append("\r\n")

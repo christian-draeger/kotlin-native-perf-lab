@@ -258,6 +258,84 @@ class HttpConnectionTest {
         assertFalse(connection.wrote(connection.outputLength, now = 2))
     }
 
+    @Test
+    fun consumesPostInFragmentsAndSeparatesTheFollowingRequest() {
+        val pieces = mutableListOf<String>()
+        var closes = 0
+        var health = 0
+        val routes = Routes().apply {
+            postStreaming("/upload/{name}") { request ->
+                assertEquals("sample", request.pathParameter("name"))
+                assertEquals(5, request.bodyLength)
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) {
+                        pieces += buffer.decodeToString(endIndex = length)
+                    }
+
+                    override fun complete(): Response = text(pieces.joinToString(""))
+
+                    override fun close() {
+                        closes++
+                    }
+                }
+            }
+            get("/health") {
+                health++
+                text("ok")
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits())
+        connection.receive("POST /upload/sample HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nab", now = 1)
+        assertFalse(connection.prepareResponse(routes, now = 1))
+        assertEquals(listOf("ab"), pieces)
+        connection.receive("cde$request", now = 2)
+        assertTrue(connection.prepareResponse(routes, now = 2))
+        assertTrue(connection.pendingOutput().endsWith("\r\n\r\nabcde"))
+        assertEquals(listOf("ab", "cde"), pieces)
+        assertEquals(1, closes)
+        assertEquals(0, health)
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+        assertTrue(connection.prepareResponse(routes, now = 3))
+        assertEquals(1, health)
+        connection.close()
+        assertEquals(1, closes)
+    }
+
+    @Test
+    fun oversizePostDoesNotOpenASinkAndAnInterruptedBodyClosesItsSink() {
+        var opens = 0
+        var closes = 0
+        val routes = Routes().apply {
+            postStreaming("/upload") {
+                opens++
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) {}
+                    override fun complete(): Response = error("Incomplete body must not finish")
+                    override fun close() { closes++ }
+                }
+            }
+        }
+        val head = "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\n"
+        val rejected = HttpConnection(0, ServerLimits(requestBodyBytes = 4))
+        rejected.receive(head, now = 1)
+        assertTrue(rejected.prepareResponse(routes, now = 1))
+        assertTrue(rejected.pendingOutput().startsWith("HTTP/1.1 413 "))
+        assertEquals(0, opens)
+
+        val partial = HttpConnection(0, ServerLimits(requestBodyMillis = 5, idleMillis = 50))
+        partial.receive(head + "a", now = 1)
+        assertFalse(partial.prepareResponse(routes, now = 1))
+        partial.receive("b", now = 5)
+        assertFalse(partial.prepareResponse(routes, now = 5))
+        assertFalse(partial.expired(now = 5))
+        assertTrue(partial.expired(now = 6))
+        assertEquals(1, opens)
+        assertEquals(0, closes)
+        partial.close()
+        partial.close()
+        assertEquals(1, closes)
+    }
+
     private fun HttpConnection.pendingOutput(): String =
         assertNotNull(output).decodeToString(endIndex = outputLength)
 

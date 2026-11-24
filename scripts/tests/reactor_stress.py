@@ -9,6 +9,8 @@ import subprocess
 import sys
 import time
 
+from reactor_http_smoke import response
+
 BODY_BYTES = 8 * 1024 * 1024
 STREAM_BYTES = BODY_BYTES - 3
 MIB = 1024 * 1024
@@ -167,6 +169,34 @@ def test_streams(port, server):
     print("Response streaming checks passed (pipeline, truncation, disconnect, idle, drain)")
 
 
+def test_request_bodies(port):
+    head = b"POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 7\r\n\r\n"
+
+    def active():
+        return fetch(port, "/open-requests")
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(head + b"abc")
+        wait_until(lambda: active() == (200, b"1"), "Request sink never opened")
+        conn.sendall(b"defg" + request("/health"))
+        with conn.makefile("rb") as stream:
+            assert response(stream)[2] == b"7"
+            assert response(stream)[2] == b"ok"
+        assert active() == (200, b"0")
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(head + b"abc")
+        wait_until(lambda: active() == (200, b"1"), "Request sink never opened")
+    wait_until(lambda: active() == (200, b"0"), "Disconnected request leaked its body sink")
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(head + b"abc")
+        wait_until(lambda: active() == (200, b"1"), "Request sink never opened")
+        assert_closed(conn)
+        assert active() == (200, b"0")
+    print("Request streaming checks passed (pipeline, disconnect, deadline)")
+
+
 def main(binary):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -183,6 +213,7 @@ def main(binary):
 
             wait_until(ready, "Fixture never became ready")
             test_limits(port, server.pid)
+            test_request_bodies(port)
             test_streams(port, server)
         finally:
             if server.poll() is None:
