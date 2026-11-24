@@ -127,9 +127,11 @@ static inline uint32_t ns_submit_accept(ns_iocp *state, uint64_t socket, ns_io *
 
 static inline int ns_attach_accepted(ns_iocp *state, uint64_t value) {
     const SOCKET socket = (SOCKET)value;
-    const int error = setsockopt(socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
-                                 (const char *)&state->listener, sizeof(state->listener));
-    return error == 0 && CreateIoCompletionPort((HANDLE)socket, state->port, 1, 0) == state->port;
+    const int send_buffer = 64 * 1024;
+    return setsockopt(socket, SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
+                      (const char *)&state->listener, sizeof(state->listener)) == 0 &&
+           setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (const char *)&send_buffer, sizeof(send_buffer)) == 0 &&
+           CreateIoCompletionPort((HANDLE)socket, state->port, 1, 0) == state->port;
 }
 
 static inline uint32_t ns_submit_io(uint64_t value, ns_io *operation, int write) {

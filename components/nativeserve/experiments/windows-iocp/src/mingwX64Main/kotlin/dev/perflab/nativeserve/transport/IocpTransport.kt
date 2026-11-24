@@ -15,6 +15,7 @@ import kotlinx.cinterop.value
 import platform.posix.memcpy
 
 private const val BATCH_SIZE = 64
+private const val SEND_BYTES = 64 * 1024
 private val INVALID_WINDOWS_SOCKET = ULong.MAX_VALUE
 
 internal fun openIocpTransport(host: String, port: Int, connectionLimit: Int): StreamTransport = memScoped {
@@ -79,11 +80,12 @@ private class IocpTransport(
         if (peer.closed) return Submission.CLOSED
         if (if (writing) peer.writing else peer.reading) return Submission.AT_CAPACITY
         require(offset >= 0 && length > 0 && offset <= bytes.size - length)
-        val io = ns_new_io(length) ?: return Submission.AT_CAPACITY
-        val transfer = Transfer(operation, io, peer, bytes, offset, length, writing)
+        val count = if (writing) minOf(length, SEND_BYTES) else length
+        val io = ns_new_io(count) ?: return Submission.AT_CAPACITY
+        val transfer = Transfer(operation, io, peer, bytes, offset, count, writing)
         if (writing) {
             peer.writing = true
-            bytes.usePinned { memcpy(ns_io_buffer(io), it.addressOf(offset), length.convert()) }
+            bytes.usePinned { memcpy(ns_io_buffer(io), it.addressOf(offset), count.convert()) }
         } else {
             peer.reading = true
         }
