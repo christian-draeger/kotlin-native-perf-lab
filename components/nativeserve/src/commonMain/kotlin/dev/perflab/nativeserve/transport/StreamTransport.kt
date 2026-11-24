@@ -25,6 +25,12 @@ internal interface TransportCompletions {
  * Rejected submissions never acquire a lease or produce a callback.
  */
 internal interface StreamTransport {
+    /**
+     * Interrupt [poll] when application work can progress. The signal can run on
+     * concurrent handler threads, including during close. Null uses timed polling.
+     */
+    val signalApplicationProgress: (() -> Unit)? get() = null
+
     fun accept(operation: OperationId): Submission
     fun read(connection: ConnectionId, operation: OperationId, bytes: ByteArray, offset: Int, length: Int): Submission
     fun write(connection: ConnectionId, operation: OperationId, bytes: ByteArray, offset: Int, length: Int): Submission

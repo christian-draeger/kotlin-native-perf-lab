@@ -50,6 +50,7 @@ private class NioTransport(
     private val listenerKey: SelectionKey,
     private val connectionLimit: Int,
 ) : StreamTransport {
+    override val signalApplicationProgress: () -> Unit = { selector.wakeup() }
     private val peers = mutableMapOf<ConnectionId, Peer>()
     private val pending = mutableMapOf<OperationId, Transfer>()
     private val failures = ArrayDeque<Transfer>()

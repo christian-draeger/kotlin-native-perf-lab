@@ -3,7 +3,7 @@ package dev.perflab.nativeserve
 import kotlinx.coroutines.channels.Channel
 
 /** Read an HTTP request body incrementally from a suspending application handler. */
-class RequestContent internal constructor() {
+class RequestContent internal constructor(private val signalApplicationProgress: (() -> Unit)? = null) {
     private val chunks = Channel<ByteArray>(1)
     private var staged: ByteArray? = null
 
@@ -11,7 +11,7 @@ class RequestContent internal constructor() {
     suspend fun readChunk(): ByteArray? {
         val result = chunks.receiveCatching()
         result.exceptionOrNull()?.let { throw it }
-        return result.getOrNull()
+        return result.getOrNull()?.also { signalApplicationProgress?.invoke() }
     }
 
     internal fun offer(buffer: ByteArray, length: Int): Boolean {
