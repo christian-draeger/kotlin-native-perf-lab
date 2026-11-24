@@ -1,5 +1,6 @@
 package dev.perflab.nativeserve.webflux
 
+import dev.perflab.nativeserve.ServerLimits
 import io.netty.buffer.PooledByteBufAllocator
 import java.net.ServerSocket
 import java.net.Socket
@@ -11,6 +12,7 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -97,6 +99,41 @@ class WebFluxAdapterTest {
         }
     }
 
+    @Test
+    fun aSlowClientBackpressuresThePublisherAndAnEarlyFailureReturnsHttp500() {
+        val chunk = ByteArray(16 * 1024)
+        val maxBytes = 16 * 1024 * 1024
+        val emitted = AtomicInteger()
+        val cancelled = CompletableFuture<Unit>()
+        val handler = HttpHandler { request, response ->
+            val output = when (request.uri.path) {
+                "/failure" -> Flux.error(IllegalStateException("fixture publisher failure"))
+                else -> Flux.range(0, maxBytes / chunk.size).map<DataBuffer> {
+                    emitted.incrementAndGet()
+                    DefaultDataBufferFactory.sharedInstance.wrap(chunk)
+                }.doOnCancel { cancelled.complete(Unit) }
+            }
+            response.writeWith(output)
+        }
+        withNativeServe(handler, ServerLimits(responseBodyBytes = maxBytes)) { port ->
+            val failure = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build().send(
+                HttpRequest.newBuilder(URI("http://127.0.0.1:$port/failure")).timeout(Duration.ofSeconds(5)).build(),
+                HttpResponse.BodyHandlers.discarding(),
+            )
+            assertEquals(500, failure.statusCode())
+            Socket().use { socket ->
+                socket.receiveBufferSize = 4096
+                socket.soTimeout = 5000
+                socket.connect(java.net.InetSocketAddress("127.0.0.1", port))
+                socket.getOutputStream().write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".encodeToByteArray())
+                assertEquals('H'.code, socket.getInputStream().read())
+                Thread.sleep(100)
+                assertTrue(emitted.get() in 1 until maxBytes / chunk.size)
+            }
+            cancelled.get(5, TimeUnit.SECONDS)
+        }
+    }
+
     private fun checkApplication(port: Int) {
         val client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build()
         fun request(path: String, body: ByteArray? = null): HttpResponse<ByteArray> {
@@ -117,14 +154,17 @@ class WebFluxAdapterTest {
         assertEquals(404, request("/missing").statusCode())
     }
 
-    private fun withNativeServe(handler: HttpHandler, test: (Int) -> Unit) {
+    private fun withNativeServe(handler: HttpHandler, test: (Int) -> Unit) =
+        withNativeServe(handler, ServerLimits(), test)
+
+    private fun withNativeServe(handler: HttpHandler, limits: ServerLimits, test: (Int) -> Unit) {
         val port = ServerSocket(0).use { it.localPort }
         val ready = CompletableFuture<Unit>()
         val finished = CompletableFuture<Unit>()
         val stop = AtomicBoolean()
         val worker = thread(isDaemon = true, name = "nativeserve-webflux-test") {
             try {
-                serveWebFlux(handler, port, stopRequested = stop::get, onListening = { ready.complete(Unit) })
+                serveWebFlux(handler, port, limits = limits, stopRequested = stop::get, onListening = { ready.complete(Unit) })
                 finished.complete(Unit)
             } catch (cause: Throwable) {
                 ready.completeExceptionally(cause)

@@ -6,6 +6,7 @@ on:
       - 'components/nativeserve/integrations/webflux/**'
       - 'components/nativeserve/src/commonMain/**'
       - 'components/nativeserve/src/jvmMain/**'
+      - 'scripts/ci-gradle.sh'
       - '.github/workflows/spring-webflux-nativeserve.yml'
   workflow_dispatch:
 
@@ -32,4 +33,4 @@ jobs:
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
         with:
           gradle-version: '9.7.0'
-      - run: gradle -p components/nativeserve/integrations/webflux test
+      - run: bash scripts/ci-gradle.sh -p components/nativeserve/integrations/webflux test
