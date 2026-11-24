@@ -155,6 +155,9 @@ internal fun Response.encode(version: String, keepAlive: Boolean): ByteArray {
     return encodeHead(version, keepAlive, payload.size) + payload
 }
 
+internal const val CHUNKED_RESPONSE_LENGTH = -1
+internal const val OMIT_RESPONSE_LENGTH = -2
+
 internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: Int): ByteArray {
     val reason = when (status) {
         200 -> "OK"
@@ -162,6 +165,7 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
         204 -> "No Content"
         304 -> "Not Modified"
         400 -> "Bad Request"
+        403 -> "Forbidden"
         404 -> "Not Found"
         405 -> "Method Not Allowed"
         413 -> "Content Too Large"
@@ -178,8 +182,8 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
         if (status == 405 && allowedMethods != null) append("Allow: ").append(allowedMethods).append("\r\n")
         for (field in fields) append(field.name).append(": ").append(field.value).append("\r\n")
         if (status != 204 && status != 304) {
-            if (length < 0) append("Transfer-Encoding: chunked\r\n")
-            else append("Content-Length: ").append(length).append("\r\n")
+            if (length == CHUNKED_RESPONSE_LENGTH) append("Transfer-Encoding: chunked\r\n")
+            if (length >= 0) append("Content-Length: ").append(length).append("\r\n")
         }
         append(if (keepAlive) "Connection: keep-alive\r\n" else "Connection: close\r\n")
         append("\r\n")

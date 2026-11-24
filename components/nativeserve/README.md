@@ -103,6 +103,8 @@ getSuspending("/profile/{id}") { request ->
 
 Suspending handlers run on `Dispatchers.Default` and can run concurrently across connections. Each connection has one active handler and sends pipelined responses in order. A peer EOF while the handler is pending, `ServerLimits.handlerMillis`, or the end of the shutdown drain cancels the coroutine. Cancellation is cooperative. Applications should use cancellable I/O and release their own resources in `finally`. The experimental h2c engine returns HTTP 501 for these routes.
 
+Framework adapters can use `application { request, body -> … }` to own routing on an HTTP/1.x listener. `body.readChunk()` suspends until a chunk or the end of the body arrives. Each returned array belongs to the application. While the handler is slow, NativeServe queues one body chunk and pauses connection reads once the bounded input fills. A response returned before the request body finishes closes the connection after writing. HEAD responses keep their known content length and omit the payload. The request size, request body timeout and handler timeout apply to the whole exchange.
+
 For a body with a known byte length, return `streamResponse` from a route. NativeServe sends the response head and pulls up to 16 KiB at a time as the connection writes progress.
 
 ```kotlin

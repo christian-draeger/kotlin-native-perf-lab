@@ -21,7 +21,9 @@ internal class HttpServer(
     private val suspended = mutableSetOf<ConnectionId>()
     private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
-        if (routes.hasSuspendingGets) ({ run -> SuspendedGet(handlerScope.value, run) }) else null
+        if (routes.hasSuspendingGets || routes.applicationHandler != null) {
+            { run -> SuspendedGet(handlerScope.value, run) }
+        } else null
     private val clock = TimeSource.Monotonic.markNow()
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
@@ -101,17 +103,20 @@ internal class HttpServer(
 
     private fun advance(id: ConnectionId, client: HttpConnection, time: Long) {
         if (client.writePending) return
-        val result = if (client.prepareResponse(routes, time, launchHandler)) {
+        val responseReady = client.prepareResponse(routes, time, launchHandler)
+        if (launchHandler != null) {
+            if (client.awaitingHandler) suspended.add(id) else suspended.remove(id)
+        }
+        val result = if (responseReady) {
             val output = checkNotNull(client.output)
             client.writePending = true
             transport.write(
                 id, OperationId(nextOperation++), output, client.outputOffset, client.outputLength - client.outputOffset,
             )
         } else {
-            if (client.awaitingHandler) suspended.add(id)
             val input = client.input
             val available = input.bytes.size - input.size
-            if (client.readPending || available == 0) return
+            if (client.readPending || client.bodyBlocked || available == 0) return
             client.readPending = true
             if (client.awaitingHandler) {
                 val buffer = client.monitorBuffer()
@@ -125,14 +130,9 @@ internal class HttpServer(
 
     private fun finishHandlers(time: Long) {
         if (suspended.isEmpty()) return
-        val iterator = suspended.iterator()
-        while (iterator.hasNext()) {
-            val id = iterator.next()
-            val client = clients.getValue(id)
-            if (client.finishHandler(time)) {
-                iterator.remove()
-                advance(id, client, time)
-            }
+        for (id in suspended.toList()) {
+            val client = clients[id] ?: continue
+            if (client.finishHandler(time) || client.bodyBlocked) advance(id, client, time)
         }
     }
 

@@ -5,8 +5,11 @@ class Routes {
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
     internal var hasSuspendingGets = false
         private set
+    internal var applicationHandler: (suspend (Request, RequestContent) -> Response)? = null
+        private set
 
     fun get(path: String, handler: (Request) -> Response) {
+        require(applicationHandler == null) { "A standalone application owns all routes" }
         gets.add(path, GetHandler.Immediate(handler))
     }
 
@@ -15,13 +18,26 @@ class Routes {
      * A disconnect, timeout, or shutdown cancels the handler's coroutine.
      */
     fun getSuspending(path: String, handler: suspend (Request) -> Response) {
+        require(applicationHandler == null) { "A standalone application owns all routes" }
         gets.add(path, GetHandler.Suspending(handler))
         hasSuspendingGets = true
     }
 
     /** Open one body sink per POST. HTTP/1.1 accepts chunked bodies. */
     fun postStreaming(path: String, handler: (Request) -> RequestBodySink) {
+        require(applicationHandler == null) { "A standalone application owns all routes" }
         posts.add(path, handler)
+    }
+
+    /**
+     * Give an HTTP/1.x application all requests on this listener. The application supplies routing.
+     * Read the body incrementally and return a response. One exchange is active per connection.
+     */
+    fun application(handler: suspend (Request, RequestContent) -> Response) {
+        require(applicationHandler == null && gets.isEmpty() && posts.isEmpty()) {
+            "An application handler must own all routes on its listener"
+        }
+        applicationHandler = handler
     }
 
     internal fun respond(request: Request): Response = checkNotNull(respond(request, null))

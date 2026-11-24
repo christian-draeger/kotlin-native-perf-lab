@@ -29,12 +29,12 @@ internal class RequestBuffer(capacity: Int) {
         searchOffset = 0
     }
 
-    fun parse(): ParsedHead {
+    fun parse(allowAnyRequestBody: Boolean = false): ParsedHead {
         for (index in searchOffset..size - 4) {
             if (bytes[index] == 13.toByte() && bytes[index + 1] == 10.toByte() &&
                 bytes[index + 2] == 13.toByte() && bytes[index + 3] == 10.toByte()
             ) {
-                return parseHead(bytes.decodeToString(endIndex = index), index + 4)
+                return parseHead(bytes.decodeToString(endIndex = index), index + 4, allowAnyRequestBody)
             }
         }
         searchOffset = (size - 3).coerceAtLeast(0)
@@ -42,7 +42,7 @@ internal class RequestBuffer(capacity: Int) {
     }
 }
 
-private fun parseHead(head: String, consumed: Int): ParsedHead {
+private fun parseHead(head: String, consumed: Int, allowAnyRequestBody: Boolean): ParsedHead {
     val requestLineEnd = head.lineEnd(0)
     val methodEnd = head.indexOf(' ')
     if (methodEnd !in 1 until requestLineEnd || !head.isToken(0, methodEnd)) return ParsedHead.Rejected(400)
@@ -127,7 +127,8 @@ private fun parseHead(head: String, consumed: Int): ParsedHead {
                 hasLength = true
             }
             head.matches(fieldStart, colon, "transfer-encoding", ignoreCase = true) -> {
-                if (chunked || version != "HTTP/1.1" || !head.matches(0, methodEnd, "POST") ||
+                if (chunked || version != "HTTP/1.1" ||
+                    !allowAnyRequestBody && !head.matches(0, methodEnd, "POST") ||
                     !head.matches(valueStart, valueEnd, "chunked", ignoreCase = true)
                 ) return ParsedHead.Rejected(400)
                 chunked = true
@@ -138,7 +139,9 @@ private fun parseHead(head: String, consumed: Int): ParsedHead {
     }
     if (version == "HTTP/1.1" && !hasHost) return ParsedHead.Rejected(400)
     if (hasLength && chunked) return ParsedHead.Rejected(400)
-    if (bodyLengthOverflow || bodyLength > 0 && !head.matches(0, methodEnd, "POST")) return ParsedHead.Rejected(413)
+    if (bodyLengthOverflow || bodyLength > 0 && !allowAnyRequestBody && !head.matches(0, methodEnd, "POST")) {
+        return ParsedHead.Rejected(413)
+    }
     val path = head.substring(targetStart, queryStart)
     val query = if (queryStart == targetEnd) null else head.substring(queryStart + 1, targetEnd)
     return ParsedHead.Complete(

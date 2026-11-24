@@ -1,18 +1,22 @@
 package dev.perflab.nativeserve
 
 internal enum class BodyProgress(val status: Int) {
-    INCOMPLETE(0), COMPLETE(0), INVALID(400), OVERSIZE(413), METADATA_LIMIT(431),
+    INCOMPLETE(0), BLOCKED(0), COMPLETE(0), INVALID(400), OVERSIZE(413), METADATA_LIMIT(431),
+}
+
+internal fun interface BodyInput {
+    fun offer(bytes: ByteArray, length: Int): Boolean
 }
 
 internal interface RequestBodyDecoder {
-    fun consume(input: RequestBuffer, sink: RequestBodySink): BodyProgress
+    fun consume(input: RequestBuffer, sink: BodyInput): BodyProgress
 }
 
 internal class FixedLengthBody(private var remaining: Int) : RequestBodyDecoder {
-    override fun consume(input: RequestBuffer, sink: RequestBodySink): BodyProgress {
+    override fun consume(input: RequestBuffer, sink: BodyInput): BodyProgress {
         val length = minOf(remaining, input.size)
         if (length > 0) {
-            sink.accept(input.bytes, length)
+            if (!sink.offer(input.bytes, length)) return BodyProgress.BLOCKED
             input.consume(length)
             remaining -= length
         }
@@ -25,7 +29,7 @@ internal class ChunkedBody(private var bodyBudget: Int, private var metadataBudg
     private var remaining = 0
     private var scan = 0
 
-    override fun consume(input: RequestBuffer, sink: RequestBodySink): BodyProgress {
+    override fun consume(input: RequestBuffer, sink: BodyInput): BodyProgress {
         while (true) {
             when (phase) {
                 Phase.SIZE, Phase.TRAILERS -> {
@@ -56,7 +60,7 @@ internal class ChunkedBody(private var bodyBudget: Int, private var metadataBudg
                 Phase.DATA -> {
                     if (input.size == 0) return BodyProgress.INCOMPLETE
                     val length = minOf(input.size, remaining)
-                    sink.accept(input.bytes, length)
+                    if (!sink.offer(input.bytes, length)) return BodyProgress.BLOCKED
                     input.consume(length)
                     remaining -= length
                     if (remaining == 0) phase = Phase.DATA_END
