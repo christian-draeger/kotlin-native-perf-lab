@@ -1,14 +1,24 @@
-# Kotlin Native Performance Lab
+# ktServe
 
-A reproducible performance lab comparing established HTTP stacks with [NativeServe](components/nativeserve/README.md), an HTTP framework for Kotlin/Native and the JVM.
+ktServe is an HTTP server for Kotlin/Native and the JVM. Use its Kotlin routing API in a standalone service, select it as a Ktor engine, or enable it in a Spring Boot WebFlux application.
 
-The [NativeServe starter](components/nativeserve/README.md) covers Linux, Apple Silicon macOS and JVM development. The [Ktor engine](components/nativeserve/integrations/ktor/README.md) and [Spring WebFlux adapter](components/nativeserve/integrations/webflux/README.md) run existing application models through the same HTTP core. See [results/](results/) for exploratory measurements and profiling evidence.
+The Kotlin Native Performance Lab is the project behind ktServe. Its [GitHub Pages site](https://christian-draeger.github.io/kotlin-native-perf-lab/) introduces the server, explains the architecture, and publishes benchmark results with their measured revisions and conditions.
+
+## Try ktServe
+
+| Start with | Example |
+| --- | --- |
+| A standalone Kotlin service on Linux, Apple Silicon, or the JVM | [Standalone quickstart](components/nativeserve/README.md) |
+| A Ktor application with the ktServe engine | [Ktor JVM example](components/nativeserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/nativeserve/integrations/ktor/README.md) |
+| A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/nativeserve/examples/spring-webflux) · [Starter guide](components/nativeserve/integrations/spring-boot-starter/README.md) |
+
+Earlier previews were published as NativeServe. The same packages, configuration keys, and benchmark history remain available. [Compatibility names](components/nativeserve/README.md#compatibility-names)
 
 ## Repository layout
 
 | Directory | Contents |
 | --- | --- |
-| `components/nativeserve/` | NativeServe and its public Kotlin API, platform implementation and component tests. |
+| `components/nativeserve/` | ktServe and its public Kotlin API, platform implementation and component tests. |
 | `components/` | Project-owned components and their modules or standalone builds. |
 | `competitors/` | Reference implementations for Rust/Axum, the Kotlin server ecosystem, ASP.NET Core, Go, Hono, Elysia and FastAPI. |
 | `scripts/` | Shared build, validation, measurement and profiling commands. |
@@ -16,9 +26,11 @@ The [NativeServe starter](components/nativeserve/README.md) covers Linux, Apple 
 
 ## Benchmark dashboard
 
-Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate NativeServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
+Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate ktServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
-To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 18-stack `expanded` suite or the quicker four-stack `core` suite, and three or five trials per server and endpoint. The optional feature label appears in NativeServe history. One VM runs each architecture and endpoint pair. Every server in that endpoint comparison runs sequentially on the same VM, with a fresh server process per trial. The dashboard groups the endpoints by workflow and architecture while showing the selected endpoint's actual CPU model and raw logs. The load generator shares that VM with each server. CPU models and host conditions can differ between endpoints and workflow runs.
+To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 18-stack `expanded` suite or the quicker four-stack `core` suite, and three or five trials per server and endpoint. The optional feature label appears in ktServe history. One VM runs each architecture and endpoint pair. Every server in that endpoint comparison runs sequentially on the same VM, with a fresh server process per trial. The dashboard groups the endpoints by workflow and architecture while showing the selected endpoint's actual CPU model and raw logs. The load generator shares that VM with each server. CPU models and host conditions can differ between endpoints and workflow runs.
+
+The engine comparisons use one application per framework and change its HTTP engine. They cover Ktor Native on CIO and ktServe, Ktor JVM on CIO, Netty and ktServe, and Spring Boot WebFlux on Reactor Netty and ktServe. Run **Actions → ktServe integration benchmarks** on `main` to collect Linux x86_64 and ARM64 measurements. GitHub Actions publishes the series to the engine comparison view. [Engine comparisons](https://christian-draeger.github.io/kotlin-native-perf-lab/#integration-benchmarks) · [Integration benchmark protocol](BENCHMARK_PROTOCOL.md#compare-framework-engines)
 
 For a local preview, build the static files and serve the output directory.
 
@@ -56,7 +68,7 @@ The Ktor servers use the *same* `commonMain` routes and serializers. Both use th
 | http4k | Kotlin HTTP handlers on Jetty with http4k's Jackson integration. |
 | Javalin | Kotlin routes on Jetty with Jackson. |
 
-The dashboard uses purple for the Kotlin server ecosystem, including both Java Spring Boot references, and orange for NativeServe. The ranking follows the selected metric.
+The dashboard uses purple for the Kotlin server ecosystem, including both Java Spring Boot references, and orange for ktServe. The ranking follows the selected metric.
 
 On Linux with the [CI toolchain versions](.github/actions/setup-competitors/action.yml), Maven, JDK 21 and the [pinned .NET SDK](competitors/aspnet-core/global.json):
 
@@ -83,7 +95,7 @@ export RUSTUP_TOOLCHAIN=1.100.0
 ./scripts/smoke-all.sh
 ```
 
-The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native release executables, and a Ktor JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises the three baselines and NativeServe sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executables on x86_64 and runs them on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
+The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native release executables, and a Ktor JVM classpath distribution. On a cold build Kotlin/Native downloads its compiler and LLVM tools. `smoke-all.sh` exercises the three baselines and ktServe sequentially over HTTP/1.1. GitHub Actions runs the checks on Ubuntu 24.04 x86_64 and ARM64. CI cross-compiles the Kotlin/Native ARM64 executables on x86_64 and runs them on the ARM64 runner. [Kotlin/Native host support](https://kotlinlang.org/docs/native-target-support.html#hosts)
 
 ## Run any server
 
@@ -91,7 +103,7 @@ The build creates the Rust release binary using `Cargo.lock`, both Kotlin/Native
 PORT=8080 ./scripts/run-server.sh ktor-jvm
 PORT=8080 ./scripts/run-server.sh ktor-native
 PORT=8080 ./scripts/run-server.sh rust-axum
-PORT=8080 ./scripts/run-server.sh nativeserve
+PORT=8080 ./scripts/run-server.sh ktserve
 ```
 
 Use another terminal to check the exact API contract:

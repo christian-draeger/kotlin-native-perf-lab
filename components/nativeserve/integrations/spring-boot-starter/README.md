@@ -1,6 +1,6 @@
-# NativeServe Spring Boot starter
+# ktServe Spring Boot starter
 
-Add the starter to a Spring Boot 4.2.0 WebFlux application on JDK 21 and enable NativeServe. The [independent example](../../examples/spring-webflux) resolves the starter from this checkout through a Gradle composite.
+Add the starter to a Spring Boot 4.2.0 WebFlux application on JDK 21 and enable ktServe. The [independent example](../../examples/spring-webflux) resolves the starter from this checkout through a Gradle composite.
 
 ```kotlin
 dependencies {

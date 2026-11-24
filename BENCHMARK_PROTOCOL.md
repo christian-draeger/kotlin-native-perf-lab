@@ -2,7 +2,7 @@
 
 ## Question
 
-How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and **NativeServe** compare on equivalent HTTP handlers?
+How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and **ktServe** compare on equivalent HTTP handlers?
 
 The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, Flask/Waitress, Django/Uvicorn, Spring Boot MVC/Tomcat, Spring Boot WebFlux/Reactor Netty, ASP.NET Core/Kestrel, Quarkus REST, Vert.x Web, Micronaut, http4k and Javalin. The same HTTP smoke contract applies to every runtime. Worker configuration follows each documented launcher and CPU/RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
 
@@ -43,9 +43,11 @@ BIND_HOST=192.0.2.10 PORT=20080 LOAD_SSH=perflab-load \
 
 The harness opens an SSH control connection, compares machine IDs, estimates clock offset and stages the same Lua reporting script on the load host. All HTTP traffic travels directly from the load host to the server. Server-side `/proc` samples bracket the measured SSH command, so the CPU window includes SSH command setup and teardown. The measured latency and throughput come from wrk's own elapsed interval. Results include the clock offset bounds, both CPU and affinity records, versions, hashes, trial ports and response error counts. Review host isolation and load-generator headroom before including a run in a controlled comparison.
 
-## Compare NativeServe workers
+<a id="compare-nativeserve-workers"></a>
 
-The `workers` suite interleaves the prior NativeServe release, one and two candidate workers, Ktor/JVM, Ktor/Native, and Axum. Provide the executable and source SHA of the prior release. On dedicated hosts, use `LOAD_SSH` as above. For a same-host rehearsal, set disjoint `SERVER_CPUS` and `LOAD_CPUS` using taskset CPU lists. Both CPU sets and the reference binary checksum are recorded.
+## Compare ktServe workers
+
+The `workers` suite interleaves the prior ktServe release, one and two candidate workers, Ktor/JVM, Ktor/Native, and Axum. Provide the executable and source SHA of the prior release. On dedicated hosts, use `LOAD_SSH` as above. For a same-host rehearsal, set disjoint `SERVER_CPUS` and `LOAD_CPUS` using taskset CPU lists. Both CPU sets and the reference binary checksum are recorded.
 
 In GitHub Actions, run the **Benchmark dashboard** workflow with suite `workers` and the run ID of a successful **Ubuntu smoke** workflow on `main` as `worker_reference_run`. The worker suite can run against a PR branch. Each Linux runner uses separate two-CPU affinity sets for server and load. It archives saturation measurements at 64 connections and fixed-rate `/json` results at 20,000 and 40,000 requests/s. These runs use one GitHub-hosted VM per cell and remain exploratory. Worker artifacts are available on the workflow run.
 
@@ -59,11 +61,36 @@ Dashboard benchmarks on `main` reuse the ARM64 release artifact when a successfu
 
 Review the actual delivered rate and failures before comparing p99 at fixed load. Keep the one-worker result alongside the prior release to spot regressions in the default path. Use the two-host setup to decide on a new default.
 
+## Compare framework engines
+
+Run **Actions → ktServe integration benchmarks** on `main` for a comparison within each framework. Each row uses the same application code, routes and response semantics for all its launch modes. [Workflow](.github/workflows/integration-benchmarks.yml) · [Dashboard engine comparisons](https://christian-draeger.github.io/kotlin-native-perf-lab/#integration-benchmarks)
+
+| Application | Engines |
+| --- | --- |
+| Ktor on Kotlin/Native | CIO, ktServe |
+| Ktor on the JVM | CIO, Netty, ktServe |
+| Spring Boot WebFlux on the JVM | Reactor Netty, ktServe |
+
+The fixtures cover a typed JSON response at `GET /json`, a 24 KiB upload at `POST /upload`, and a streamed response at `GET /download`. The download sends 32 KiB plus three bytes in total, with a 50 ms application delay between chunks. HTTP/1.1 smoke checks verify response parity before measurement. Compare engines within the same application, architecture and workload. Download latency includes the application delay.
+
+The GitHub-hosted comparison runs each engine in an independent server process and records raw workload logs, the measured revision and host information. The server and load generator share the VM with separate CPU affinity sets. Treat these results as exploratory. Controlled conclusions still require two physical hosts, validated JVM warm-up and at least five valid repetitions per cell.
+
+To check the Ktor JVM fixture locally with JDK 21, build its distribution and run the HTTP smoke checks across its engines.
+
+```sh
+fixture=components/nativeserve/benchmarks/ktor-jvm
+./components/nativeserve/gradlew -p "$fixture" installDist
+python3 scripts/benchmark-integrations.py --family ktor-jvm \
+  --executable "$fixture/build/install/ktserve-benchmark-ktor-jvm/bin/ktserve-benchmark-ktor-jvm" \
+  --output "$(mktemp -d)" --smoke-only
+```
+
 ## Local harness and limitations
 
 - The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.
 - The Lua callback reads p50, p95, and p99 from stock wrk's interval-corrected latency distribution after each run. Report the median and min–max of the run-level p99s. A pooled request-level p99 would require the original latency samples.
 - The CPU numerator is the change in cumulative process user and system time from `/proc/<pid>/stat` around the measured load. Its boundary includes starting and draining the load generator, and its accounting excludes the load generator and any CPU activity that Linux charges outside the server process.
+- The stock `wrk` harness uses GNU `time` on the load host when available, including over SSH. The raw load log records user and system CPU time, elapsed wall time and peak resident memory. The trial CSV records their CPU time sum as `load_cpu_seconds`, peak RSS as `load_peak_rss_kib` and CPU seconds divided by wall seconds as `load_cpu_equivalents`. A value of `1.0` means `wrk` occupied about one logical CPU on average. Compare this diagnostic with the load affinity set and delivered traffic. An average can hide a saturated thread, scheduling delays or contention elsewhere on the host.
 - The denominator for a valid run is the wrk completed response count. wrk flags HTTP statuses 400 and above and socket errors. The separate smoke checks require HTTP 200, verify the payloads and headers, and exercise keep-alive. wrk accepts 3xx and does not inspect payloads under load.
 - `VmHWM` includes process startup and warm-up. The CSV also records resident memory at the end of each measurement.
 - Check the warm-up and measurement logs before interpreting the table. A trial with zero completed responses, socket errors, or wrk HTTP errors is retained and left out of the aggregate. The fixed warm-up provides the same preconditioning workload across variants. Confirm steady state with the pilot below before using controlled results.
@@ -73,7 +100,7 @@ Review the actual delivered rate and failures before comparing p99 at fixed load
 
 Set `WARMUP_WINDOWS` to at least three to test steady state. Each wrk window uses the planned workload for `WARMUP` seconds. Three consecutive error-free windows must have at most 10% spread from minimum to maximum requests per second. For the JVM servers, the increase in HotSpot compilation time must also be at most 1% of JVM elapsed time in each of those windows. The first qualifying window ends the warm-up. The cap is `WARMUP × WARMUP_WINDOWS` seconds of target load. The harness keeps every raw window, compiler snapshot and stability decision. It records measured trials that reach the cap as unstable and excludes them from the summary statistics. [HotSpot compiler counters](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jstat.html)
 
-Start calibration with `WARMUP=10 WARMUP_WINDOWS=6`. In the exploratory SSH pilot, five three-second windows were too short for Ktor/JVM and one NativeServe trial at 16 connections. A longer Ktor/JVM `/users/123` pilot recorded gains of 1.06 and 0.23 seconds of compilation time in early ten-second windows, followed by 0.07, 0.07 and 0.04 seconds while throughput spread was 3.27%. Compilation tasks continued during that low-activity period. The 60-second cap and compiler-time threshold are starting values for the dedicated-host pilot.
+Start calibration with `WARMUP=10 WARMUP_WINDOWS=6`. In the exploratory SSH pilot, five three-second windows were too short for Ktor/JVM and one ktServe trial at 16 connections. A longer Ktor/JVM `/users/123` pilot recorded gains of 1.06 and 0.23 seconds of compilation time in early ten-second windows, followed by 0.07, 0.07 and 0.04 seconds while throughput spread was 3.27%. Compilation tasks continued during that low-activity period. The 60-second cap and compiler-time threshold are starting values for the dedicated-host pilot.
 
 On the target hardware, use the pilot to choose a fixed preconditioning budget that covers every variant at each concurrency. Keep the thresholds and window length fixed during the pilot and report when a hardware or workload combination needs a longer cap. Publish measurements using the chosen fixed warm-up so every variant has the same preconditioning. The hosted CI series use a short fixed warm-up and remain exploratory.
 

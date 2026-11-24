@@ -1,6 +1,6 @@
 # Kotlin Native Performance Lab roadmap
 
-Build NativeServe, an HTTP framework for Kotlin/Native with a short, idiomatic setup path and a reproducible comparison against Rust/Axum. GitHub issues hold the acceptance criteria and prerequisites for each change. [Milestones](https://github.com/christian-draeger/kotlin-native-perf-lab/milestones) · [Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues)
+Build ktServe, an HTTP framework for Kotlin/Native and the JVM with a short, idiomatic setup path and a reproducible comparison against Rust/Axum. GitHub issues hold the acceptance criteria and prerequisites for each change. [Milestones](https://github.com/christian-draeger/kotlin-native-perf-lab/milestones) · [Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues)
 
 ## Developer experience
 
@@ -54,9 +54,9 @@ The initial Linux reference implementation uses the following ownership and prot
 | [3 · Controlled measurement and profiles](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/4) | Run a native Linux reference host with a separate load generator, validate steady state and collect symbolized profiles. | Matched release workloads, raw trials on each tested architecture, measured dispersion and at least one ranked bottleneck. |
 | [4 · Measured optimization](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/5) | Evaluate scheduling, buffers, generated route matching and serialization one at a time when the profiles warrant them. | Before and after trials for all four variants and a recorded decision for each change, including regressions. |
 | [5 · Supported preview release](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/6) | Harden the supported HTTP surface, package both Linux architectures and publish onboarding with the measured scorecard. | Verified binaries and consumer example, checksums, compatibility notes, resource bounds and a public result with its conditions. |
-| [6 · Ktor Native engine and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/7) | Extend the transport for streaming and cancellation, then provide an engine selected through normal Ktor configuration. | The same Ktor Native application passes compatibility checks and a controlled CIO versus NativeServe comparison on the documented platforms. |
-| [7 · JVM transport and Ktor comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/8) | Reuse the shared protocol and routing logic with a JVM transport and a packaged Ktor JVM engine. | A clean-checkout consumer and a measured comparison of the same Ktor JVM application on CIO, Netty and NativeServe. |
-| [8 · Spring WebFlux integration and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/9) | Implement the reactive HTTP adapter and Boot starter, compare engines, then assess Servlet compatibility. | Backpressure and lifecycle tests, a one-dependency consumer, a controlled Reactor Netty versus NativeServe comparison and a documented Spring MVC feasibility decision. |
+| [6 · Ktor Native engine and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/7) | Extend the transport for streaming and cancellation, then provide an engine selected through normal Ktor configuration. | The same Ktor Native application passes compatibility checks and a controlled CIO versus ktServe comparison on the documented platforms. |
+| [7 · JVM transport and Ktor comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/8) | Reuse the shared protocol and routing logic with a JVM transport and a packaged Ktor JVM engine. | A clean-checkout consumer and a measured comparison of the same Ktor JVM application on CIO, Netty and ktServe. |
+| [8 · Spring WebFlux integration and comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/9) | Implement the reactive HTTP adapter and Boot starter, compare engines, then assess Servlet compatibility. | Backpressure and lifecycle tests, a one-dependency consumer, a controlled Reactor Netty versus ktServe comparison and a documented Spring MVC feasibility decision. |
 | [9 · Measured I/O backend experiments](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/12) | Prototype io_uring on Linux and verify Windows tooling before an IOCP prototype. | Shared contract and platform socket tests plus independent, same-platform measurement reports and an evidence-backed decision for each backend. |
 | [10 · HTTP/2 support](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/13) | Reuse a maintained HTTP/2 implementation where it meets the session contract, then integrate bounded streams and TLS negotiation. | Existing handler API, protocol and resource tests on both Linux architectures, secure ALPN deployment and a distinct HTTP/2 comparison. |
 | [11 · Multi-core scheduling and async handoff](https://github.com/christian-draeger/kotlin-native-perf-lab/milestone/15) | Isolate connection distribution, CPU budgets and coroutine completion costs. | Paired listener, event-loop and handler comparisons with correctness checks, resource costs and recorded negative results. |
@@ -101,6 +101,13 @@ Report protocol, TLS mode, connections, and concurrent streams in the [matched H
 ## Validation and performance decisions
 
 The [performance research review](results/performance-research.md) audits current Linux results, prior negative experiments and the next scheduling and workload hypotheses. It records the evidence needed for each optimization decision.
+
+### Current priorities
+
+- Add equivalent dynamic JSON, validated uploads, asynchronous work and bounded streaming across the core implementations. Keep the small-route measurements available for comparison. [Application workloads #114](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/114)
+- Verify the offered and delivered request rates, response success and load-generator headroom so the load generator's limits are visible in each comparison. [Load validation #113](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/113)
+- Hold CPU affinity constant while varying event-loop counts, then measure documented deployment defaults against the same workload. [Event-loop and CPU budget #116](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/116)
+- Measure HTTP/2 in its own series with equivalent payloads and concurrency settings. Record the negotiated protocol, TLS mode and streams per connection. [Matched HTTP/2 comparisons #81](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81)
 
 | Layer | When to run | Signal |
 | --- | --- | --- |

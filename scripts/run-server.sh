@@ -27,9 +27,9 @@ case "$variant" in
     exec env NATIVESERVE_BACKEND="$backend" "${NATIVESERVE_IO_BINARY:?Missing experimental backend binary}" \
       "${PORT:-8080}" "${BIND_HOST:-127.0.0.1}"
     ;;
-  nativeserve|kotlin-reactor|nativeserve-workers-2|nativeserve-workers-2-reuseport)
+  ktserve|nativeserve|kotlin-reactor|nativeserve-workers-2|nativeserve-workers-2-reuseport)
     bin="$ROOT/components/nativeserve/build/bin/native/releaseExecutable/nativeserve.kexe"
-    [[ -x "$bin" ]] || { echo 'Missing NativeServe release binary. Run scripts/build-all.sh' >&2; exit 1; }
+    [[ -x "$bin" ]] || { echo 'Missing ktServe release binary. Run scripts/build-all.sh' >&2; exit 1; }
     if [[ "$variant" == nativeserve-workers-2* ]]; then
       export NATIVESERVE_WORKERS=2
       export NATIVESERVE_WORKER_LISTENER=shared

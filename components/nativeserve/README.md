@@ -1,8 +1,8 @@
-# NativeServe
+# ktServe
 
 HTTP framework for Kotlin/Native and the JVM.
 
-NativeServe provides a Kotlin routing API on Linux x86_64 and ARM64 and on Apple Silicon macOS. Its event loop uses nonblocking sockets with epoll on Linux and kqueue on macOS. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
+ktServe provides a Kotlin routing API on Linux x86_64 and ARM64 and on Apple Silicon macOS. Its event loop uses nonblocking sockets with epoll on Linux and kqueue on macOS. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
 
 Set `NATIVESERVE_WORKERS=2` on the benchmark executable to try the experimental worker configuration. The process-wide connection limit is divided among workers. Each worker runs its own epoll loop on a shared listener. This option is available for evaluating the benchmark application.
 
@@ -60,9 +60,10 @@ The [JVM starter](examples/hello-jvm) runs the same routing DSL and HTTP core wi
 
 Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `dev.perflab:nativeserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `NATIVESERVE_BACKEND=nio` explicitly selects the JVM backend.
 
-## Use NativeServe with a framework
+## Use ktServe with a framework
 
 - [Ktor engine](integrations/ktor/README.md) on Kotlin/Native Linux and the JVM.
+- [Spring Boot starter](integrations/spring-boot-starter/README.md) for an opt-in WebFlux server on the JVM.
 - [Spring WebFlux adapter](integrations/webflux/README.md) for a reactive `HttpHandler` on the JVM.
 
 ## Experiments
@@ -79,7 +80,7 @@ The [hello example](examples/hello) is a separate Gradle build that consumes `de
 ./components/nativeserve/gradlew -p components/nativeserve/examples/hello runReleaseExecutableNative
 ```
 
-Open `http://127.0.0.1:8080/` to see the greeting. The example uses the same Kotlin version and Gradle wrapper as NativeServe. Linux CI builds and tests the example release executable on x86_64 and ARM64.
+Open `http://127.0.0.1:8080/` to see the greeting. The example uses the same Kotlin version and Gradle wrapper as ktServe. Linux CI builds and tests the example release executable on x86_64 and ARM64.
 
 ```kotlin
 import dev.perflab.nativeserve.*
@@ -101,7 +102,7 @@ fun main() {
 
 Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
 
-Use `request.header("accept")` for the first matching request value or `request.headers()` for the ordered header fields, including duplicates. Use `response(bytes, status, contentType)` for a pre-encoded body and `.withHeaders(HttpField("Cache-Control", "no-store"))` to add response headers. NativeServe validates response fields and sets framing and connection headers. `ServerLimits.responseHeaderBytes` bounds application-added fields and the Content-Type field.
+Use `request.header("accept")` for the first matching request value or `request.headers()` for the ordered header fields, including duplicates. Use `response(bytes, status, contentType)` for a pre-encoded body and `.withHeaders(HttpField("Cache-Control", "no-store"))` to add response headers. ktServe validates response fields and sets framing and connection headers. `ServerLimits.responseHeaderBytes` bounds application-added fields and the Content-Type field.
 
 Use `getSuspending` when an HTTP/1.x handler calls a suspending API.
 
@@ -114,9 +115,9 @@ getSuspending("/profile/{id}") { request ->
 
 Suspending handlers run on `Dispatchers.Default` and can run concurrently across connections. Each connection has one active handler and sends pipelined responses in order. A peer EOF while the handler is pending, `ServerLimits.handlerMillis`, or the end of the shutdown drain cancels the coroutine. Cancellation is cooperative. Applications should use cancellable I/O and release their own resources in `finally`. The experimental h2c engine returns HTTP 501 for these routes.
 
-Framework adapters can use `application { request, body -> … }` to own routing on an HTTP/1.x listener. `body.readChunk()` suspends until a chunk or the end of the body arrives. Each returned array belongs to the application. While the handler is slow, NativeServe queues one body chunk and pauses connection reads once the bounded input fills. A response returned before the request body finishes closes the connection after writing. HEAD responses keep their known content length and omit the payload. The request size, request body timeout and handler timeout apply to the whole exchange.
+Framework adapters can use `application { request, body -> … }` to own routing on an HTTP/1.x listener. `body.readChunk()` suspends until a chunk or the end of the body arrives. Each returned array belongs to the application. While the handler is slow, ktServe queues one body chunk and pauses connection reads once the bounded input fills. A response returned before the request body finishes closes the connection after writing. HEAD responses keep their known content length and omit the payload. The request size, request body timeout and handler timeout apply to the whole exchange.
 
-For a body with a known byte length, return `streamResponse` from a route. NativeServe sends the response head and pulls up to 16 KiB at a time as the connection writes progress.
+For a body with a known byte length, return `streamResponse` from a route. ktServe sends the response head and pulls up to 16 KiB at a time as the connection writes progress.
 
 ```kotlin
 get("/download") {
@@ -127,13 +128,13 @@ get("/download") {
 }
 ```
 
-Create a new source for each response. Return promptly from `read` and `close`. Writes pull data on the owning I/O loop. A response returned by a cancelled coroutine may be closed on the handler dispatcher. Write up to `limit` bytes starting at index zero and release any references to the buffer before returning. Override `close` to release source resources. NativeServe takes ownership when the handler returns the response and closes it after the final write completes or the response is cancelled. `ServerLimits.responseBodyBytes` also applies to streamed bodies. If the source ends early or fails after the head is sent, the server closes the connection so the client can detect the incomplete body.
+Create a new source for each response. Return promptly from `read` and `close`. Writes pull data on the owning I/O loop. A response returned by a cancelled coroutine may be closed on the handler dispatcher. Write up to `limit` bytes starting at index zero and release any references to the buffer before returning. Override `close` to release source resources. ktServe takes ownership when the handler returns the response and closes it after the final write completes or the response is cancelled. `ServerLimits.responseBodyBytes` also applies to streamed bodies. If the source ends early or fails after the head is sent, the server closes the connection so the client can detect the incomplete body.
 
-For an HTTP/1.1 stream with an unknown length, use `streamResponse(contentType, source)` and return `-1` at end of input. NativeServe applies chunked framing and terminates the stream when it reaches EOF. The response size limit applies to the body bytes. An unknown-length response to an HTTP/1.0 request returns HTTP 500 and closes the source. [HTTP/1.1 message framing](https://www.rfc-editor.org/rfc/rfc9112.html#name-chunked-transfer-coding)
+For an HTTP/1.1 stream with an unknown length, use `streamResponse(contentType, source)` and return `-1` at end of input. ktServe applies chunked framing and terminates the stream when it reaches EOF. The response size limit applies to the body bytes. An unknown-length response to an HTTP/1.0 request returns HTTP 500 and closes the source. [HTTP/1.1 message framing](https://www.rfc-editor.org/rfc/rfc9112.html#name-chunked-transfer-coding)
 
-Use `streamSuspending` to generate a response with suspending APIs. Its writer copies at most 16 KiB per chunk and suspends when the transfer queue fills. Acquire resources inside the producer and release them in `finally`. NativeServe cancels a producer when the response completes, the connection closes, or the shutdown drain ends. The experimental h2c server returns HTTP 501 for suspending producers.
+Use `streamSuspending` to generate a response with suspending APIs. Its writer copies at most 16 KiB per chunk and suspends when the transfer queue fills. Acquire resources inside the producer and release them in `finally`. ktServe cancels a producer when the response completes, the connection closes, or the shutdown drain ends. The experimental h2c server returns HTTP 501 for suspending producers.
 
-NativeServe accepts origin-form HTTP/1.0 and HTTP/1.1 requests. `get` handles requests with empty bodies. `postStreaming` consumes a POST with a valid `Content-Length` or HTTP/1.1 chunked framing through a `RequestBodySink`. `accept` sees one borrowed slice at a time and must return promptly. `complete` returns the response after the full body arrives. NativeServe calls `close` once per opened sink, including on disconnect and timeout. The input buffer bounds each slice, and `requestBodyBytes` and `requestBodyMillis` bound the full body. `headerBytes` also caps total chunk-size lines and trailers. NativeServe validates trailers before completing the body, and the handler receives only the body bytes. An `Expect` header returns HTTP 417. The example binds to loopback using a numeric IPv4 address.
+ktServe accepts origin-form HTTP/1.0 and HTTP/1.1 requests. `get` handles requests with empty bodies. `postStreaming` consumes a POST with a valid `Content-Length` or HTTP/1.1 chunked framing through a `RequestBodySink`. `accept` sees one borrowed slice at a time and must return promptly. `complete` returns the response after the full body arrives. ktServe calls `close` once per opened sink, including on disconnect and timeout. The input buffer bounds each slice, and `requestBodyBytes` and `requestBodyMillis` bound the full body. `headerBytes` also caps total chunk-size lines and trailers. ktServe validates trailers before completing the body, and the handler receives only the body bytes. An `Expect` header returns HTTP 417. The example binds to loopback using a numeric IPv4 address.
 
 The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
 
@@ -161,6 +162,10 @@ python3 scripts/tests/reactor_stress.py components/nativeserve/build/bin/native/
 
 On macOS, add `-Pbenchmark.targetOs=macos` to the Gradle command and use the fixture under `components/nativeserve/build/macos/bin/native/stressReleaseExecutable/`.
 
-[Project roadmap](../../ROADMAP.md)
+## Compatibility names
 
-The source module lives in `components/nativeserve/`. Benchmark records use the stable `kotlin-reactor` identifier, which the dashboard displays as NativeServe across existing and new series. The release executable is `nativeserve.kexe`, and the public Kotlin package is `dev.perflab.nativeserve`.
+Earlier previews used the name NativeServe. The source module remains in `components/nativeserve/`. Existing Gradle coordinates and Kotlin imports retain `nativeserve`. The Ktor engine factory is still `NativeServe`, and Spring Boot settings still use the `nativeserve` prefix. Environment switches retain their `NATIVESERVE_…` names.
+
+Existing archives start with `./nativeserve` and the Gradle release target produces `nativeserve.kexe`. In the repository, use `./scripts/run-server.sh ktserve` after building. The original `nativeserve` selector continues to work. The dashboard displays the stable `kotlin-reactor` benchmark identifier as ktServe for both historical and new runs.
+
+[Project roadmap](../../ROADMAP.md)

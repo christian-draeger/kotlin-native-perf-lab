@@ -1,6 +1,6 @@
-# NativeServe HTTP/2 session experiment
+# ktServe HTTP/2 session experiment
 
-This experiment exercises the runtime boundary to nghttp2 on Linux. nghttp2 implements HTTP/2 framing, HPACK, stream state and flow control under the MIT license. Kotlin owns the application-visible stream state. The C adapter exposes the library's memory interface. The h2c executable attaches it to the shared epoll transport and NativeServe parity routes on loopback. [nghttp2 programmer's guide](https://nghttp2.org/documentation/programmers-guide.html) · [License](https://github.com/nghttp2/nghttp2/blob/master/COPYING)
+This experiment exercises the runtime boundary to nghttp2 on Linux. nghttp2 implements HTTP/2 framing, HPACK, stream state and flow control under the MIT license. Kotlin owns the application-visible stream state. The C adapter exposes the library's memory interface. The h2c executable attaches it to the shared epoll transport and ktServe parity routes on loopback. [nghttp2 programmer's guide](https://nghttp2.org/documentation/programmers-guide.html) · [License](https://github.com/nghttp2/nghttp2/blob/master/COPYING)
 
 ## Run the probe
 
