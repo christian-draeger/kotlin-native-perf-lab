@@ -37,7 +37,7 @@ on:
       application_mix_profile:
         description: Connection or overload profile for the application-mix suite
         type: choice
-        options: [persistent, churn, overload]
+        options: [persistent, churn, overload, capacity]
         default: persistent
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
@@ -81,7 +81,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ inputs.suite == 'application-mix' && inputs.application_mix_profile == 'overload' && 50 || 35 }}
+    timeout-minutes: ${{ inputs.suite == 'application-mix' && (inputs.application_mix_profile == 'capacity' && 65 || inputs.application_mix_profile == 'overload' && 50) || 35 }}
     permissions:
       actions: read
       contents: read
@@ -121,6 +121,11 @@ jobs:
         run: |
           bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
           printf '%s\n' "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: inputs.suite == 'application-mix' && inputs.application_mix_profile == 'capacity'
+        with:
+          go-version-file: competitors/go-http/go.mod
+          cache: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         if: matrix.arch == 'aarch64'
         with:
@@ -199,6 +204,11 @@ jobs:
             profile_args=(--application-profile "$APPLICATION_PROFILE")
             if [[ "$APPLICATION_PROFILE" == overload ]]; then
               profile_args+=(--rates 800 3200 6400 --vus 48)
+              DURATION=10
+            elif [[ "$APPLICATION_PROFILE" == capacity ]]; then
+              calibration="$RUNNER_TEMP/traffic-calibration"
+              go build -trimpath -o "$calibration" ./scripts/fixtures/traffic-calibration.go
+              profile_args+=(--rates 200 800 3200 6400 --vus 96 --calibration-server "$calibration")
               DURATION=10
             fi
             python3 scripts/benchmark-integrations.py --family application-mix --executable scripts/run-server.sh \

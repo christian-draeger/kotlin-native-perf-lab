@@ -21,6 +21,15 @@ from parse_wrk import read_load_timing
 
 SCRIPTS = Path(__file__).resolve().parent
 APPLICATION_MIX = "application-mix"
+TRAFFIC_CAPACITY = "capacity"
+TRAFFIC_VARIANTS = {
+    variant: variant for variant in ("ktserve", "ktserve-workers-2", "rust-axum", "ktor-jvm")
+}
+TRAFFIC_BUDGETS_MS = {
+    "json": 20, "catalog": 20, "upload_1k": 20, "upload_24k": 20, "upload_64k": 20,
+    "wait": 50, "download": 100,
+}
+GENERATOR_CPU_FRACTION = 0.8
 ENGINES = {
     "ktor-native": {"cio": "cio", "ktserve": "ktserve"},
     "ktor-jvm": {"cio": "cio", "netty": "netty", "ktserve": "ktserve"},
@@ -33,6 +42,10 @@ DOWNLOAD = b"s" * (16 * 1024) + b"t" * (16 * 1024 + 3)
 USER = {"id": 42, "name": "benchmark-user", "active": True}
 WORKLOADS = ("/json", "/upload", "/download")
 NODELAY_ENGINE = "ktserve-eventfd-nodelay"
+
+
+def engine_modes(args):
+    return TRAFFIC_VARIANTS if args.application_profile == TRAFFIC_CAPACITY else ENGINES[args.family]
 
 
 def request(port, path, upload_size=UPLOAD_SIZE):
@@ -135,12 +148,24 @@ def server(args, engine, affinity, log, trace=()):
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
     eventfd = engine in ("ktserve-eventfd", NODELAY_ENGINE)
-    mode = ENGINES[args.family]["ktserve" if eventfd else engine]
+    calibrating = engine == "traffic-calibration"
+    mode = engine if calibrating else engine_modes(args)["ktserve" if eventfd else engine]
     env = None
     command = [str(args.executable), str(port), mode]
     if args.family == APPLICATION_MIX:
         command = [str(args.executable), mode]
         env = {**os.environ, "PORT": str(port), "BIND_HOST": "127.0.0.1", "BENCHMARK_SUITE": APPLICATION_MIX}
+        if args.application_profile == TRAFFIC_CAPACITY:
+            if calibrating:
+                command = [str(args.calibration_server)]
+                env["GOMAXPROCS"] = "2"
+            else:
+                env["KTSERVE_WORKERS"] = "2" if mode == "ktserve-workers-2" else "1"
+                env["KTSERVE_BACKEND"] = "epoll"
+                env["KTSERVE_EPOLL_TRIGGER"] = "level"
+                env["KTSERVE_EPOLL_APPLICATION_WAKEUP"] = "poll"
+                env["KTSERVE_EPOLL_TCP_NODELAY"] = "default"
+                env["TOKIO_WORKER_THREADS"] = "2"
     wakeup = None
     tcp_nodelay = None
     if args.compare_native_wakeup or args.compare_native_nodelay:
@@ -164,6 +189,11 @@ def server(args, engine, affinity, log, trace=()):
         try:
             expected_engine = mode if args.family == "spring-webflux" else None
             wait_until_ready(process, port, log, expected_engine)
+            if args.application_profile == TRAFFIC_CAPACITY and mode == "ktserve-workers-2":
+                settings = log.read_text().splitlines()
+                if ("ktServe backend=epoll tcp=ipv4 workers=2" not in settings
+                        or "ktServe worker_listener=shared" not in settings):
+                    raise RuntimeError(f"The capacity trial did not start two shared epoll workers. See {log}")
             if wakeup:
                 settings = log.read_text()
                 if f"ktServe epoll application_wakeup={wakeup}\n" not in settings:
@@ -210,6 +240,21 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
             if args.application_profile == "overload":
                 workload += ["integration_experiment=application-mix-overload",
                              "overload_warmup_max_rate=800", "success_budget_ms=100"]
+            if args.application_profile == TRAFFIC_CAPACITY:
+                workload += [
+                    "integration_experiment=traffic-capacity",
+                    "traffic_target=Zero failed or dropped arrivals and p99 within 20 ms for API routes, "
+                    "50 ms for wait, and 100 ms for download",
+                    f"traffic_budgets_ms={json.dumps(TRAFFIC_BUDGETS_MS, separators=(',', ':'))}",
+                    f"generator_cpu_fraction_limit={GENERATOR_CPU_FRACTION}",
+                    "calibration_target=loopback Go stub with matched payloads and fixture waits",
+                    "capacity_warmup_max_rate=800",
+                    "payload_validation=exact UTF-8 response bytes",
+                    "ktserve_worker_counts=1,2",
+                    "ktserve_socket_mode=level-triggered epoll with poll application wake-up and default TCP_NODELAY",
+                    "ktserve_two_worker_listener=shared",
+                    "tokio_worker_threads=2",
+                ]
     else:
         load_version = subprocess.run(
             ["wrk", "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -234,6 +279,9 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
             root / "components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe",
         ])
         versions.extend([run_output("rustc", "--version"), run_output("gradle", "--version")])
+        if args.application_profile == TRAFFIC_CAPACITY:
+            binaries.append(args.calibration_server)
+            versions.append(run_output("go", "version"))
     with (args.output / "application.sha256").open("w") as manifest:
         for path in binaries:
             with path.open("rb") as binary:
@@ -259,7 +307,7 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
             f"repetitions={args.repeats}",
             f"warmup_seconds={args.warmup}",
             f"target_duration_seconds={args.duration}",
-            *(f"engine_{engine}={mode}" for engine, mode in ENGINES[args.family].items()),
+            *(f"engine_{engine}={mode}" for engine, mode in engine_modes(args).items()),
             *versions,
             "",
         ]))
@@ -317,8 +365,11 @@ def read_k6_summary(path, offered, duration, profile="persistent"):
     if profile == "churn":
         row["new_connections"] = count("perflab_new_connections")
         row["valid"] = int(valid and row["new_connections"] == requests)
-    if profile == "overload":
-        on_time = count("perflab_success_within_100ms")
+    if profile == TRAFFIC_CAPACITY:
+        row["new_connections"] = count("perflab_new_connections")
+    if profile in ("overload", TRAFFIC_CAPACITY):
+        on_time = count("perflab_success_within_operation_budget" if profile == TRAFFIC_CAPACITY
+                        else "perflab_success_within_100ms")
         timeouts = count("perflab_timeouts")
         accounted = (
             bool(rates) and sum(rates.values()) * duration == offered
@@ -346,6 +397,8 @@ def load_k6(args, affinity, port, rate, duration, prefix):
         "PERFLAB_APPLICATION_MIX": "true" if args.family == APPLICATION_MIX else "false",
         "PERFLAB_APPLICATION_PROFILE": args.application_profile,
     })
+    if args.application_profile == TRAFFIC_CAPACITY:
+        env["PERFLAB_TRAFFIC_BUDGETS"] = json.dumps(TRAFFIC_BUDGETS_MS)
     with log.open("w") as output:
         subprocess.run([
             *affinity, "/usr/bin/time", "-f",
@@ -359,22 +412,67 @@ def load_k6(args, affinity, port, rate, duration, prefix):
 
 
 def k6_results_path(args):
-    return args.output / ("overload.csv" if args.application_profile == "overload" else "results.csv")
+    filename = {"overload": "overload.csv", TRAFFIC_CAPACITY: "traffic.csv"}.get(
+        args.application_profile, "results.csv",
+    )
+    return args.output / filename
 
 
-def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
+def write_csv_row(path, row):
+    existed = path.exists()
+    with path.open("a", newline="") as output:
+        writer = csv.DictWriter(output, fieldnames=row)
+        if not existed:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def generator_headroom(row, threads):
+    load_cpu = row["load_cpu_equivalents"]
+    return (
+        row["dropped_iterations"] == 0
+        and load_cpu != "" and 0 < load_cpu <= threads * GENERATOR_CPU_FRACTION
+    )
+
+
+def traffic_p99_within_budgets(row):
+    operations = json.loads(row["operations"])
+    return operations.keys() == TRAFFIC_BUDGETS_MS.keys() and all(
+        operations[name]["p99"] <= limit for name, limit in TRAFFIC_BUDGETS_MS.items()
+    )
+
+
+def calibrate_traffic(args, server_affinity, load_affinity):
+    results = {}
+    with server(args, "traffic-calibration", server_affinity,
+                args.output / "traffic-calibration.server.log") as (_, port):
+        for rate in args.rates:
+            prefix = args.output / f"traffic-calibration-{rate}"
+            load_k6(args, load_affinity, port, rate, args.warmup, prefix.with_name(prefix.name + "-warmup"))
+            row = load_k6(args, load_affinity, port, rate, args.duration, prefix)
+            qualified = row["valid"] and generator_headroom(row, args.threads) and traffic_p99_within_budgets(row)
+            results[rate] = bool(qualified)
+            write_csv_row(args.output / "traffic-calibration.csv", {
+                "offered_rate": rate, "calibration_qualified": int(qualified), **row,
+            })
+            print(f"Calibration at {rate} offered req/s qualified: {bool(qualified)}", flush=True)
+    return results
+
+
+def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity, calibration_qualified=False):
     variant = engine if args.family == APPLICATION_MIX else f"{args.family}-{engine}"
     stem = args.output / f"{variant}-mixed-{rate}-{run}"
     metrics = (sys.executable, SCRIPTS / "proc_metrics.py")
-    overload = args.application_profile == "overload"
-    warmup_rate = min(rate, 800) if overload else rate
+    capacity = args.application_profile == TRAFFIC_CAPACITY
+    diagnostic = args.application_profile in ("overload", TRAFFIC_CAPACITY)
+    warmup_rate = min(rate, 800) if diagnostic else rate
     with server(args, engine, server_affinity, stem.with_suffix(".server.log")) as (process, port):
         cold = load_k6(args, load_affinity, port, warmup_rate, args.precondition, stem.with_name(stem.name + "-cold"))
         warmup = load_k6(args, load_affinity, port, warmup_rate, args.warmup, stem.with_name(stem.name + "-warmup"))
         before, _, before_rss = run_output(*metrics, str(process.pid)).split()
         row = load_k6(args, load_affinity, port, rate, args.duration, stem)
         after, peak, rss = run_output(*metrics, str(process.pid)).split()
-        if overload:
+        if diagnostic:
             try:
                 require_response(port, "/health", "text/plain", b"ok")
                 require_response(port, "/download", "application/octet-stream", DOWNLOAD)
@@ -384,10 +482,18 @@ def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
     cpu = float(after) - float(before)
     preconditioned = warmup["valid"] and cold["failed_responses"] == 0 and cpu >= 0
     valid = row["valid"] and preconditioned
-    if overload:
+    if diagnostic:
         row.update({
             "accounted": int(row["accounted"] and preconditioned and recovered),
             "recovered": int(recovered), "measurement_start_rss_kib": before_rss,
+        })
+    if capacity:
+        valid = valid and recovered
+        qualified = calibration_qualified and generator_headroom(row, args.threads)
+        row.update({
+            "calibration_qualified": int(calibration_qualified),
+            "generator_qualified": int(qualified),
+            "slo_met": int(valid and qualified and traffic_p99_within_budgets(row)),
         })
     cost = cpu / row["successful_responses"] * 1_000_000 if row["successful_responses"] else None
     row.update({
@@ -400,16 +506,10 @@ def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
         "cpu_seconds_per_million_requests": round(cost, 3) if (valid or row.get("accounted")) and cost is not None else "",
         "peak_rss_kib": peak, "end_rss_kib": rss, "git_sha": git_sha,
     })
-    path = k6_results_path(args)
-    existed = path.exists()
-    with path.open("a", newline="") as output:
-        writer = csv.DictWriter(output, fieldnames=row)
-        if not existed:
-            writer.writeheader()
-        writer.writerow(row)
+    write_csv_row(k6_results_path(args), row)
     print(f"{variant} {rate} offered req/s trial {run}: {row['rps']:.1f} successful req/s; "
           f"{row['failed_responses']} failed, {row['dropped_iterations']} dropped, valid={bool(valid)}"
-          + (f", overload accounting and recovery passed={bool(row['accounted'])}" if overload else ""), flush=True)
+          + (f", accounting and recovery passed={bool(row['accounted'])}" if diagnostic else ""), flush=True)
 
 
 def trial(args, git_sha, engine, endpoint, run, server_affinity, load_affinity):
@@ -499,9 +599,11 @@ def benchmark(args):
             (SCRIPTS / "wrk-stats.lua").read_text()
         )
     workloads = WORKLOADS if args.load_tool == "wrk" else args.rates
-    measure = trial if args.load_tool == "wrk" else trial_k6
+    calibration = {}
+    if args.application_profile == TRAFFIC_CAPACITY:
+        calibration = calibrate_traffic(args, server_affinity, load_affinity)
 
-    engines = list(ENGINES[args.family])
+    engines = list(engine_modes(args))
     if args.compare_native_wakeup:
         workloads = (args.compare_native_wakeup,)
         engines.append("ktserve-eventfd")
@@ -515,10 +617,14 @@ def benchmark(args):
         for index, workload in enumerate(workloads):
             offset = (run - 1 + index) % len(engines)
             for engine in engines[offset:] + engines[:offset]:
-                measure(args, git_sha, engine, workload, run, server_affinity, load_affinity)
+                if args.load_tool == "wrk":
+                    trial(args, git_sha, engine, workload, run, server_affinity, load_affinity)
+                else:
+                    trial_k6(args, git_sha, engine, workload, run, server_affinity, load_affinity,
+                             calibration.get(workload, False))
 
     result_path = k6_results_path(args)
-    result_field = "accounted" if args.application_profile == "overload" else "valid"
+    result_field = "accounted" if args.application_profile in ("overload", TRAFFIC_CAPACITY) else "valid"
     with result_path.open() as results:
         invalid = [row for row in csv.DictReader(results) if row[result_field] != "1"]
     if invalid:
@@ -540,8 +646,10 @@ def main():
     parser.add_argument("--trace-native-nodelay", action="store_true",
                         help="Capture separate loopback diagnostics with strace and sudo tcpdump")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800], help="Mixed requests per second for k6")
-    parser.add_argument("--application-profile", choices=("persistent", "churn", "overload"), default="persistent",
-                        help="Use fresh connections or retain bounded overload diagnostics instead of the default mix")
+    parser.add_argument("--application-profile", choices=("persistent", "churn", "overload", TRAFFIC_CAPACITY),
+                        default="persistent", help="Select the application mix load profile")
+    parser.add_argument("--calibration-server", type=lambda path: Path(path).resolve(),
+                        help="Release loopback fixture required for the capacity profile")
     parser.add_argument("--vus", type=int, default=16, help="k6 virtual users per scenario")
     parser.add_argument("--precondition", type=int, default=15, help="k6 cold load before steady-state validation")
     parser.add_argument("--connections", type=int, default=16)
@@ -565,13 +673,22 @@ def main():
     if args.family == APPLICATION_MIX and args.load_tool != "k6":
         parser.error("The application mix needs the k6 load tool")
     if args.application_profile != "persistent" and args.family != APPLICATION_MIX:
-        parser.error("Churn and overload profiles need the application-mix family")
+        parser.error("Non-persistent profiles need the application-mix family")
+    if args.application_profile == TRAFFIC_CAPACITY:
+        if not args.calibration_server or not os.access(args.calibration_server, os.X_OK):
+            parser.error("The capacity profile needs the release --calibration-server executable")
+    elif args.calibration_server:
+        parser.error("--calibration-server is only used with the capacity profile")
     args.output.mkdir(parents=True, exist_ok=True)
     result_path = k6_results_path(args)
-    if any((args.output / name).exists() for name in ("results.csv", "overload.csv")):
+    if any((args.output / name).exists()
+           for name in ("results.csv", "overload.csv", "traffic.csv", "traffic-calibration.csv")):
         parser.error(f"Use a new output directory for {result_path.name}")
     if args.smoke_only:
-        for engine in ENGINES[args.family]:
+        engines = list(engine_modes(args))
+        if args.application_profile == TRAFFIC_CAPACITY:
+            engines.append("traffic-calibration")
+        for engine in engines:
             with server(args, engine, [], args.output / f"{args.family}-{engine}.server.log"):
                 print(f"{args.family}-{engine} HTTP/1.1 response parity passed", flush=True)
     else:
