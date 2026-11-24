@@ -195,7 +195,7 @@
             <div class="history-controls integration-controls">
               <label>Application<select id="integration-family"></select></label>
               <label>Run<select id="integration-run"></select></label>
-              <label>Endpoint<select id="integration-endpoint"></select></label>
+              <label>Workload<select id="integration-endpoint"></select></label>
               <label>Metric<select id="integration-metric"></select></label>
             </div>
             <div class="chart-caption">
@@ -203,6 +203,15 @@
               <span id="integration-context"></span>
             </div>
             <div id="integration-chart" class="chart" aria-live="polite"></div>
+            <details id="integration-operations" hidden>
+              <summary>Results by operation</summary>
+              <div class="table-scroll">
+                <table aria-label="Mixed-workload results by operation">
+                  <thead><tr><th>Operation</th><th>Engine</th><th>Successful req/s</th><th>p99 (ms)</th></tr></thead>
+                  <tbody id="integration-operation-rows"></tbody>
+                </table>
+              </div>
+            </details>
             <div class="chart-legend">
               <span><i class="median-key"></i>Median</span>
               <span><i class="range-key"></i>Trial min–max</span>
