@@ -1,6 +1,6 @@
 # NativeServe HTTP/2 session experiment
 
-This experiment exercises the managed runtime boundary to nghttp2 on Linux. nghttp2 implements HTTP/2 framing, HPACK, stream state and flow control under the MIT license. Kotlin owns the application-visible stream state. The C adapter exposes its memory input and output functions to Kotlin/Native and leaves sockets, TLS and HTTP routing outside the experiment. [nghttp2 programmer's guide](https://nghttp2.org/documentation/programmers-guide.html) · [License](https://github.com/nghttp2/nghttp2/blob/master/COPYING)
+This experiment exercises the runtime boundary to nghttp2 on Linux. nghttp2 implements HTTP/2 framing, HPACK, stream state and flow control under the MIT license. Kotlin owns the application-visible stream state. The C adapter exposes the library's memory interface. The h2c executable attaches it to the shared epoll transport and NativeServe parity routes on loopback. [nghttp2 programmer's guide](https://nghttp2.org/documentation/programmers-guide.html) · [License](https://github.com/nghttp2/nghttp2/blob/master/COPYING)
 
 ## Run the probe
 
@@ -14,6 +14,15 @@ On Ubuntu 24.04 x86_64, install the distribution's `libnghttp2-dev` package and 
 
 The workflow uses the Ubuntu SDK for each architecture, records the package versions, builds both binaries with Kotlin/Native and checks the corresponding executable on each Linux runner.
 
+Use `linkH2cReleaseExecutableNative` with the same SDK parameters to build the socket executable. Run it on loopback and use a curl build with HTTP/2 support.
+
+```sh
+components/nativeserve/experiments/http2-nghttp2/build/bin/native/h2cReleaseExecutable/nativeserve-h2c.kexe 8080
+curl --http2-prior-knowledge -fsS http://127.0.0.1:8080/users/123
+```
+
+The h2c preview handles bodyless HTTP/2 requests and buffered text and JSON responses. It uses one read range and one write range per connection and admits at most eight streams. SIGTERM stops accepting and queues GOAWAY before draining existing streams to the configured deadline. The executable is a loopback test for prior knowledge. The production deployment milestone covers TLS with ALPN.
+
 ## Boundary and ownership
 
 | Operation | Ownership and progress |
@@ -26,4 +35,4 @@ The workflow uses the Ubuntu SDK for each architecture, records the package vers
 
 The probe checks two streams sharing a session, fragmentation on each memory input, bounded output pulls, response data and an explicit `RST_STREAM` cancellation. A 96 KiB response stalls until the receiver returns credit, while a separate small stream completes. The test driver counts wire bytes and input fragments. These counts describe the exercised boundary. Throughput and latency require the matched workload in [#81](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81).
 
-For [#79](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/79), connect the session to the owned transport and route through the existing method and response types. Add admission caps for headers, streams, pending response bytes and outbound frames, then test connection shutdown with GOAWAY. Treat TLS and ALPN as the protocol-selection boundary in [#80](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/80). For JVM integrations, existing Ktor/Netty and Spring WebFlux/Reactor Netty engines can own HTTP/2 framing, leaving application handlers on the portable side of the adapter. [Ktor HTTP/2](https://ktor.io/docs/server-http2.html) · [Spring WebFlux server support](https://docs.spring.io/spring-boot/reference/web/reactive.html)
+For [#79](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/79), extend the socket adapter to request and response sources, then exercise resource limits and multiplexed traffic over the real transport. Treat TLS and ALPN as the protocol-selection boundary in [#80](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/80). For JVM integrations, existing Ktor/Netty and Spring WebFlux/Reactor Netty engines can own HTTP/2 framing, leaving application handlers on the portable side of the adapter. [Ktor HTTP/2](https://ktor.io/docs/server-http2.html) · [Spring WebFlux server support](https://docs.spring.io/spring-boot/reference/web/reactive.html)

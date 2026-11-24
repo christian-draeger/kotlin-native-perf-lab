@@ -57,8 +57,9 @@ private class RecordingEvents : SessionEvents {
     val closed = mutableMapOf<Int, UInt>()
     var checkData: (Int, ByteArray) -> Unit = { _, _ -> }
 
-    override fun header(stream: Int, name: String, value: String) {
+    override fun header(stream: Int, name: String, value: String): Boolean {
         headers.getOrPut(stream) { mutableMapOf() }[name] = value
+        return true
     }
 
     override fun data(stream: Int, bytes: ByteArray) {

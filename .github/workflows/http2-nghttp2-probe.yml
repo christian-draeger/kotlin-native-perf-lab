@@ -71,15 +71,21 @@ jobs:
         run: |
           project=components/nativeserve/experiments/http2-nghttp2
           binary="$project/build/bin/native/releaseExecutable/nativeserve-http2-session-probe.kexe"
+          server="$project/build/bin/native/h2cReleaseExecutable/nativeserve-h2c.kexe"
           cc -Wall -Wextra -Werror -fsyntax-only -include "$project/src/nativeInterop/cinterop/http2_probe.h" -xc /dev/null
           gradle -p "$project" -Pbenchmark.targetArch=x86_64 -Pnghttp2.headers="$RUNNER_TEMP/x86-headers" \
-            -Pnghttp2.archive=/usr/lib/x86_64-linux-gnu/libnghttp2.a linkReleaseExecutableNative
+            -Pnghttp2.archive=/usr/lib/x86_64-linux-gnu/libnghttp2.a linkReleaseExecutableNative linkH2cReleaseExecutableNative
           "$binary"
+          bash "$project/smoke.sh" "$server"
           gradle -p "$project" -Pbenchmark.targetArch=aarch64 -Pnghttp2.headers="$RUNNER_TEMP/arm-sdk/usr/include" \
-            -Pnghttp2.archive="$RUNNER_TEMP/arm-sdk/usr/lib/aarch64-linux-gnu/libnghttp2.a" linkReleaseExecutableNative
+            -Pnghttp2.archive="$RUNNER_TEMP/arm-sdk/usr/lib/aarch64-linux-gnu/libnghttp2.a" \
+            linkReleaseExecutableNative linkH2cReleaseExecutableNative
           readelf -h "$binary" | grep -E 'Machine:[[:space:]]+AArch64$'
+          readelf -h "$server" | grep -E 'Machine:[[:space:]]+AArch64$'
           mkdir "$RUNNER_TEMP/h2-arm"
           install -m 755 "$binary" "$RUNNER_TEMP/h2-arm/h2-probe"
+          install -m 755 "$server" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
+          cp "$project/smoke.sh" "$RUNNER_TEMP/h2-arm/"
           cp "$RUNNER_TEMP/arm-sdk/LICENSE.nghttp2" "$RUNNER_TEMP/h2-arm/"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
@@ -99,5 +105,6 @@ jobs:
           path: ${{ runner.temp }}/h2-arm
       - run: |
           test "$(uname -m)" = aarch64
-          chmod +x "$RUNNER_TEMP/h2-arm/h2-probe"
+          chmod +x "$RUNNER_TEMP/h2-arm/h2-probe" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
           "$RUNNER_TEMP/h2-arm/h2-probe"
+          bash "$RUNNER_TEMP/h2-arm/smoke.sh" "$RUNNER_TEMP/h2-arm/nativeserve-h2c"
