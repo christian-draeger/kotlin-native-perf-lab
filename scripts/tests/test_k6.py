@@ -91,3 +91,38 @@ class K6TrialTest(unittest.TestCase):
             sample["metrics"]["dropped_iterations"] = metric(2)
             path.write_text(json.dumps(sample))
             self.assertEqual(benchmark.read_k6_summary(path, offered=40, duration=2, profile="overload")["accounted"], 0)
+
+    def test_capacity_keeps_budget_misses_separate_from_delivery_and_generator_pressure(self):
+        def metric(count, p99=1):
+            return {"values": {"count": count, "p(50)": 1, "p(95)": 1, "p(99)": p99}}
+
+        rates = {name: 20 for name in benchmark.TRAFFIC_BUDGETS_MS}
+        offered = sum(rates.values())
+        sample = {
+            "perflab_rates": rates,
+            "metrics": {
+                "http_reqs": metric(offered), "iterations": metric(offered),
+                "perflab_success_duration": metric(offered),
+                "perflab_success_within_operation_budget": metric(offered - 1),
+                **{f"perflab_{name}_duration": metric(20, limit) for name, limit in benchmark.TRAFFIC_BUDGETS_MS.items()},
+            },
+        }
+        with TemporaryDirectory() as temp:
+            path = Path(temp) / "summary.json"
+            path.write_text(json.dumps(sample))
+            outcome = benchmark.read_k6_summary(path, offered, duration=1, profile="capacity")
+            self.assertEqual((outcome["valid"], outcome["accounted"]), (1, 1))
+            self.assertEqual(outcome["within_budget_rps"], offered - 1)
+            self.assertTrue(benchmark.traffic_p99_within_budgets(outcome))
+            self.assertTrue(benchmark.generator_headroom({**outcome, "load_cpu_equivalents": 1.6}, 2))
+            self.assertFalse(benchmark.generator_headroom({**outcome, "load_cpu_equivalents": 1.61}, 2))
+            self.assertFalse(benchmark.generator_headroom({**outcome, "load_cpu_equivalents": ""}, 2))
+            self.assertFalse(benchmark.generator_headroom(
+                {**outcome, "load_cpu_equivalents": 0.5, "dropped_iterations": 1}, 2,
+            ))
+
+            sample["metrics"]["perflab_catalog_duration"] = metric(20, p99=21)
+            path.write_text(json.dumps(sample))
+            outcome = benchmark.read_k6_summary(path, offered, duration=1, profile="capacity")
+            self.assertEqual(outcome["valid"], 1)
+            self.assertFalse(benchmark.traffic_p99_within_budgets(outcome))
