@@ -4,6 +4,7 @@ package dev.perflab.nativeserve.transport
 
 import kotlinx.cinterop.ULongVar
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.coroutines.runBlocking
@@ -21,7 +22,7 @@ import platform.posix.errno
 
 /** A nonblocking notification counter owned by one epoll loop. */
 internal class EpollCompletionSignal {
-    val descriptor = eventfd(0U, EFD_NONBLOCK or EFD_CLOEXEC)
+    val descriptor = eventfd(0.convert(), EFD_NONBLOCK or EFD_CLOEXEC)
     private val lifecycle = Mutex()
     private var closed = false
 
