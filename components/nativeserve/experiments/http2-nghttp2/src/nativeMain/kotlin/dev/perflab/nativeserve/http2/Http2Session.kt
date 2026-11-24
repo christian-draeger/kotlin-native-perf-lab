@@ -10,6 +10,7 @@ import dev.perflab.nativeserve.http2.bridge.probe_cancel
 import dev.perflab.nativeserve.http2.bridge.probe_close
 import dev.perflab.nativeserve.http2.bridge.probe_consume
 import dev.perflab.nativeserve.http2.bridge.probe_get
+import dev.perflab.nativeserve.http2.bridge.probe_goaway
 import dev.perflab.nativeserve.http2.bridge.probe_input
 import dev.perflab.nativeserve.http2.bridge.probe_open
 import dev.perflab.nativeserve.http2.bridge.probe_output
@@ -33,7 +34,7 @@ import kotlinx.cinterop.value
 import platform.posix.memcpy
 
 internal interface SessionEvents {
-    fun header(stream: Int, name: String, value: String) {}
+    fun header(stream: Int, name: String, value: String): Boolean = true
     fun data(stream: Int, bytes: ByteArray) {}
     fun end(stream: Int) {}
     fun closed(stream: Int, code: UInt) {}
@@ -51,11 +52,11 @@ internal class Http2Session(server: Boolean, events: SessionEvents) : AutoClosea
 
     fun get(path: String): Int = probe_get(active(), path).also { check(it > 0) }
 
-    fun respond(stream: Int, status: Int, body: ByteArray) {
+    fun respond(stream: Int, status: Int, body: ByteArray, contentType: String? = "text/plain") {
         require(status in 200..599)
         check(!state.responses.containsKey(stream))
         state.responses[stream] = OutboundBody(body)
-        if (probe_respond(active(), stream, status, body.size.convert()) != 0) {
+        if (probe_respond(active(), stream, status, contentType, body.size.convert()) != 0) {
             state.responses.remove(stream)
             error("Could not submit nghttp2 response")
         }
@@ -68,6 +69,10 @@ internal class Http2Session(server: Boolean, events: SessionEvents) : AutoClosea
 
     fun cancel(stream: Int) {
         check(probe_cancel(active(), stream) == 0)
+    }
+
+    fun beginDrain() {
+        check(probe_goaway(active()) == 0)
     }
 
     fun receive(bytes: ByteArray, start: Int, count: Int) {
@@ -116,7 +121,9 @@ private fun onEvent(
     val state = context?.asStableRef<CallbackState>()?.get() ?: return -1
     return try {
         when (kind) {
-            PROBE_HEADER -> state.events.header(stream, first.copy(firstLength).decodeToString(), second.copy(secondLength).decodeToString())
+            PROBE_HEADER -> if (!state.events.header(
+                    stream, first.copy(firstLength).decodeToString(), second.copy(secondLength).decodeToString(),
+                )) return -1
             PROBE_DATA -> state.events.data(stream, first.copy(firstLength))
             PROBE_END -> state.events.end(stream)
             PROBE_CLOSED -> {
