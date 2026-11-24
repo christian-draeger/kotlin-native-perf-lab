@@ -42,6 +42,7 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
     val largeBody = "x".repeat(BODY_BYTES)
     var largeRequests = 0
     var openStreams = 0
+    var producedStreamBytes = 0L
     var openRequests = 0
     var stop = false
     val openHandlers = AtomicInt(0)
@@ -56,6 +57,7 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
                 val count = minOf(remaining, limit)
                 buffer.fill('s'.code.toByte(), toIndex = count)
                 remaining -= count
+                producedStreamBytes += count
                 return count
             }
 
@@ -91,6 +93,7 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
         get("/chunks") { streamResponse("application/octet-stream", source(32 * 1024 + 3)) }
         get("/truncated-stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(1)) }
         get("/open-streams") { text(openStreams.toString()) }
+        get("/stream-progress") { text("$openStreams $producedStreamBytes") }
         get("/open-requests") { text(openRequests.toString()) }
         postStreaming("/upload") {
             openRequests++

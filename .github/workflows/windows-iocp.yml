@@ -12,6 +12,11 @@ on:
       - 'scripts/tests/ktserve_*'
       - '.github/workflows/windows-iocp.yml'
   workflow_dispatch:
+    inputs:
+      idle_trials:
+        description: Number of stalled response checks (1–30)
+        type: number
+        default: 1
 
 permissions:
   contents: read
@@ -43,8 +48,10 @@ jobs:
           Get-FileHash -Algorithm SHA256 (Join-Path $project 'build/bin/mingwX64/serverReleaseExecutable/ktserve-iocp.exe')
       - name: Exercise real IOCP sockets, limits and shutdown
         shell: pwsh
+        env:
+          IDLE_TRIALS: ${{ inputs.idle_trials || 1 }}
         run: |
           $fixture = 'components/ktserve/experiments/windows-iocp/build/bin/mingwX64/stressReleaseExecutable/ktserve-iocp-stress.exe'
           $env:KTSERVE_BACKEND = 'iocp'
-          python scripts/tests/ktserve_stress.py $fixture
+          python scripts/tests/ktserve_stress.py $fixture --idle-trials $env:IDLE_TRIALS
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise ktServe's resource bounds with an isolated release fixture."""
 
+import argparse
 from contextlib import ExitStack
 from http.client import HTTPConnection, IncompleteRead
 from pathlib import Path
@@ -137,7 +138,40 @@ def test_limits(port, pid):
     print(f"ktServe resource checks passed (connection cap, live heap {initial_heap} -> {final_heap} bytes)")
 
 
-def test_streams(port, server):
+def test_idle_stream(port):
+    def progress():
+        status, body = fetch(port, "/stream-progress")
+        assert status == 200
+        return tuple(map(int, body.split()))
+
+    _, initial_bytes = progress()
+    with pending_client(port, "/stream", "/health"):
+        started = time.monotonic()
+        active, produced = progress()
+        assert active == 1
+        transitions = [(0.0, active, produced - initial_bytes)]
+        last_progress = started
+        try:
+            while True:
+                active, produced = progress()
+                now = time.monotonic()
+                produced_bytes = produced - initial_bytes
+                if produced_bytes != transitions[-1][2]:
+                    # The fixture pulls another chunk only after the preceding write completes.
+                    last_progress = now
+                if (active, produced_bytes) != transitions[-1][1:]:
+                    transitions.append((round(now - started, 2), active, produced_bytes))
+                if active == 0:
+                    assert produced_bytes < STREAM_BYTES, "Slow-reader fixture completed its entire response"
+                    return
+                assert now - last_progress < 5, "Stream source remained open five seconds after output stopped"
+                assert now - started < 10, "Slow-reader fixture never reached an idle timeout"
+                time.sleep(0.02)
+        finally:
+            print(f"Idle stream progress (elapsed seconds, open sources, bytes produced): {transitions}", flush=True)
+
+
+def test_streams(port, server, idle_trials):
     assert fetch(port, "/chunks") == (200, b"s" * (32 * 1024 + 3))
     with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
         conn.sendall(request("/stream") + request("/health"))
@@ -172,9 +206,8 @@ def test_streams(port, server):
         assert fetch(port, "/health") == (200, b"ok")
     wait_until(lambda: active_streams(0), "Disconnected stream leaked its source")
 
-    with pending_client(port, "/stream", "/health"):
-        assert active_streams(1)
-        wait_until(lambda: active_streams(0), "Idle stream leaked its source")
+    for _ in range(idle_trials):
+        test_idle_stream(port)
 
     with pending_client(port, "/stream", "/health"):
         assert active_streams(1)
@@ -279,7 +312,7 @@ def test_application(binary):
     print("Suspending application checks passed (request backpressure, response streaming, pipeline, drain)")
 
 
-def main(binary):
+def main(binary, idle_trials):
     subprocess.run([binary, "--transport", str(ephemeral_port())], check=True, timeout=10)
     port = ephemeral_port()
     with subprocess.Popen([binary, str(port)]) as server:
@@ -288,7 +321,7 @@ def main(binary):
             test_limits(port, server.pid)
             test_request_bodies(port)
             test_suspended_handlers(port)
-            test_streams(port, server)
+            test_streams(port, server, idle_trials)
         finally:
             if server.poll() is None:
                 server.terminate()
@@ -297,4 +330,10 @@ def main(binary):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("binary")
+    parser.add_argument("--idle-trials", type=int, default=1, metavar="N", help="Repeat the stalled response check (1–30)")
+    args = parser.parse_args()
+    if not 1 <= args.idle_trials <= 30:
+        parser.error("--idle-trials must be between 1 and 30")
+    main(args.binary, args.idle_trials)
