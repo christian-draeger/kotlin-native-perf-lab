@@ -20,6 +20,7 @@ internal class HttpServer(
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
     private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+    private val dispatcher: () -> CoroutineScope = { handlerScope.value }
     private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
         if (routes.hasSuspendingGets || routes.applicationHandler != null) {
             { run -> SuspendedGet(handlerScope.value, run) }
@@ -69,7 +70,7 @@ internal class HttpServer(
             return
         }
         val time = completionTime()
-        val client = HttpConnection(time, limits)
+        val client = HttpConnection(time, limits, dispatcher)
         clients[connection] = client
         advance(connection, client, time)
         acceptNext()
@@ -104,9 +105,8 @@ internal class HttpServer(
     private fun advance(id: ConnectionId, client: HttpConnection, time: Long) {
         if (client.writePending) return
         val responseReady = client.prepareResponse(routes, time, launchHandler)
-        if (launchHandler != null) {
-            if (client.awaitingHandler) suspended.add(id) else suspended.remove(id)
-        }
+        val waiting = client.awaitingHandler || client.awaitingProducer
+        if (waiting) suspended.add(id) else if (suspended.isNotEmpty()) suspended.remove(id)
         val result = if (responseReady) {
             val output = checkNotNull(client.output)
             client.writePending = true
@@ -118,7 +118,7 @@ internal class HttpServer(
             val available = input.bytes.size - input.size
             if (client.readPending || client.bodyBlocked || available == 0) return
             client.readPending = true
-            if (client.awaitingHandler) {
+            if (waiting) {
                 val buffer = client.monitorBuffer()
                 transport.read(id, OperationId(nextOperation++), buffer, 0, minOf(buffer.size, available))
             } else {
@@ -132,7 +132,11 @@ internal class HttpServer(
         if (suspended.isEmpty()) return
         for (id in suspended.toList()) {
             val client = clients[id] ?: continue
-            if (client.finishHandler(time) || client.bodyBlocked) advance(id, client, time)
+            if (client.awaitingProducer) {
+                if (!client.resumeProducer()) disconnect(id) else if (client.output != null) advance(id, client, time)
+            } else if (client.finishHandler(time) || client.bodyBlocked) {
+                advance(id, client, time)
+            }
         }
     }
 

@@ -6,6 +6,7 @@ import dev.perflab.nativeserve.ResponseSource
 import dev.perflab.nativeserve.ServerLimits
 import dev.perflab.nativeserve.serve
 import dev.perflab.nativeserve.streamResponse
+import dev.perflab.nativeserve.streamSuspending
 import dev.perflab.nativeserve.text
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
@@ -141,6 +142,11 @@ private fun runApplication(port: Int) {
                         bytes += chunk.size
                     }
                     text("${request.method}:$bytes")
+                }
+                "/download" -> streamSuspending(contentType = "application/octet-stream") {
+                    write(ByteArray(16 * 1024) { 'x'.code.toByte() })
+                    delay(50)
+                    write(ByteArray(8 * 1024 + 3) { 'y'.code.toByte() })
                 }
                 else -> text("missing", status = 404)
             }

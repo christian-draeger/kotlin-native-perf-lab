@@ -269,13 +269,14 @@ def test_application(binary):
                 with conn.makefile("rb") as stream:
                     assert response(stream)[2] == b"PATCH:24576"
                     assert response(stream)[2] == b"ok"
+            assert fetch(port, "/download") == (200, b"x" * (16 * 1024) + b"y" * (8 * 1024 + 3))
             assert fetch(port, "/stop") == (200, b"ok")
             assert server.wait(timeout=5) == 0
         finally:
             if server.poll() is None:
                 server.terminate()
             server.wait(timeout=5)
-    print("Suspending application checks passed (request backpressure, pipeline, drain)")
+    print("Suspending application checks passed (request backpressure, response streaming, pipeline, drain)")
 
 
 def main(binary):

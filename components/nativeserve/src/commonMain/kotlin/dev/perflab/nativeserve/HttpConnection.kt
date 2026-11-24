@@ -1,6 +1,7 @@
 package dev.perflab.nativeserve
 
-private const val RESPONSE_CHUNK_BYTES = 16 * 1024
+import kotlinx.coroutines.CoroutineScope
+
 private val EMPTY_CHUNKED_END = "0\r\n\r\n".encodeToByteArray()
 private val CHUNKED_END = "\r\n0\r\n\r\n".encodeToByteArray()
 
@@ -23,7 +24,11 @@ class ServerLimits(
     }
 }
 
-internal class HttpConnection(connectedAt: Long, private val limits: ServerLimits) {
+internal class HttpConnection(
+    connectedAt: Long,
+    private val limits: ServerLimits,
+    private val dispatcher: (() -> CoroutineScope)? = null,
+) {
     val input = RequestBuffer(limits.headerBytes)
     var output: ByteArray? = null
         private set
@@ -35,6 +40,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     private var stream: PendingStream? = null
     private var handler: PendingHandler? = null
     val awaitingHandler: Boolean get() = handler != null
+    val awaitingProducer: Boolean get() = stream?.waiting == true
     var bodyBlocked = false
         private set
     var readPending = false
@@ -55,7 +61,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     fun beginDrain(): Boolean {
         draining = true
         closeAfterWrite = true
-        return output != null || awaitingHandler
+        return output != null || awaitingHandler || awaitingProducer
     }
 
     fun received(count: Int, now: Long) {
@@ -95,7 +101,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     ): Boolean {
         if (output != null) return true
         incoming?.let { return consumeBody(it) }
-        if (awaitingHandler) return false
+        if (awaitingHandler || stream != null) return false
         val application = routes.applicationHandler
         when (val head = input.parse(allowAnyRequestBody = application != null)) {
             ParsedHead.Incomplete -> {
@@ -230,6 +236,8 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         } catch (_: Exception) {
             0
         }
+        pending.waiting = read == SOURCE_WAITING && pending.source is AsyncResponseSource
+        if (pending.waiting) return true
         if (pending.chunked && read == -1) {
             pending.phase = ChunkPhase.END
             setOutput(if (pending.wroteChunk) CHUNKED_END else EMPTY_CHUNKED_END)
@@ -251,6 +259,8 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         }
         return true
     }
+
+    fun resumeProducer(): Boolean = pull(checkNotNull(stream))
 
     fun closeResponse() {
         val pending = stream ?: return
@@ -283,22 +293,26 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         if ((stream?.length ?: response.body.size) > limits.responseBodyBytes ||
             response.applicationHeaderBytes > limits.responseHeaderBytes || chunked && version != "HTTP/1.1" && !headOnly
         ) {
-            stream?.source?.release()
+            stream?.discard()
             closeAfterWrite = true
             setOutput(emptyResponse(500).encode(version, keepAlive = false))
             return
         }
         val persistent = keepAlive && !draining
         closeAfterWrite = !persistent
-        if (headOnly) {
-            stream?.source?.release()
+        if (headOnly || stream is ResponseStream.Produce && stream.length == 0) {
+            stream?.discard()
             val length = if (chunked) OMIT_RESPONSE_LENGTH else stream?.length ?: response.body.size
             setOutput(response.encodeHead(version, persistent, length))
         } else if (stream == null) {
             setOutput(response.encode(version, persistent))
         } else {
             val length = stream.length
-            this.stream = PendingStream(stream.source, length ?: limits.responseBodyBytes, chunked)
+            val source = when (stream) {
+                is ResponseStream.Pull -> stream.source
+                is ResponseStream.Produce -> AsyncResponseSource(checkNotNull(dispatcher).invoke(), stream.producer)
+            }
+            this.stream = PendingStream(source, length ?: limits.responseBodyBytes, chunked)
             setOutput(response.encodeHead(version, persistent, length ?: CHUNKED_RESPONSE_LENGTH))
         }
     }
@@ -341,6 +355,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         var phase = ChunkPhase.SOURCE
         var wroteChunk = false
         var chunkLength = 0
+        var waiting = false
     }
 }
 
