@@ -26,9 +26,9 @@ on:
         options: ['3', '5']
         default: '5'
       suite:
-        description: Complete ranking or quicker NativeServe, Ktor and Axum feedback
+        description: Complete ranking, Core feedback or an exploratory NativeServe comparison
         type: choice
-        options: [expanded, core, workers]
+        options: [expanded, core, workers, responses]
         default: expanded
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
@@ -46,11 +46,11 @@ permissions:
   actions: read
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || 'benchmark-dashboard-publish' }}
+  group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || ((inputs.suite == 'workers' || inputs.suite == 'responses') && format('experiment-{0}-{1}', inputs.suite, github.ref)) || 'benchmark-dashboard-publish' }}
 
 jobs:
   arm_native:
-    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers')
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmark && (github.ref_name == 'main' || inputs.suite == 'workers' || inputs.suite == 'responses')
     uses: ./.github/workflows/arm-native.yml
     with:
       reuse_smoke: true
@@ -119,7 +119,7 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: ${{ runner.temp }}/arm-native
-      - name: Prepare the worker reference and CPU affinity
+      - name: Prepare the worker reference
         if: inputs.suite == 'workers'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -139,11 +139,14 @@ jobs:
           archive="nativeserve-snapshot-${sha:0:12}-linux-$EXPECTED_ARCH.tar.gz"
           (cd "$reference"; sha256sum --strict -c "$archive.sha256"; tar -xzf "$archive" nativeserve)
           printf 'NATIVESERVE_REFERENCE_BINARY=%s/nativeserve\nNATIVESERVE_REFERENCE_SHA=%s\n' "$reference" "$sha" >> "$GITHUB_ENV"
+      - name: Select disjoint CPU masks
+        if: inputs.suite == 'workers' || inputs.suite == 'responses'
+        run: |
           python3 - <<'PY' >> "$GITHUB_ENV"
           import os
           cpus = sorted(os.sched_getaffinity(0))
           if len(cpus) < 4:
-              raise SystemExit("The workers suite needs at least four available logical CPUs.")
+              raise SystemExit("The exploratory suites need at least four available logical CPUs.")
           print("SERVER_CPUS=" + ",".join(map(str, cpus[:2])))
           print("LOAD_CPUS=" + ",".join(map(str, cpus[2:4])))
           PY
@@ -230,7 +233,7 @@ jobs:
 
   store:
     needs: benchmark
-    if: ${{ !cancelled() && inputs.suite != 'workers' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
+    if: ${{ !cancelled() && inputs.suite != 'workers' && inputs.suite != 'responses' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

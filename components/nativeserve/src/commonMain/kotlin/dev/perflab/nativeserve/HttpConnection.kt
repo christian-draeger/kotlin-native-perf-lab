@@ -29,6 +29,7 @@ internal class HttpConnection(
     private val limits: ServerLimits,
     private val dispatcher: (() -> CoroutineScope)? = null,
     private val countRequest: (() -> Unit)? = null,
+    private val gatherResponses: Boolean = false,
 ) {
     val input = RequestBuffer(limits.headerBytes)
     var output: ByteArray? = null
@@ -36,6 +37,8 @@ internal class HttpConnection(
     var outputOffset = 0
         private set
     var outputLength = 0
+        private set
+    var outputTail: ByteArray? = null
         private set
     private var incoming: IncomingBody? = null
     private var stream: PendingStream? = null
@@ -216,6 +219,15 @@ internal class HttpConnection(
         lastActivity = now
         outputOffset += count
         if (outputOffset < outputLength) return true
+        outputTail?.let { body ->
+            val sentBodyBytes = outputOffset - outputLength
+            outputTail = null
+            if (sentBodyBytes < body.size) {
+                setOutput(body)
+                outputOffset = sentBodyBytes
+                return true
+            }
+        }
         output = null
         val pending = stream ?: return !closeAfterWrite
         if (pending.phase == ChunkPhase.END ||
@@ -277,6 +289,7 @@ internal class HttpConnection(
     }
 
     fun close() {
+        outputTail = null
         cancelHandler()
         closeRequest()
         closeResponse()
@@ -313,7 +326,12 @@ internal class HttpConnection(
             val length = if (chunked) OMIT_RESPONSE_LENGTH else stream?.length ?: response.body.size
             setOutput(response.encodeHead(version, persistent, length))
         } else if (stream == null) {
-            setOutput(response.encode(version, persistent))
+            if (gatherResponses && response.body.isNotEmpty() && response.status != 204 && response.status != 304) {
+                setOutput(response.encodeHead(version, persistent, response.body.size))
+                outputTail = response.body
+            } else {
+                setOutput(response.encode(version, persistent))
+            }
         } else {
             val length = stream.length
             val source = when (stream) {

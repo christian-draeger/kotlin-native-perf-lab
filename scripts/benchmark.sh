@@ -36,7 +36,7 @@ if [[ "$suite" == io-backends ]]; then
     echo 'NATIVESERVE_IO_BINARY must be an absolute executable path.' >&2; exit 2;
   }
 fi
-if [[ "$suite" == workers || "$suite" == io-backends ]]; then
+if [[ "$suite" == workers || "$suite" == io-backends || "$suite" == responses ]]; then
   if [[ -z "${LOAD_SSH:-}" ]]; then
     : "${SERVER_CPUS:?Specify server CPU affinity or use a separate LOAD_SSH host}"
     : "${LOAD_CPUS:?Specify load CPU affinity or use a separate LOAD_SSH host}"
@@ -144,6 +144,8 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   if [[ "$suite" == workers ]]; then
     printf 'nativeserve_reference_sha=%s\n' "$NATIVESERVE_REFERENCE_SHA"
     sha256sum "$NATIVESERVE_REFERENCE_BINARY"
+  fi
+  if [[ "$suite" == workers || "$suite" == responses ]]; then
     printf 'server_affinity=%s\nload_affinity=%s\n' "${server_affinity:-${SERVER_CPUS:-all}}" "${load_affinity:-remote}"
   fi
   if [[ "$suite" == expanded || "$suite" == competitors ]]; then

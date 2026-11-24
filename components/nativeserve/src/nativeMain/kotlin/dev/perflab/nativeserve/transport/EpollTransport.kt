@@ -2,6 +2,7 @@
 
 package dev.perflab.nativeserve.transport
 
+import kotlinx.cinterop.COpaquePointer
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.MemScope
@@ -51,10 +52,13 @@ import platform.posix.errno
 import platform.posix.fcntl
 import platform.posix.htonl
 import platform.posix.htons
+import platform.posix.iovec
 import platform.posix.listen
 import platform.posix.memset
+import platform.posix.msghdr
 import platform.posix.recv
 import platform.posix.send
+import platform.posix.sendmsg
 import platform.posix.setsockopt
 import platform.posix.sockaddr_in
 import platform.posix.socket
@@ -68,7 +72,8 @@ internal fun MemScope.openPlatformTransport(
     host: String,
     port: Int,
     connectionLimit: Int,
-): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN) { openListener(host, port) }
+    gatherResponses: Boolean = false,
+): StreamTransport = openEpollTransport(connectionLimit, EPOLLIN, gatherResponses) { openListener(host, port) }
 
 internal fun MemScope.openWorkerEpollTransports(
     host: String,
@@ -98,11 +103,19 @@ internal fun MemScope.openWorkerEpollTransports(
 private fun MemScope.openEpollTransport(
     connectionLimit: Int,
     listenerEvents: UInt,
+    gatherResponses: Boolean = false,
     open: () -> Int,
 ): StreamTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
     val change = alloc<epoll_event>()
     memset(change.ptr, 0, sizeOf<epoll_event>().convert())
+    val message = if (gatherResponses) {
+        alloc<msghdr>().apply {
+            memset(ptr, 0, sizeOf<msghdr>().convert())
+            msg_iov = allocArray<iovec>(2)
+            msg_iovlen = 2.convert()
+        }.ptr
+    } else null
     val listener = open()
     val poller = epoll_create1(EPOLL_CLOEXEC)
     if (poller < 0) {
@@ -110,7 +123,7 @@ private fun MemScope.openEpollTransport(
         close(listener)
         error("epoll_create1 failed (errno $cause)")
     }
-    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents)
+    return EpollTransport(listener, poller, events, change.ptr, connectionLimit, listenerEvents, message)
 }
 
 internal fun MemScope.ipv4SocketAddress(host: String, port: Int): sockaddr_in {
@@ -166,7 +179,8 @@ private class EpollTransport(
     private val change: CPointer<epoll_event>,
     private val connectionLimit: Int,
     private val listenerEvents: UInt,
-) : StreamTransport {
+    private val gatheringMessage: CPointer<msghdr>?,
+) : GatheringStreamTransport {
     private val peers = mutableMapOf<ConnectionId, Peer>()
     private val work = ArrayDeque<Peer>()
     private var processing: Peer? = null
@@ -192,7 +206,30 @@ private class EpollTransport(
         return submit(peer, peer.write, operation, bytes, offset, length)
     }
 
-    private fun submit(peer: Peer, slot: Transfer, operation: OperationId, bytes: ByteArray, offset: Int, length: Int): Submission {
+    override fun writeGathered(
+        connection: ConnectionId,
+        operation: OperationId,
+        head: ByteArray,
+        headOffset: Int,
+        body: ByteArray,
+    ): Submission {
+        val peer = peers[connection] ?: return Submission.CLOSED
+        checkNotNull(gatheringMessage)
+        require(headOffset in head.indices)
+        val headLength = head.size - headOffset
+        require(body.isNotEmpty() && body.size <= Int.MAX_VALUE - headLength)
+        return submit(peer, peer.write, operation, head, headOffset, headLength, body)
+    }
+
+    private fun submit(
+        peer: Peer,
+        slot: Transfer,
+        operation: OperationId,
+        bytes: ByteArray,
+        offset: Int,
+        length: Int,
+        tail: ByteArray? = null,
+    ): Submission {
         if (peer.fd < 0) return Submission.CLOSED
         if (slot.buffer != null) return Submission.AT_CAPACITY
         require(offset >= 0 && length > 0 && offset <= bytes.size - length)
@@ -200,6 +237,7 @@ private class EpollTransport(
         slot.buffer = bytes
         slot.offset = offset
         slot.length = length
+        slot.tail = tail
         slot.firstAttempt = slot.writing
         queue(peer)
         return Submission.ACCEPTED
@@ -340,10 +378,12 @@ private class EpollTransport(
         var count = 0
         if (slot.failure == null) {
             val transferred = bytes.usePinned { pinned ->
-                if (slot.writing) {
-                    send(peer.fd, pinned.addressOf(slot.offset), slot.length.convert(), MSG_NOSIGNAL)
-                } else {
-                    recv(peer.fd, pinned.addressOf(slot.offset), slot.length.convert(), 0)
+                val address = pinned.addressOf(slot.offset)
+                val tail = slot.tail
+                when {
+                    tail != null -> sendGathered(peer.fd, address, slot.length, tail)
+                    slot.writing -> send(peer.fd, address, slot.length.convert(), MSG_NOSIGNAL)
+                    else -> recv(peer.fd, address, slot.length.convert(), 0)
                 }
             }
             if (transferred < 0 && (errno == EAGAIN || errno == EINTR)) return false
@@ -357,6 +397,7 @@ private class EpollTransport(
         val operation = slot.operation
         val failure = slot.failure
         slot.buffer = null
+        slot.tail = null
         slot.failure = null
         when {
             failure != null -> completions.failed(peer.id, operation, failure)
@@ -364,6 +405,18 @@ private class EpollTransport(
             else -> completions.read(peer.id, operation, count)
         }
         return true
+    }
+
+    private fun sendGathered(fd: Int, head: COpaquePointer, headLength: Int, body: ByteArray): Long {
+        val message = checkNotNull(gatheringMessage)
+        val vectors = checkNotNull(message.pointed.msg_iov)
+        return body.usePinned { pinned ->
+            vectors[0].iov_base = head
+            vectors[0].iov_len = headLength.convert()
+            vectors[1].iov_base = pinned.addressOf(0)
+            vectors[1].iov_len = body.size.convert()
+            sendmsg(fd, message, MSG_NOSIGNAL)
+        }
     }
 
     private fun updateInterest(peer: Peer) {
@@ -421,6 +474,7 @@ private class EpollTransport(
             peer.fd = -1
             peer.read.buffer = null
             peer.write.buffer = null
+            peer.write.tail = null
         }
         peers.clear()
         work.clear()
@@ -443,6 +497,7 @@ private class EpollTransport(
     private class Transfer(val writing: Boolean) {
         var operation = OperationId(0)
         var buffer: ByteArray? = null
+        var tail: ByteArray? = null
         var offset = 0
         var length = 0
         var firstAttempt = false

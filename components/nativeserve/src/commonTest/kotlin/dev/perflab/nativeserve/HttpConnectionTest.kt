@@ -1,11 +1,13 @@
 package dev.perflab.nativeserve
 
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class HttpConnectionTest {
@@ -35,6 +37,40 @@ class HttpConnectionTest {
         assertNull(connection.output)
         assertEquals(request.length, connection.input.size)
         assertEquals(1, handled)
+    }
+
+    @Test
+    fun gatheredPartialWritesResumeInTheBodyBeforeDispatchingTheNextRequest() {
+        val body = "Grüße".encodeToByteArray()
+        val reply = response(body, contentType = "text/plain; charset=UTF-8")
+        var handled = 0
+        val routes = Routes().apply {
+            get("/health") {
+                handled++
+                reply
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits(), gatherResponses = true)
+        connection.receive(request.repeat(2), now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        val head = assertNotNull(connection.output)
+        assertSame(body, connection.outputTail)
+        assertContentEquals(reply.encode("HTTP/1.1", keepAlive = true), head + body)
+
+        assertTrue(connection.wrote(1, now = 2))
+        assertEquals(1, connection.outputOffset)
+        assertSame(body, connection.outputTail)
+        assertTrue(connection.wrote(head.size - 1 + 2, now = 3))
+        assertSame(body, connection.output)
+        assertNull(connection.outputTail)
+        assertEquals(2, connection.outputOffset)
+        assertTrue(connection.prepareResponse(routes, now = 3))
+        assertEquals(1, handled)
+
+        assertTrue(connection.wrote(body.size - 2, now = 4))
+        assertNull(connection.output)
+        assertTrue(connection.prepareResponse(routes, now = 4))
+        assertEquals(2, handled)
     }
 
     @Test

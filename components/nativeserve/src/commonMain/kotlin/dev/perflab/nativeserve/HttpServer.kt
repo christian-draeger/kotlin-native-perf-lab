@@ -1,6 +1,7 @@
 package dev.perflab.nativeserve
 
 import dev.perflab.nativeserve.transport.ConnectionId
+import dev.perflab.nativeserve.transport.GatheringStreamTransport
 import dev.perflab.nativeserve.transport.OperationId
 import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.Submission
@@ -22,7 +23,9 @@ internal class HttpServer(
     private val routes: Routes,
     private val limits: ServerLimits,
     private val counters: HttpServerCounters? = null,
+    gatherResponses: Boolean = false,
 ) : TransportCompletions {
+    private val gathering = if (gatherResponses) transport as GatheringStreamTransport else null
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
     private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
@@ -78,7 +81,7 @@ internal class HttpServer(
         }
         val time = completionTime()
         counters?.let { it.accepted++ }
-        val client = HttpConnection(time, limits, dispatcher, countRequest)
+        val client = HttpConnection(time, limits, dispatcher, countRequest, gatherResponses = gathering != null)
         clients[connection] = client
         advance(connection, client, time)
         acceptNext()
@@ -117,10 +120,14 @@ internal class HttpServer(
         if (waiting) suspended.add(id) else if (suspended.isNotEmpty()) suspended.remove(id)
         val result = if (responseReady) {
             val output = checkNotNull(client.output)
+            val tail = client.outputTail
+            val operation = OperationId(nextOperation++)
             client.writePending = true
-            transport.write(
-                id, OperationId(nextOperation++), output, client.outputOffset, client.outputLength - client.outputOffset,
-            )
+            if (tail == null) {
+                transport.write(id, operation, output, client.outputOffset, client.outputLength - client.outputOffset)
+            } else {
+                checkNotNull(gathering).writeGathered(id, operation, output, client.outputOffset, tail)
+            }
         } else {
             val input = client.input
             val available = input.bytes.size - input.size

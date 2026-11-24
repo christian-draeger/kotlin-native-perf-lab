@@ -25,6 +25,11 @@ start_server() {
         }
       fi
       case "$variant" in
+        nativeserve-gathered) grep -qFx 'NativeServe response_writes=gathered' "$log" || return 1 ;;
+        kotlin-reactor)
+          if [[ "${BENCHMARK_SUITE:-}" == responses ]]; then
+            grep -qFx 'NativeServe response_writes=contiguous' "$log" || return 1
+          fi ;;
         nativeserve-workers-2-reuseport) grep -qFx 'NativeServe worker_listener=reuseport' "$log" || return 1 ;;
         nativeserve-epoll) grep -qFx 'NativeServe backend=epoll tcp=ipv4' "$log" || return 1 ;;
         nativeserve-io-uring) grep -q '^NativeServe backend=io_uring tcp=ipv4 features=0x' "$log" || return 1 ;;

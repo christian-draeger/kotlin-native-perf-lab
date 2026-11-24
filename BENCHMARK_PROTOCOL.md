@@ -59,6 +59,10 @@ Dashboard benchmarks on `main` reuse the ARM64 release artifact when a successfu
 
 Review the actual delivered rate and failures before comparing p99 at fixed load. Keep the one-worker result alongside the prior release to spot regressions in the default path. Use the two-host setup to decide on a new default.
 
+## Compare HTTP response writes
+
+The exploratory `responses` suite compares contiguous response writes with separate header and body buffers sent by a single Linux `sendmsg`. Both modes run with one worker in the same release binary. The original four-way fixtures and their serializers remain the same. The workflow interleaves five variants and uploads results with runner and CPU-mask metadata. These short-response trials characterize the existing endpoints. Larger payloads need an equivalent separate workload. [Experiment #120](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/120)
+
 ## Local harness and limitations
 
 - The load generator and server share one host. Use the local runs to exercise the methodology and identify hypotheses on that host.

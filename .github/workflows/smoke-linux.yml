@@ -65,7 +65,7 @@ jobs:
           source scripts/server-process.sh
           trap stop_server EXIT
           log="$RUNNER_TEMP/nativeserve-workers.log"
-          for variant in nativeserve-workers-2 nativeserve-workers-2-reuseport; do
+          for variant in nativeserve-workers-2 nativeserve-workers-2-reuseport nativeserve-gathered; do
             start_server "$variant" "$log"
             ./scripts/smoke.sh "http://127.0.0.1:$PORT"
             python3 scripts/tests/reactor_http_smoke.py "$PORT"

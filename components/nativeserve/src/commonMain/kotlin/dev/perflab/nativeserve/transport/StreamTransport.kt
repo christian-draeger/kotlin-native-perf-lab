@@ -41,3 +41,14 @@ internal interface StreamTransport {
     /** Discards undelivered outcomes and releases all buffers and handles before returning. */
     fun close()
 }
+
+/** Lease two immutable ranges for one write. The completion count spans both ranges in order. */
+internal interface GatheringStreamTransport : StreamTransport {
+    fun writeGathered(
+        connection: ConnectionId,
+        operation: OperationId,
+        head: ByteArray,
+        headOffset: Int,
+        body: ByteArray,
+    ): Submission
+}
