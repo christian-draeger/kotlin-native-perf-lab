@@ -92,6 +92,8 @@ After the WebFlux comparison, [assess Spring MVC and Servlet compatibility](http
 
 Evaluate [reusable protocol components and the session adapter](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/78) alongside the bounded streaming work in #37. Keep routing, application handlers, and typed serialization reusable across protocols and runtimes. Use the adapter for [bounded HTTP/2 sessions](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/79) with multiplexing and flow control, then verify [TLS and ALPN deployment](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/80) on Linux x86_64 and ARM64.
 
+The [nghttp2 session experiment](components/nativeserve/experiments/http2-nghttp2) exercises the Kotlin/Native memory boundary, fragmented input, flow-control credit and cancellation on both Linux architectures.
+
 Report protocol, TLS mode, connections, and concurrent streams in the [matched HTTP/2 comparisons](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/81). HTTP/2 gets a separate workload series. [HTTP/2 specification](https://www.rfc-editor.org/rfc/rfc9113.html)
 
 ## Validation and performance decisions
