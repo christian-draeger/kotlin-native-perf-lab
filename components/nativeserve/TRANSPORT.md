@@ -2,7 +2,7 @@
 
 The routing API configures handlers in the HTTP core. The core owns request framing, response encoding, per-connection HTTP state and server policy. It drives the internal `StreamTransport` interface. Platform backends implement that interface and own the listener, sockets, readiness registrations, kernel submission queues and native addressing. HTTP code receives connection IDs, operation IDs, byte counts and portable outcomes. Backends can log the underlying platform error with operation context.
 
-The HTTP loop and contract live in shared Kotlin so the HTTP core and tests can run without native headers. Linux uses a level-triggered epoll implementation.
+The HTTP loop and contract live in shared Kotlin so the HTTP core and tests can run without native headers. Linux uses level-triggered epoll. Apple Silicon macOS uses kqueue.
 
 ## Operations and progress
 
@@ -39,6 +39,8 @@ epoll owns the listener, poll descriptor and each accepted socket. A registratio
 
 The opt-in worker experiment opens one listening socket. Each worker owns a duplicate listener descriptor, a poll descriptor, and the sockets it accepts. Listener registrations use `EPOLLEXCLUSIVE`. The coordinator partitions the process connection limit among workers, and the handlers in the sample can run concurrently. Coroutines launch and join the fixed workers. Event arrays stay alive in the coordinator's native scope until the workers have joined.
 
-The shared fake exercises immediate and delayed completion, partial transfers, EOF, capacity, cancellation races, stale events and final shutdown without timing dependencies. Backend integration adds real TCP smoke tests and exploratory before/after measurements of the epoll boundary, including allocation, throughput, latency and CPU use.
+macOS selects kqueue automatically. `NATIVESERVE_BACKEND=kqueue` requests it explicitly. The backend registers one one-shot read or write filter per pending socket operation. It stores the operation ID in `udata` and checks that ID against live work before every callback, including when a descriptor was reused during the same event batch. Reads consume buffered bytes before reporting EOF. Darwin sockets use `SO_NOSIGPIPE` and the backend pins Kotlin buffers only during `recv` and `send`. The `serve` scope owns the event arrays and the backend closes the descriptors before that scope returns. The macOS preview uses one event loop and numeric IPv4 bind addresses.
+
+The shared fake exercises immediate and delayed completion, partial transfers, EOF, capacity, cancellation races, stale events and final shutdown without timing dependencies. The native fixture runs the same transport probe and TCP stress cases on Linux and macOS. Exploratory epoll boundary measurements record allocation, throughput, latency and CPU use.
 
 [Linux epoll](https://man7.org/linux/man-pages/man7/epoll.7.html) · [Apple kqueue](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/kqueue.2.html) · [Linux io_uring cancellation](https://man7.org/linux/man-pages/man7/io_uring_cancelation.7.html) · [Windows overlapped I/O cancellation](https://learn.microsoft.com/en-us/windows/win32/fileio/canceling-pending-i-o-operations)

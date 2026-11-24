@@ -9,9 +9,10 @@ import sys
 from reactor_http_smoke import connect, response
 
 
-def main(port, pid):
+def main(port, pid, binary=None):
     runner = Path(__file__).resolve().parents[1] / "run-server.sh"
-    conflict = subprocess.run([runner, "kotlin-reactor"], capture_output=True, text=True, timeout=5)
+    command = [binary] if binary else [runner, "kotlin-reactor"]
+    conflict = subprocess.run(command, capture_output=True, text=True, timeout=5)
     host = os.environ.get("BIND_HOST", "127.0.0.1")
     assert conflict.returncode != 0 and f"bind {host}:{port} failed" in conflict.stderr, conflict.stderr
     with connect(port) as conn, conn.makefile("rb") as stream:
@@ -24,4 +25,4 @@ def main(port, pid):
 
 
 if __name__ == "__main__":
-    main(int(sys.argv[1]), int(sys.argv[2]))
+    main(int(sys.argv[1]), int(sys.argv[2]), *sys.argv[3:])

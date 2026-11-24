@@ -61,6 +61,9 @@ def test_limits(port, pid):
     descriptors = Path(f"/proc/{pid}/fd")
 
     def open_fds():
+        if sys.platform == "darwin":
+            fields = subprocess.check_output(["lsof", "-nP", "-p", str(pid), "-Ff"], text=True)
+            return sum(line.startswith("f") and line[1:].isdigit() for line in fields.splitlines())
         return len(list(descriptors.iterdir()))
 
     def read_counter(path):
@@ -170,7 +173,7 @@ def main(binary):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    subprocess.run([binary, "--epoll", str(port)], check=True, timeout=10)
+    subprocess.run([binary, "--transport", str(port)], check=True, timeout=10)
     with subprocess.Popen([binary, str(port)]) as server:
         try:
             def ready():
