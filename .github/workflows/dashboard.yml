@@ -30,9 +30,9 @@ on:
         options: ['3', '5']
         default: '5'
       suite:
-        description: Complete ranking, core feedback, application JSON, or worker experiments
+        description: Complete ranking, core feedback, application workload, or worker experiment
         type: choice
-        options: [expanded, core, application, workers]
+        options: [expanded, core, application, application-mix, workers]
         default: expanded
       worker_reference_run:
         description: Successful main Ubuntu smoke run ID supplying the workers suite reference
@@ -67,7 +67,7 @@ jobs:
       fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-        route: ${{ fromJSON(inputs.suite == 'application' && '["catalog"]' || '["health","json","users"]') }}
+        route: ${{ fromJSON(inputs.suite == 'application' && '["catalog"]' || inputs.suite == 'application-mix' && '["mix"]' || '["health","json","users"]') }}
         include:
           - arch: x86_64
             runner: ubuntu-24.04
@@ -109,6 +109,11 @@ jobs:
         env:
           NATIVE_ARTIFACT: ${{ needs.arm_native.outputs.artifact_id }}
         run: test -n "$NATIVE_ARTIFACT"
+      - name: Install k6 for the application mix
+        if: inputs.suite == 'application-mix'
+        run: |
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          printf '%s\n' "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         if: matrix.arch == 'aarch64'
         with:
@@ -178,7 +183,17 @@ jobs:
           BENCHMARK_LABEL: ${{ inputs.benchmark_label }}
         run: |
           export BENCHMARK_RESULTS_DIR="$RUNNER_TEMP/benchmark-results"
-          ./scripts/benchmark.sh
+          if [[ "$BENCHMARK_SUITE" == application-mix ]]; then
+            result="$BENCHMARK_RESULTS_DIR/$(date -u +%Y%m%dT%H%M%SZ)"
+            mkdir -p "$result"
+            grep '^PRETTY_NAME=' /etc/os-release > "$result/environment.txt"
+            printf 'kotlin_version=%s\n' "$(sed -n 's/.*kotlin("multiplatform") version "\([^"]*\)".*/\1/p' components/ktserve/build.gradle.kts)" >> "$result/environment.txt"
+            python3 scripts/benchmark-integrations.py --family application-mix --executable scripts/run-server.sh \
+              --output "$result" --repeats "$RUNS" --warmup "$WARMUP" --precondition "$WARMUP" \
+              --duration "$DURATION" --threads "$THREADS"
+          else
+            ./scripts/benchmark.sh
+          fi
       - name: Measure worker tail latency at matched offered load
         if: inputs.suite == 'workers' && matrix.route == 'json'
         run: |
@@ -294,7 +309,7 @@ jobs:
               grep -Fxq "ci_run_id=$SOURCE_RUN" "$metadata"
               grep -Fxq "ci_run_attempt=$SOURCE_ATTEMPT" "$metadata"
             else
-              [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users|catalog)$ ]]
+              [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users|catalog|mix)$ ]]
             fi
             series_count=$((series_count + 1))
             if [[ -e "results/$series" ]]; then

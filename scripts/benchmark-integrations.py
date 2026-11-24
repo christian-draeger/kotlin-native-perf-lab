@@ -19,10 +19,12 @@ from pathlib import Path
 from parse_wrk import read_load_timing
 
 SCRIPTS = Path(__file__).resolve().parent
+APPLICATION_MIX = "application-mix"
 ENGINES = {
     "ktor-native": {"cio": "cio", "ktserve": "ktserve"},
     "ktor-jvm": {"cio": "cio", "netty": "netty", "ktserve": "ktserve"},
     "spring-webflux": {"reactor-netty": "reactor-netty", "ktserve": "ktserve"},
+    APPLICATION_MIX: {variant: variant for variant in ("ktor-native", "ktor-jvm", "rust-axum", "ktserve")},
 }
 UPLOAD_SIZE = 24 * 1024
 UPLOAD = b"x" * UPLOAD_SIZE
@@ -117,6 +119,10 @@ def server(args, engine, affinity, log):
         port = listener.getsockname()[1]
     mode = ENGINES[args.family]["ktserve" if engine == "ktserve-eventfd" else engine]
     env = None
+    command = [str(args.executable), str(port), mode]
+    if args.family == APPLICATION_MIX:
+        command = [str(args.executable), mode]
+        env = {**os.environ, "PORT": str(port), "BIND_HOST": "127.0.0.1", "BENCHMARK_SUITE": APPLICATION_MIX}
     wakeup = None
     if args.compare_native_wakeup:
         env = {**os.environ, "KTSERVE_EPOLL_TRIGGER": "level"}
@@ -127,7 +133,7 @@ def server(args, engine, affinity, log):
             env["KTSERVE_EPOLL_APPLICATION_WAKEUP"] = wakeup
     with log.open("w") as output:
         process = subprocess.Popen(
-            [*affinity, str(args.executable), str(port), mode],
+            [*affinity, *command],
             stdout=output,
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -139,6 +145,8 @@ def server(args, engine, affinity, log):
             if wakeup and f"ktServe epoll application_wakeup={wakeup}\n" not in log.read_text():
                 raise RuntimeError(f"The server did not log {wakeup} application wake-up. See {log}")
             check_responses(port, args.load_tool == "k6")
+            if args.family == APPLICATION_MIX:
+                require_response(port, "/wait", "text/plain", b"ready")
             yield process, port
         finally:
             stop_server(process, port, args.family)
@@ -165,6 +173,9 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
             f"max_vus_per_scenario={args.vus}",
             f"precondition_seconds={args.precondition}",
         ]
+        if args.family == APPLICATION_MIX:
+            workload[1] = workload[1].replace("json:40%", "json:30%,wait:10%")
+            workload.append("wait_delay_ms=20")
     else:
         load_version = subprocess.run(
             ["wrk", "--version"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
@@ -174,9 +185,19 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
         if args.compare_native_wakeup:
             workload[0] = f"workloads={args.compare_native_wakeup}"
             workload += ["integration_experiment=epoll-application-wakeup", "epoll_peer_trigger=level"]
-    dependencies = sorted((args.executable.parent.parent / "lib").glob("*.jar"))
+    binaries = [args.executable, *sorted((args.executable.parent.parent / "lib").glob("*.jar"))]
+    if args.family == APPLICATION_MIX:
+        root = SCRIPTS.parent
+        jvm = root / "competitors/ktor/build/jvmDist"
+        binaries.extend([
+            jvm / "app.jar", *sorted((jvm / "lib").glob("*.jar")),
+            root / "competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe",
+            root / "competitors/rust-axum/target/release/axum-baseline",
+            root / "components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe",
+        ])
+        versions.extend([run_output("rustc", "--version"), run_output("gradle", "--version")])
     with (args.output / "application.sha256").open("w") as manifest:
-        for path in [args.executable, *dependencies]:
+        for path in binaries:
             with path.open("rb") as binary:
                 digest = hashlib.file_digest(binary, "sha256").hexdigest()
             manifest.write(f"{digest}  {path.name}\n")
@@ -265,6 +286,7 @@ def load_k6(args, affinity, port, rate, duration, prefix):
         "GOMAXPROCS": str(args.threads), "PERFLAB_TARGET": f"http://127.0.0.1:{port}",
         "PERFLAB_RATE": str(rate), "PERFLAB_DURATION": str(duration),
         "PERFLAB_VUS": str(args.vus), "PERFLAB_SUMMARY": str(summary),
+        "PERFLAB_APPLICATION_MIX": "true" if args.family == APPLICATION_MIX else "false",
     })
     with log.open("w") as output:
         subprocess.run([
@@ -276,7 +298,7 @@ def load_k6(args, affinity, port, rate, duration, prefix):
 
 
 def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
-    variant = f"{args.family}-{engine}"
+    variant = engine if args.family == APPLICATION_MIX else f"{args.family}-{engine}"
     stem = args.output / f"{variant}-mixed-{rate}-{run}"
     metrics = (sys.executable, SCRIPTS / "proc_metrics.py")
     with server(args, engine, server_affinity, stem.with_suffix(".server.log")) as (process, port):
@@ -391,6 +413,8 @@ def main():
         parser.error("Expected a positive VU count and distinct k6 arrival rates in multiples of 20")
     if args.compare_native_wakeup and (args.family != "ktor-native" or args.load_tool != "wrk" or args.smoke_only):
         parser.error("The native wake-up comparison needs the ktor-native family and the wrk load tool")
+    if args.family == APPLICATION_MIX and args.load_tool != "k6":
+        parser.error("The application mix needs the k6 load tool")
     args.output.mkdir(parents=True, exist_ok=True)
     if (args.output / "results.csv").exists():
         parser.error("Output directory already contains results.csv")

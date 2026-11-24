@@ -7,6 +7,7 @@ const rate = Number(__ENV.PERFLAB_RATE);
 const duration = Number(__ENV.PERFLAB_DURATION);
 const vus = Number(__ENV.PERFLAB_VUS);
 const summary = __ENV.PERFLAB_SUMMARY;
+const standalone = __ENV.PERFLAB_APPLICATION_MIX === "true";
 if (!target || !summary || !Number.isInteger(rate) || rate < 20 || rate % 20 !== 0
     || !Number.isInteger(duration) || duration < 1 || !Number.isInteger(vus) || vus < 1) {
   throw new Error("Set PERFLAB_TARGET, PERFLAB_RATE (multiple of 20), PERFLAB_DURATION, PERFLAB_VUS and PERFLAB_SUMMARY.");
@@ -15,13 +16,16 @@ if (!target || !summary || !Number.isInteger(rate) || rate < 20 || rate % 20 !==
 // One request per iteration preserves the configured HTTP request rate.
 // A fixed VU budget makes dropped iterations visible without allocating VUs during measurement.
 const operations = {
-  json: { weight: 8, path: "/json", type: "application/json", validate: user },
+  json: { weight: standalone ? 6 : 8, path: "/json", type: "application/json", validate: user },
   catalog: { weight: 5, path: "/catalog", type: "application/json", validate: catalog },
   upload_1k: upload(2, 1024),
   upload_24k: upload(1, 24 * 1024),
   upload_64k: upload(2, 64 * 1024),
   download: { weight: 2, path: "/download", type: "application/octet-stream", validate: download },
 };
+if (standalone) {
+  operations.wait = { weight: 2, path: "/wait", type: "text/plain", validate: (response) => response.body === "ready" };
+}
 const streamBody = "s".repeat(16 * 1024) + "t".repeat(16 * 1024 + 3);
 const successfulLatency = new Trend("perflab_success_duration", true);
 const failure = new Counter("perflab_failed_responses");

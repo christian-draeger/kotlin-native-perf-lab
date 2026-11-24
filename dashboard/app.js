@@ -678,6 +678,7 @@ function startIntegration() {
     "ktor-native": "Ktor · Kotlin/Native",
     "ktor-jvm": "Ktor · JVM",
     "spring-webflux": "Spring Boot WebFlux · JVM",
+    "application-mix": "Standalone application mix",
   };
   const runs = data?.integration_runs ?? [];
   const available = Object.keys(families).filter((family) => runs.some((run) => run.integration === family));
@@ -691,6 +692,7 @@ function startIntegration() {
   const operationLabels = {
     json: "GET /json", catalog: "GET /catalog/{id}", upload_1k: "POST /upload · 1 KiB",
     upload_24k: "POST /upload · 24 KiB", upload_64k: "POST /upload · 64 KiB", download: "GET /download",
+    wait: "GET /wait · 20 ms dependency delay",
   };
   let familyRuns;
   let run;
