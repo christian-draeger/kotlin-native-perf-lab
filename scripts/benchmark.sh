@@ -30,6 +30,13 @@ if [[ "$suite" == workers ]]; then
   [[ "${NATIVESERVE_REFERENCE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || {
     echo 'NATIVESERVE_REFERENCE_SHA must identify the reference source commit.' >&2; exit 2;
   }
+fi
+if [[ "$suite" == io-backends ]]; then
+  [[ "${NATIVESERVE_IO_BINARY:-}" == /* && -x "$NATIVESERVE_IO_BINARY" ]] || {
+    echo 'NATIVESERVE_IO_BINARY must be an absolute executable path.' >&2; exit 2;
+  }
+fi
+if [[ "$suite" == workers || "$suite" == io-backends ]]; then
   if [[ -z "${LOAD_SSH:-}" ]]; then
     : "${SERVER_CPUS:?Specify server CPU affinity or use a separate LOAD_SSH host}"
     : "${LOAD_CPUS:?Specify load CPU affinity or use a separate LOAD_SSH host}"
@@ -117,7 +124,12 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   java ${JAVA_OPTS:-} -XX:+PrintCommandLineFlags -version 2>&1
   python3 --version
   cd "$ROOT"
-  if [[ "$suite" != competitors ]]; then
+  if [[ "$suite" == io-backends ]]; then
+    printf 'kotlin_native=2.4.21\nliburing=%s\n' "${LIBURING_VERSION:-unknown}"
+    sha256sum "$NATIVESERVE_IO_BINARY"
+    printf 'server_affinity=%s\nload_affinity=%s\n' "${server_affinity:-${SERVER_CPUS:-all}}" "${load_affinity:-remote}"
+    "$NATIVESERVE_IO_BINARY" --capabilities
+  elif [[ "$suite" != competitors ]]; then
     rustc -Vv
     cargo --version
     if [[ -x competitors/ktor/gradlew ]]; then
