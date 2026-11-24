@@ -12,7 +12,7 @@ dependencies {
 }
 ```
 
-Gradle reads the root module metadata and selects JVM, Linux x86_64, Linux ARM64 or macOS ARM64. Native variants include their C interop libraries. The first publication covers the standalone ktServe library. Ktor and WebFlux adapters are still available as checkout integrations.
+Gradle reads the root module metadata and selects JVM, Linux x86_64, Linux ARM64 or macOS ARM64. Native variants include their C interop libraries. For a JVM project with a Maven `pom.xml`, use `io.github.christian-draeger:ktserve-jvm` at the same version. The first publication covers the standalone ktServe library. Ktor and WebFlux adapters are still available as checkout integrations.
 
 ## Stage and test a version
 

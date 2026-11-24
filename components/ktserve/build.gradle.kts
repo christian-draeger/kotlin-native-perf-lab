@@ -123,8 +123,9 @@ if (publicationVersion != null) {
     }
     providers.environmentVariable("KTSERVE_PGP_PRIVATE_KEY").orNull?.let { key ->
         apply(plugin = "signing")
+        val passphrase = providers.environmentVariable("KTSERVE_PGP_PASSPHRASE").getOrElse("")
         extensions.configure<SigningExtension> {
-            useInMemoryPgpKeys(key, providers.environmentVariable("KTSERVE_PGP_PASSPHRASE").orNull)
+            useInMemoryPgpKeys(key, passphrase)
             sign(extensions.getByType<PublishingExtension>().publications)
         }
     }
