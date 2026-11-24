@@ -1,5 +1,14 @@
-use axum::{extract::Path, http::header, routing::get, Json, Router};
+use axum::{
+    body::{Body, Bytes},
+    extract::Path,
+    http::header,
+    response::IntoResponse,
+    routing::get,
+    Json, Router,
+};
+use futures_util::stream;
 use serde::Serialize;
+use std::convert::Infallible;
 
 mod application_mix;
 
@@ -65,6 +74,14 @@ async fn catalog(Path(id): Path<i32>) -> Json<Catalog> {
     Json(Catalog { id, items })
 }
 
+async fn stream_response() -> impl IntoResponse {
+    let chunks = stream::iter((0..5).map(|_| Ok::<_, Infallible>(Bytes::from(vec![b'x'; 16 * 1024]))));
+    (
+        [(header::CONTENT_TYPE, "application/octet-stream")],
+        Body::from_stream(chunks),
+    )
+}
+
 #[tokio::main]
 async fn main() {
     let port = std::env::var("PORT")
@@ -80,6 +97,7 @@ async fn main() {
     let app = match std::env::var("BENCHMARK_SUITE").as_deref() {
         Ok("application-mix") => application_mix::routes(app.route("/catalog/{id}", get(catalog))),
         Ok("application") => app.route("/catalog/{id}", get(catalog)),
+        Ok("http2-stream") => app.route("/stream", get(stream_response)),
         _ => app,
     };
 

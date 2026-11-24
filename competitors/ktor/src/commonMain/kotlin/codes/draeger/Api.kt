@@ -7,9 +7,11 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytesWriter
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
+import io.ktor.utils.io.writeFully
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -60,5 +62,15 @@ fun Application.configureApi(suite: String?) {
             }
         }
         if (suite == "application-mix") applicationMixRoutes()
+        if (suite == "http2-stream") {
+            get("/stream") {
+                call.respondBytesWriter(contentType = ContentType.Application.OctetStream) {
+                    repeat(5) {
+                        writeFully(ByteArray(16 * 1024) { 'x'.code.toByte() })
+                        flush()
+                    }
+                }
+            }
+        }
     }
 }
