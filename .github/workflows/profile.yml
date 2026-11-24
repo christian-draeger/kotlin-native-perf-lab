@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: Sample HTTP CPU stacks or measure the Native JSON stages
+        description: Sample HTTP CPU stacks, measure the Native JSON stages, or compare Native JSON over HTTP
         type: choice
-        options: [core, application, json-phases]
+        options: [core, application, json-phases, json-http]
         default: core
 
 permissions:
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   profiles:
-    if: inputs.suite != 'json-phases'
+    if: inputs.suite != 'json-phases' && inputs.suite != 'json-http'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -60,7 +60,7 @@ jobs:
           if-no-files-found: error
 
   json-probe-build:
-    if: inputs.suite == 'json-phases'
+    if: inputs.suite == 'json-phases' || inputs.suite == 'json-http'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -97,6 +97,7 @@ jobs:
 
   json-phases:
     needs: json-probe-build
+    if: inputs.suite == 'json-phases'
     strategy:
       fail-fast: false
       matrix:
@@ -129,4 +130,55 @@ jobs:
         with:
           name: exploratory-json-phases-${{ matrix.arch }}
           path: ${{ runner.temp }}/json-phases
+          if-no-files-found: warn
+
+  json-http:
+    needs: json-probe-build
+    if: inputs.suite == 'json-http'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            vegeta_arch: amd64
+            checksum: e8759ce45c14e18374bdccd3ba6068197bc3a9f9b7e484db3837f701b9d12e61
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            vegeta_arch: arm64
+            checksum: 950381173a5575e25e8e086f36fc03bf65d61a2433329b48e41e1cb5e4133bba
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
+    env:
+      JSON_ARCH: ${{ matrix.arch }}
+      VEGETA_ARCH: ${{ matrix.vegeta_arch }}
+      VEGETA_CHECKSUM: ${{ matrix.checksum }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: native-json-probes
+          path: ${{ runner.temp }}/json-probes
+      - name: Install Vegeta
+        run: |
+          asset="vegeta_12.13.0_linux_$VEGETA_ARCH.tar.gz"
+          curl -fsSL --retry 3 "https://github.com/tsenart/vegeta/releases/download/v12.13.0/$asset" -o "$RUNNER_TEMP/$asset"
+          printf '%s  %s\n' "$VEGETA_CHECKSUM" "$RUNNER_TEMP/$asset" | sha256sum --strict -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" vegeta
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Check and measure the JSON response paths
+        run: |
+          test "$(uname -m)" = "$JSON_ARCH"
+          binary="$RUNNER_TEMP/json-probes/$JSON_ARCH"
+          chmod +x "$binary"
+          result="$RUNNER_TEMP/json-http"
+          python3 scripts/profile-json-http.py "$binary" "$result" "$GITHUB_SHA"
+          cp "$RUNNER_TEMP/json-probes/"*.txt "$result/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: exploratory-json-http-${{ matrix.arch }}
+          path: ${{ runner.temp }}/json-http
           if-no-files-found: warn

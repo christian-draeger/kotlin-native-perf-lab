@@ -23,6 +23,10 @@ import platform.posix.timespec
 private var sink: Any? = null
 
 fun runJsonProbe(args: Array<String>) {
+    if (args.firstOrNull() == "http") {
+        runJsonHttpProbe(args)
+        return
+    }
     require(args.size == 2 || args.size == 4) {
         "Use small|catalog fixture or small|catalog construct|string|utf8|complete timing|heap iterations"
     }

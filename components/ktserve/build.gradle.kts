@@ -77,6 +77,9 @@ kotlin {
         if (targetOs == "linux") {
             val jsonProbe = native.compilations.create("jsonProbe") {
                 associateWith(native.compilations.getByName("main"))
+                defaultSourceSet.dependencies {
+                    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json-io:1.11.0")
+                }
             }
             native.binaries.executable("jsonProbe", listOf(RELEASE)) {
                 compilation = jsonProbe
