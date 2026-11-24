@@ -1,0 +1,2 @@
+time="2026-11-24T23:15:00Z" level=warning msg="Insufficient VUs, reached 48 active VUs and cannot initialize more" executor=ramping-arrival-rate scenario=json
+time="2026-11-24T23:15:00Z" level=warning msg="Insufficient VUs, reached 48 active VUs and cannot initialize more" executor=ramping-arrival-rate scenario=catalog
