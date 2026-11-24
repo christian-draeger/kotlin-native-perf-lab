@@ -2,7 +2,7 @@
 
 The routing API configures handlers in the HTTP core. The core owns request framing, response encoding, per-connection HTTP state and server policy. It drives the internal `StreamTransport` interface. Platform backends implement that interface and own the listener, sockets, readiness registrations, kernel submission queues and native addressing. HTTP code receives connection IDs, operation IDs, byte counts and portable outcomes. Backends can log the underlying platform error with operation context.
 
-The HTTP loop and contract live in shared Kotlin so the HTTP core and tests can run without native headers. Linux uses level-triggered epoll. Apple Silicon macOS uses kqueue.
+The HTTP loop and contract live in shared Kotlin so the HTTP core and tests can run without native headers. Standard backends use level-triggered epoll on Linux, kqueue on Apple Silicon macOS, and NIO on the JVM.
 
 ## Operations and progress
 
@@ -41,6 +41,8 @@ The opt-in worker experiment opens one listening socket. Each worker owns a dupl
 
 macOS selects kqueue automatically. `NATIVESERVE_BACKEND=kqueue` requests it explicitly. The backend registers one one-shot read or write filter per pending socket operation. It stores the operation ID in `udata` and checks that ID against live work before every callback, including when a descriptor was reused during the same event batch. Reads consume buffered bytes before reporting EOF. Darwin sockets use `SO_NOSIGPIPE` and the backend pins Kotlin buffers only during `recv` and `send`. The `serve` scope owns the event arrays and the backend closes the descriptors before that scope returns. The macOS preview uses one event loop and numeric IPv4 bind addresses.
 
-The shared fake exercises immediate and delayed completion, partial transfers, EOF, capacity, cancellation races, stale events and final shutdown without timing dependencies. The native fixture runs the same transport probe and TCP stress cases on Linux and macOS. Exploratory epoll boundary measurements record allocation, throughput, latency and CPU use.
+The experimental [Linux io_uring](experiments/linux-io-uring/README.md) and [Windows IOCP](experiments/windows-iocp/README.md) backends own their native completion storage until the kernel has completed the matching operation. They run the same socket probes and HTTP resource fixture as the readiness backends.
+
+The shared fake exercises immediate and delayed completion, partial transfers, EOF, capacity, cancellation races, stale events and final shutdown without timing dependencies. Exploratory epoll boundary measurements record allocation, throughput, latency and CPU use.
 
 [Linux epoll](https://man7.org/linux/man-pages/man7/epoll.7.html) · [Apple kqueue](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/kqueue.2.html) · [Linux io_uring cancellation](https://man7.org/linux/man-pages/man7/io_uring_cancelation.7.html) · [Windows overlapped I/O cancellation](https://learn.microsoft.com/en-us/windows/win32/fileio/canceling-pending-i-o-operations)

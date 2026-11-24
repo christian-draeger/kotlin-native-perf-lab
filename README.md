@@ -1,8 +1,8 @@
 # Kotlin Native Performance Lab
 
-A reproducible performance lab comparing established HTTP stacks with [NativeServe](components/nativeserve/README.md), an HTTP framework for Kotlin/Native.
+A reproducible performance lab comparing established HTTP stacks with [NativeServe](components/nativeserve/README.md), an HTTP framework for Kotlin/Native and the JVM.
 
-**Phase 0 baselines and the NativeServe reference server.** See [results/](results/) for the exploratory measurements and profiling evidence.
+The [NativeServe starter](components/nativeserve/README.md) covers Linux, Apple Silicon macOS and JVM development. The [Ktor engine](components/nativeserve/integrations/ktor/README.md) and [Spring WebFlux adapter](components/nativeserve/integrations/webflux/README.md) run existing application models through the same HTTP core. See [results/](results/) for exploratory measurements and profiling evidence.
 
 ## Repository layout
 

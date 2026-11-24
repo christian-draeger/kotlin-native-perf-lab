@@ -1,6 +1,6 @@
 # NativeServe
 
-HTTP framework for Kotlin/Native.
+HTTP framework for Kotlin/Native and the JVM.
 
 NativeServe provides a Kotlin routing API on Linux x86_64 and ARM64 and on Apple Silicon macOS. Its event loop uses nonblocking sockets with epoll on Linux and kqueue on macOS. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
 
@@ -59,6 +59,17 @@ The [JVM starter](examples/hello-jvm) runs the same routing DSL and HTTP core wi
 ```
 
 Check it with `curl -fsS http://127.0.0.1:8080/health`. The starter uses a Gradle composite to resolve `dev.perflab:nativeserve` from the checkout. Both Linux CI architectures run the portable tests, real JVM socket tests and the separate Gradle application. `NATIVESERVE_BACKEND=nio` explicitly selects the JVM backend.
+
+## Use NativeServe with a framework
+
+- [Ktor engine](integrations/ktor/README.md) on Kotlin/Native Linux and the JVM.
+- [Spring WebFlux adapter](integrations/webflux/README.md) for a reactive `HttpHandler` on the JVM.
+
+## Experiments
+
+- [HTTP/2 with nghttp2 and TLS ingress](experiments/http2-nghttp2/README.md)
+- [Linux io_uring](experiments/linux-io-uring/README.md)
+- [Windows x64 IOCP](experiments/windows-iocp/README.md)
 
 ## Write a handler
 
