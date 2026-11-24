@@ -1,0 +1,6 @@
+libibverbs: Warning: couldn't open config directory '/etc/libibverbs.d'.
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on lo, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+163 packets captured
+326 packets received by filter
+0 packets dropped by kernel

@@ -1,0 +1,6 @@
+[INFO] (io.ktor.server.Application): Application started in 0.002 seconds.
+ktServe epoll tcp_nodelay=default
+ktServe epoll peer_trigger=level
+ktServe epoll application_wakeup=eventfd
+ktServe backend=epoll tcp=ipv4
+[INFO] (io.ktor.server.Application): Responding at http://127.0.0.1:50525
