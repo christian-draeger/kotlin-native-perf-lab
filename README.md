@@ -8,13 +8,32 @@ ktServe is licensed under the [Apache License 2.0](LICENSE). Third-party assets 
 
 ## Try ktServe
 
+Add the standalone library to a Kotlin/JVM Gradle project on JDK 21. Kotlin Multiplatform projects can use the same dependency in a source set targeting JVM, Linux x86_64, Linux ARM64, or Apple Silicon macOS. [Maven Central versions](https://central.sonatype.com/artifact/codes.draeger/ktserve) · [Maven release guide](components/ktserve/RELEASING.md)
+
+```kotlin
+repositories { mavenCentral() }
+
+dependencies {
+    implementation("codes.draeger:ktserve:0.2.0-preview.2")
+}
+```
+
+```kotlin
+import codes.draeger.ktserve.serve
+import codes.draeger.ktserve.text
+
+fun main() = serve(port = 8080) {
+    get("/health") { text("ok") }
+}
+```
+
+Start the application and check it with `curl -fsS http://127.0.0.1:8080/health`. The Ktor and Spring WebFlux integrations have separate checkout examples.
+
 | Start with | Example |
 | --- | --- |
 | A standalone Kotlin service on Linux, Apple Silicon, or the JVM | [Standalone quickstart](components/ktserve/README.md) |
 | A Ktor application with the ktServe engine | [Ktor JVM example](components/ktserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/ktserve/integrations/ktor/README.md) |
 | A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/ktserve/examples/spring-webflux) · [Starter guide](components/ktserve/integrations/spring-boot-starter/README.md) |
-
-The library uses the Maven coordinate `codes.draeger:ktserve` and the Kotlin package `codes.draeger.ktserve`. [Maven release guide](components/ktserve/RELEASING.md)
 
 ktServe replaces the NativeServe preview identifiers in packages, build coordinates and configuration. Historical benchmark results remain available. [Upgrade from the preview](components/ktserve/README.md#upgrade-from-the-preview)
 
