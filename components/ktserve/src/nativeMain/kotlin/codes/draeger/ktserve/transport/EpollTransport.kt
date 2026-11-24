@@ -77,6 +77,7 @@ internal fun MemScope.openPlatformTransport(
     connectionLimit: Int,
 ): StreamTransport = openEpollTransport(
     connectionLimit, EPOLLIN,
+    tcpNoDelay = configuredTcpNoDelay(),
     edgeTriggered = configuredEdgeTrigger(),
     wakeOnApplicationProgress = configuredApplicationWakeup(),
 ) { openListener(host, port) }
@@ -94,6 +95,7 @@ internal fun MemScope.openWorkerEpollTransports(
     connectionLimits: List<Int>,
     reusePort: Boolean,
 ): List<StreamTransport> {
+    val tcpNoDelay = configuredTcpNoDelay()
     val edgeTriggered = configuredEdgeTrigger()
     val wakeOnApplicationProgress = configuredApplicationWakeup()
     val transports = ArrayList<StreamTransport>(connectionLimits.size)
@@ -102,7 +104,8 @@ internal fun MemScope.openWorkerEpollTransports(
         for (limit in connectionLimits) {
             val events = if (reusePort) EPOLLIN else EPOLLIN or EPOLL_EXCLUSIVE
             transports += openEpollTransport(
-                limit, events, edgeTriggered = edgeTriggered, wakeOnApplicationProgress = wakeOnApplicationProgress,
+                limit, events, tcpNoDelay = tcpNoDelay, edgeTriggered = edgeTriggered,
+                wakeOnApplicationProgress = wakeOnApplicationProgress,
             ) {
                 if (reusePort) openListener(host, port, reusePort = true)
                 else checked(fcntl(sharedListener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
@@ -115,6 +118,13 @@ internal fun MemScope.openWorkerEpollTransports(
     } finally {
         if (sharedListener >= 0) close(sharedListener)
     }
+}
+
+private fun configuredTcpNoDelay(): Boolean {
+    val mode = getenv("KTSERVE_EPOLL_TCP_NODELAY")?.toKString() ?: return false
+    require(mode == "default" || mode == "on") { "KTSERVE_EPOLL_TCP_NODELAY must be default or on" }
+    println("ktServe epoll tcp_nodelay=$mode")
+    return mode == "on"
 }
 
 private fun configuredEdgeTrigger(): Boolean {
