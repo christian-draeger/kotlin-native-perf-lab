@@ -748,7 +748,7 @@ function startIntegration() {
   function changeFamily() {
     familyRuns = runs.filter((entry) => entry.integration === familySelect.value);
     runSelect.replaceChildren(...familyRuns.map((entry) => new Option([
-      entry.experiment === "epoll-application-wakeup" ? "wrk · upload wake-up pilot"
+      entry.experiment === "epoll-application-wakeup" ? `wrk · ${entry.groups[0]?.endpoint ?? "streaming"} wake-up pilot`
         : entry.load_tool === "k6" ? "k6 · mixed" : "wrk · single endpoint", entry.machine,
       utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
     ].filter(Boolean).join(" · "), entry.id)));
