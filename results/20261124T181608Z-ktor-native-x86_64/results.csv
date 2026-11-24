@@ -1,0 +1,10 @@
+variant,endpoint,run,valid,requests,rps,p50_us,p95_us,p99_us,cpu_start_seconds,cpu_end_seconds,cpu_seconds,cpu_seconds_per_million_requests,peak_rss_kib,end_rss_kib,connect_errors,read_errors,write_errors,timeouts,http_errors,warmup_errors,threads,connections,target_duration_s,duration_s,warmup_s,warmup_stability,git_sha,load_cpu_seconds,load_peak_rss_kib,load_cpu_equivalents
+ktor-native-cio,/download,1,1,1571,313.958,50419,51754,53571,1.66,2.47,0.81,515.595,153984,148664,0,0,0,0,0,0,2,16,5,5.003855,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.05,5112,0.01
+ktor-native-ktserve,/download,1,1,1474,294.468,53362,55747,90776,0.85,1.26,0.41,278.155,39108,29912,0,0,0,0,0,0,2,16,5,5.00564,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.07,5236,0.014
+ktor-native-ktserve-eventfd,/download,1,1,1559,311.534,50557,51566,54440,0.99,1.45,0.46,295.061,39240,30428,0,0,0,0,0,0,2,16,5,5.004269,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.08,5124,0.016
+ktor-native-ktserve,/download,2,1,1469,293.652,53248,55807,92176,0.86,1.3,0.44,299.523,38728,29660,0,0,0,0,0,0,2,16,5,5.002523,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.08,5496,0.016
+ktor-native-ktserve-eventfd,/download,2,1,1552,310.22,50504,51546,90947,0.96,1.51,0.55,354.381,39648,29556,0,0,0,0,0,0,2,16,5,5.002899,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.09,5276,0.018
+ktor-native-cio,/download,2,1,1568,313.182,50519,52088,53312,1.82,2.66,0.84,535.714,123252,123252,0,0,0,0,0,0,2,16,5,5.006679,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.06,5268,0.012
+ktor-native-ktserve-eventfd,/download,3,1,1558,311.066,50631,51771,90538,1.05,1.5,0.45,288.832,39940,30132,0,0,0,0,0,0,2,16,5,5.008583,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.08,5300,0.016
+ktor-native-cio,/download,3,1,1568,313.26,50510,52460,54277,1.77,2.62,0.85,542.092,154876,145632,0,0,0,0,0,0,2,16,5,5.005431,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.06,5316,0.012
+ktor-native-ktserve,/download,3,1,1471,294.051,53427,55932,91371,0.89,1.34,0.45,305.914,39404,30088,0,0,0,0,0,0,2,16,5,5.002529,10,unchecked,0752b4b2bf92e91f8268917a5d91ae4de11432ea,0.08,5400,0.016
