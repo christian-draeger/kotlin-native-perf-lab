@@ -80,3 +80,34 @@ Use fixed concurrency for saturation throughput and a fixed-offer sweep for late
 | Separate listeners improve two-worker distribution and service efficiency | [Implementation](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/117) · [Hosted run](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45353312293) |
 | An event-driven handoff reduces latency for a suspending handler | [Implementation](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/118) · [Hosted run](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45354961631) |
 | Current release profiles expose the next measurable CPU bottlenecks | [Separate diagnostic run](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45354419219) |
+
+### Shared versus per-worker listeners
+
+The same two-worker release binary ran both listener configurations on each runner. All 126 saturation trials were valid across the three routes and both architectures, including reference, one worker, Axum and Ktor. All 90 fixed-rate trials delivered within 2% of the offered rate with HTTP 200 and no measured failures. The separate distribution diagnostics handled about 60,000 requests per mode and CPU placement. The table reports the larger worker's request share, including startup, and the three-trial medians at 40,000 requests/s. [Raw CSV, Vegeta reports and worker counters](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45353312293)
+
+| Placement, server / load masks | Larger worker share, shared → reuse-port | p99 at 40k, ms | CPU at 40k, s/M |
+| --- | ---: | ---: | ---: |
+| ARM64 `0,1 / 2,3` | 83.1% → 51.3% | 2.550 → 2.628 | 15.25 → 16.25 |
+| x86_64 `0,1 / 2,3` | 68.9% → 53.5% | 0.993 → 1.029 | 12.65 → 12.85 |
+| x86_64 `0,2 / 1,3` | 60.9% → 54.8% | 0.808 → 0.830 | 13.85 → 14.90 |
+
+The distribution moved toward equal request counts in each diagnostic sample. Saturation throughput changes across the six cells were between −0.85% and +1.77%. Saturation `/json` p99 dropped from 2.153 to 1.667 ms on x86_64 and 1.532 to 1.220 ms on ARM64. At matched 40k, p99 and CPU medians increased in all three placements, with overlapping p99 ranges. At 20k on ARM64, p99 fell from 0.821 to 0.768 ms. Better balance can change saturation behavior while providing a different trade-off below saturation.
+
+In this matrix, two workers with a shared listener reached 240,031 req/s against Axum's 261,825 on x86_64 `/json` (92%) and 187,701 against 200,464 on ARM64 (94%). In the default x86_64 placement at 40k, the shared-listener p99 was 0.993 ms against Axum's 1.196, while CPU was 12.65 against 10.20 s/M. On ARM64 those pairings were 2.550 vs 2.591 ms and 15.25 vs 13.90 s/M. These cells have different relative bottlenecks and do not establish the production gate. Retain the reuse-port configuration as opt-in for controlled repeats and workloads with connection churn. Keep the one-worker application default. [Decision #115](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/115)
+
+### Coroutine handoff and eventfd completion
+
+Each `/json` response was serialized from the same Kotlin value in one release binary with one NativeServe I/O worker. The modes were inline, dispatcher with polling, and dispatcher with eventfd completion. The same job assigned disjoint server and client masks for both saturation and fixed-load trials. The matched-load artifacts record masks and CPU topology. HTTP smoke covered parity, concurrent pipelines, disconnects and shutdown on both Linux architectures. The first x86_64 build exposed an eventfd argument binding difference and the corrected executable was measured on both architectures. A Windows IOCP idle-stream stress failure passed on the same commit's retry and in a separate main-branch check. [Linux smoke](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45354897293) · [Windows retry](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45354897044) · [Windows main](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45355766065)
+
+All 36 saturation and 48 fixed-rate trials were valid. Each mode has three repeats per load and architecture. Fixed-rate p99 and CPU medians below are ordered inline, polling, eventfd. The individual counter snapshots, p50/p95/p99, errors, warm-up and raw request distributions are in the artifacts. [Raw handler measurements](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45354961631)
+
+| Linux | Offered req/s | p99 ms, inline / polling / eventfd | CPU s/M, inline / polling / eventfd |
+| --- | ---: | ---: | ---: |
+| x86_64 | 20,000 | 1.062 / 1.459 / 0.927 | 11.40 / 23.30 / 34.10 |
+| x86_64 | 40,000 | 0.949 / 2.031 / 1.278 | 11.60 / 23.60 / 26.10 |
+| ARM64 | 20,000 | 0.987 / 1.484 / 1.014 | 18.40 / 31.30 / 36.70 |
+| ARM64 | 40,000 | 2.798 / 2.872 / 2.623 | 14.25 / 26.65 / 28.50 |
+
+The eventfd variant reduced fixed-load p99 relative to polling in all four cells and consumed more CPU per request in all four. At saturation, the inline, polling and eventfd medians were 142,798, 91,953 and 106,857 req/s on x86_64 and 95,978, 68,128 and 71,934 on ARM64. Both dispatcher paths retained about 24–26 MiB peak RSS, compared with 17–18 MiB inline. The experiment captures scheduler and completion costs for a small handler that finishes immediately. Upstream waiting and mixed streaming traffic remain separate tests.
+
+Keep the eventfd implementation in the experiment branch. The next hypothesis is a bounded completion queue with fewer notifications, followed by an identical application workload with real suspensions. Validate cancellation and wake-up races before considering the change for the default transport. [Prototype #118](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/118) · [Follow-up #112](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/112)
