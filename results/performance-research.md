@@ -131,6 +131,25 @@ Both Linux architectures passed parity, pipelining, shutdown and rebinding. A lo
 
 Keep the contiguous writer and preserve the gathered implementation as a benchmark prototype. The measured changes are small and provide no consistent advantage for these endpoints. A matched larger-payload comparison may change the trade-off between copying and the second buffer lease. That belongs to [#114](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/114). [Prototype #121](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/121) · [Decision #120](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/120)
 
+### Cost of typed JSON on Kotlin/Native
+
+The isolated release probe measured the same constructors and `kotlinx.serialization` settings as the HTTP endpoints. On both hosted architectures, it verified the exact 47-byte `/json` body and 4,445-byte `/catalog/123` body, including Unicode, against independent fixtures. Construction starts from the route ID, String serialization starts from a constructed DTO, and UTF-8 conversion starts from a serialized String. The complete operation performs all three steps. Each cell runs five warmed CPU trials of 50,000 iterations using the standard runtime and five heap diagnostics of 1,024 iterations with manual GC and unpaged allocation. [Raw CPU, wall time, GC, RSS, fixture hashes and host metadata](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45467927333)
+
+| Payload | Phase | x86_64 CPU µs/op | ARM64 CPU µs/op | Diagnostic heap growth B/op, both |
+| --- | --- | ---: | ---: | ---: |
+| `/json` | Construct DTO | 0.014 | 0.022 | 43 |
+| `/json` | Serialize to String | 0.364 | 0.795 | 731 |
+| `/json` | Convert to UTF-8 | 0.091 | 0.134 | 83 |
+| `/json` | Complete | 0.487 | 0.956 | 851 |
+| `/catalog/123` | Construct DTO | 5.701 | 11.772 | 11,819 |
+| `/catalog/123` | Serialize to String | 21.442 | 44.156 | 39,875 |
+| `/catalog/123` | Convert to UTF-8 | 6.167 | 8.477 | 4,483 |
+| `/catalog/123` | Complete | 32.912 | 65.167 | 56,171 |
+
+CPU and heap columns report medians from separate runs. The complete catalog trial had a median of 486 and 490 GC cycles on x86_64 and ARM64, respectively. Timings include any GC activity inside the sampled block. The separate heap estimate comes from occupied managed heap growth within an uninterrupted diagnostic epoch. Each phase has its own setup and GC behavior, so use the measured complete operation for total cost.
+
+String serialization dominated isolated CPU for both payloads. The previous Kotlin sink paid for a copy into the contiguous HTTP response, and gathered writes showed no consistent gain for the small fixtures. A byte-oriented candidate merits HTTP measurement if it removes an intermediate allocation or copy through response completion. The remaining comparison needs matching small and catalog requests at common offered rates, plus cancellation and slow-client resource bounds. [Sink experiment #84](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/84) · [Gathered writes #120](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/120) · [JSON work #133](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/133)
+
 ### Level- and edge-triggered epoll
 
 The Linux release comparison used the same binary for both peer modes, 64 HTTP/1.1 connections, and three repeats for `/json` and `/catalog/{id}` on each runner. Both modes passed the extended partial-I/O, keep-alive and shutdown stress. Across one worker, two with a shared listener, and two with `SO_REUSEPORT`, edge-triggered throughput changed between −1.8% and +4.6%, with p99 moving in both directions. Keep level triggering as default. `KTSERVE_EPOLL_TRIGGER=edge` enables the peer-only experiment. The event loop retains readiness when backpressure or bounded work pauses a socket before `EAGAIN`, and listeners stay level-triggered. [Experiment and correctness](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/134) · [Hosted trial data](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45391515745)

@@ -25,7 +25,7 @@ private data class CatalogItem(val sku: String, val name: String, val descriptio
 @Serializable
 private data class Stock(val available: Boolean, val units: Int)
 
-fun Application.configureApi(catalogWorkload: Boolean) {
+fun Application.configureApi(suite: String?) {
     install(ContentNegotiation) {
         json(Json { encodeDefaults = true })
     }
@@ -44,7 +44,7 @@ fun Application.configureApi(catalogWorkload: Boolean) {
                 call.respond(UserResponse(id, "benchmark-user", true))
             }
         }
-        if (catalogWorkload) {
+        if (suite == "application" || suite == "application-mix") {
             get("/catalog/{id}") {
                 val id = call.parameters["id"]?.toIntOrNull()
                 if (id == null) {
@@ -59,5 +59,6 @@ fun Application.configureApi(catalogWorkload: Boolean) {
                 }
             }
         }
+        if (suite == "application-mix") applicationMixRoutes()
     }
 }

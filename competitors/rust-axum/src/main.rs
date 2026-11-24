@@ -1,6 +1,8 @@
 use axum::{extract::Path, http::header, routing::get, Json, Router};
 use serde::Serialize;
 
+mod application_mix;
+
 #[derive(Serialize)]
 struct UserResponse {
     id: i32,
@@ -75,10 +77,10 @@ async fn main() {
         .route("/health", get(health))
         .route("/json", get(json))
         .route("/users/{id}", get(user_by_id));
-    let app = if std::env::var("BENCHMARK_SUITE").as_deref() == Ok("application") {
-        app.route("/catalog/{id}", get(catalog))
-    } else {
-        app
+    let app = match std::env::var("BENCHMARK_SUITE").as_deref() {
+        Ok("application-mix") => application_mix::routes(app.route("/catalog/{id}", get(catalog))),
+        Ok("application") => app.route("/catalog/{id}", get(catalog)),
+        _ => app,
     };
 
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))

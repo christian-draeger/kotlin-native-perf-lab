@@ -17,7 +17,8 @@ cases = [
     ("/json", 200, "application/json", b'{"id":42,"name":"benchmark-user","active":true}'),
     ("/users/123", 200, "application/json", b'{"id":123,"name":"benchmark-user","active":true}'),
 ]
-if os.environ.get("BENCHMARK_SUITE") == "application":
+suite = os.environ.get("BENCHMARK_SUITE")
+if suite in ("application", "application-mix"):
     for catalog_id in (123, 987):
         items = [
             {"sku": f"{catalog_id}-{index}", "name": f"Café item {index}",
@@ -29,6 +30,32 @@ if os.environ.get("BENCHMARK_SUITE") == "application":
         cases.append((f"/catalog/{catalog_id}", 200, "application/json", body))
     cases.append(("/catalog/invalid", 400, None, None))
 cases.append(("/users/invalid", 400, None, None))
+
+def check_application_mix():
+    connection.request("GET", base.path.rstrip("/") + "/wait")
+    with connection.getresponse() as response:
+        assert response.version == 11 and response.status == 200 and response.read() == b"ready"
+        assert response.headers.get_content_type() == "text/plain"
+    connection.request("GET", base.path.rstrip("/") + "/download")
+    with connection.getresponse() as response:
+        assert response.version == 11 and response.status == 200 and response.chunked
+        assert response.headers.get_content_type() == "application/octet-stream"
+        assert response.read(16 * 1024) == b"s" * (16 * 1024)
+        assert response.read() == b"t" * (16 * 1024 + 3)
+    assert connection.sock is socket, "The streamed response closed the keep-alive connection"
+
+    uploads = [(b"x" * size, 200) for size in (1024, 24 * 1024, 64 * 1024)]
+    uploads += [(b"x" * 1023 + b"y", 400), (b"x" * (64 * 1024 + 1), 413)]
+    for payload, status in uploads:
+        connection.request("POST", base.path.rstrip("/") + "/upload", payload,
+                           {"Content-Type": "application/octet-stream"})
+        with connection.getresponse() as response:
+            body = response.read()
+            assert response.version == 11 and response.status == status, (response.status, len(payload))
+            if status == 200:
+                assert response.headers.get_content_type() == "text/plain" and body == str(len(payload)).encode()
+                assert connection.sock is socket, "The upload closed the keep-alive connection"
+    print("Application mix passed (suspension, streamed bytes, bounded and validated uploads)")
 
 try:
     for path, expected_status, media_type, expected_body in cases:
@@ -56,6 +83,8 @@ try:
             print(f"{path} HTTP/1.1 {response.status} Content-Type={content_type!r} "
                   f"Content-Length={content_length!r} Transfer-Encoding={transfer_encoding!r} "
                   f"body_bytes={len(body)}")
+    if suite == "application-mix":
+        check_application_mix()
 finally:
     connection.close()
 PY_CHECK

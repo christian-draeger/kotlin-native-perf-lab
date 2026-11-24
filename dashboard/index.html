@@ -186,14 +186,14 @@
         <section class="card integration-results" id="integration-benchmarks" aria-labelledby="integration-benchmarks-title">
           <div class="card-heading">
             <div>
-              <h3 id="integration-benchmarks-title">Same app, different engine</h3>
-              <p class="history-context">Compare ktServe with CIO or Netty in Ktor and Reactor Netty in Spring Boot WebFlux. Each family runs the same application across its engines.</p>
+              <h3 id="integration-benchmarks-title">Engine and application workloads</h3>
+              <p class="history-context">Select a shared application to compare engines or the standalone mix to compare complete servers at equal offered load.</p>
             </div>
           </div>
           <p id="integration-empty" class="notice" hidden>Engine measurements will appear here after the first published integration run.</p>
           <div id="integration-data" hidden>
             <div class="history-controls integration-controls">
-              <label>Application<select id="integration-family"></select></label>
+              <label>Comparison<select id="integration-family"></select></label>
               <label>Run<select id="integration-run"></select></label>
               <label>Workload<select id="integration-endpoint"></select></label>
               <label>Metric<select id="integration-metric"></select></label>
@@ -207,7 +207,7 @@
               <summary>Results by operation</summary>
               <div class="table-scroll">
                 <table aria-label="Mixed-workload results by operation">
-                  <thead><tr><th>Operation</th><th>Engine</th><th>Successful req/s</th><th>p99 (ms)</th></tr></thead>
+                  <thead><tr><th>Operation</th><th>Variant</th><th>Successful req/s</th><th>p99 (ms)</th></tr></thead>
                   <tbody id="integration-operation-rows"></tbody>
                 </table>
               </div>

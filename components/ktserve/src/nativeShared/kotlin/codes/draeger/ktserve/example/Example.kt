@@ -27,17 +27,18 @@ internal fun benchmarkCatalog(id: Int) = Catalog(id, List(32) { index ->
     )
 })
 
-internal fun Routes.parityRoutes(catalogWorkload: Boolean = false) {
+internal fun Routes.parityRoutes(suite: String? = null) {
     get("/health") { text("ok") }
     get("/json") { json(benchmarkUser(42)) }
     get("/users/{id}") { request ->
         val id = request.pathInt("id") ?: return@get badRequest()
         json(benchmarkUser(id))
     }
-    if (catalogWorkload) {
+    if (suite == "application" || suite == "application-mix") {
         get("/catalog/{id}") { request ->
             val id = request.pathInt("id") ?: return@get badRequest()
             json(benchmarkCatalog(id))
         }
     }
+    if (suite == "application-mix") applicationMixRoutes()
 }
