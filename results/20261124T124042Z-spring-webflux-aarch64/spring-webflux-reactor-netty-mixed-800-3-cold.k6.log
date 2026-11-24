@@ -1,0 +1,4 @@
+time="2026-11-24T12:50:47Z" level=warning msg="Insufficient VUs, reached 16 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=json
+time="2026-11-24T12:50:47Z" level=warning msg="Insufficient VUs, reached 16 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=download
+time="2026-11-24T12:50:48Z" level=warning msg="Insufficient VUs, reached 16 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=catalog
+perflab_load elapsed_s=15.14 user_s=4.82 system_s=1.68 peak_rss_kib=110056
