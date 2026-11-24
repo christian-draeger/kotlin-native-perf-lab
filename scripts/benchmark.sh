@@ -65,12 +65,8 @@ fi
 export BIND_HOST="${BIND_HOST:-127.0.0.1}"
 export NO_PROXY="${NO_PROXY:-${no_proxy:-}},$BIND_HOST"
 export no_proxy="$NO_PROXY"
-# Allocate distinct ports before any trial. After load, accepted connections can
-# remain in TIME_WAIT and prevent a different runtime from binding the same port.
-ports="$(python3 - "$(( RUNS * ${#variants[@]} * ${#endpoints[@]} ))" "${PORT:-0}" "$BIND_HOST" "${LOAD_SSH:-}" <<'PY'
-import contextlib
+first_port="$(python3 - "$(( RUNS * ${#variants[@]} * ${#endpoints[@]} ))" "${PORT:-0}" "$BIND_HOST" "${LOAD_SSH:-}" <<'PY'
 import ipaddress
-import socket
 import sys
 
 count, start = map(int, sys.argv[1:3])
@@ -79,14 +75,19 @@ if host.is_unspecified or host.is_multicast or (sys.argv[4] and host.is_loopback
     sys.exit("BIND_HOST must be this server's IPv4 interface address (non-loopback for LOAD_SSH).")
 if not 0 <= start <= 65535 or start and start + count - 1 > 65535:
     sys.exit("PORT must leave enough room for one port per trial.")
-with contextlib.ExitStack() as sockets:
-    for index in range(count):
-        probe = sockets.enter_context(socket.socket())
-        probe.bind((str(host), start + index if start else 0))
-        print(probe.getsockname()[1])
+print(start)
 PY
 )"
-mapfile -t trial_ports <<< "$ports"
+select_port() {
+  python3 - "$BIND_HOST" "$1" <<'PY'
+import socket
+import sys
+
+with socket.socket() as probe:
+    probe.bind((sys.argv[1], int(sys.argv[2])))
+    print(probe.getsockname()[1])
+PY
+}
 trial_index=0
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 results_root="${BENCHMARK_RESULTS_DIR:-$ROOT/results}"
@@ -176,7 +177,11 @@ GIT_SHA="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unavailable)"
   printf 'benchmark_endpoint=%s\n' "${BENCHMARK_ENDPOINT:-}"
   echo "runs=$RUNS warmup_s=$WARMUP target_duration_s=$DURATION threads=$THREADS connections=$CONNECTIONS timeout_s=2"
   echo "max_warmup_windows=$WARMUP_WINDOWS"
-  echo 'port_strategy=distinct TCP port per trial'
+  if (( first_port == 0 )); then
+    echo 'port_strategy=kernel-assigned port selected immediately before each trial'
+  else
+    echo 'port_strategy=consecutive explicit port range checked before each trial'
+  fi
   load_environment
 ) > "$OUT/environment.txt"
 
@@ -227,7 +232,11 @@ for ((run = 1; run <= RUNS; run++)); do
     for ((offset = 0; offset < ${#variants[@]}; offset++)); do
       variant="${variants[(run - 1 + offset) % ${#variants[@]}]}"
       prefix="$OUT/${variant}_${endpoint//\//_}_$run"
-      export PORT="${trial_ports[trial_index]}"
+      # An earlier trial can leave a client source port in TIME_WAIT.
+      requested_port=0
+      if (( first_port > 0 )); then requested_port=$((first_port + trial_index)); fi
+      PORT="$(select_port "$requested_port")"
+      export PORT
       trial_index=$((trial_index + 1))
       base="http://$BIND_HOST:$PORT"
       printf '%s %s %s %s\n' "$run" "$endpoint" "$variant" "$PORT" >> "$OUT/ports.txt"
