@@ -132,8 +132,8 @@ for ($run = 1; $run -le 3; $run++) {
                 $failures = $measured.perflab_failed_responses.values.count
                 $latency = $measured.perflab_success_duration.values
                 $warmupFailures = $warmup.perflab_failed_responses.values.count
-                $valid = ($warmup.http_reqs.values.count -gt 0 -and $warmupFailures -eq 0
-                    -and $requests -gt 0 -and $failures -eq 0 -and $latency.count -eq $requests)
+                $validWarmup = $warmup.http_reqs.values.count -gt 0 -and $warmupFailures -eq 0
+                $valid = $validWarmup -and $requests -gt 0 -and $failures -eq 0 -and $latency.count -eq $requests
                 $invalid = $invalid -or -not $valid
                 [PSCustomObject][ordered]@{
                     variant = $variant

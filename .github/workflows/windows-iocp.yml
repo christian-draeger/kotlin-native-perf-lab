@@ -38,6 +38,13 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Check the pilot script syntax before building
+        shell: pwsh
+        run: |
+          $source = Resolve-Path components/ktserve/experiments/windows-iocp/benchmark.ps1
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($source.Path, [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { throw ($errors.Message -join [Environment]::NewLine) }
       - name: Build the Winsock probe, HTTP server and shared socket fixture
         shell: pwsh
         run: |
