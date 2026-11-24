@@ -4,6 +4,7 @@ package dev.perflab.nativeserve.ktor.example
 
 import dev.perflab.nativeserve.ktor.NativeServe
 import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCallPipeline
@@ -32,6 +33,15 @@ import kotlin.concurrent.atomics.AtomicInt
 @Serializable
 private data class User(val id: Int, val name: String, val active: Boolean)
 
+@Serializable
+private data class Catalog(val id: Int, val items: List<CatalogItem>)
+
+@Serializable
+private data class CatalogItem(val sku: String, val name: String, val description: String, val stock: Stock)
+
+@Serializable
+private data class Stock(val available: Boolean, val units: Int)
+
 internal fun Application.exampleModule(stop: () -> Unit = {}) {
     val suspended = AtomicInt(0)
     install(ContentNegotiation) { json() }
@@ -41,6 +51,19 @@ internal fun Application.exampleModule(stop: () -> Unit = {}) {
     routing {
         get("/health") { call.respondText("ok") }
         get("/json") { call.respond(User(42, "benchmark-user", true)) }
+        get("/catalog/{id}") {
+            val id = call.parameters["id"]?.toIntOrNull()
+            if (id == null) {
+                call.respond(HttpStatusCode.BadRequest)
+            } else {
+                call.respond(Catalog(id, List(32) { index ->
+                    CatalogItem(
+                        "$id-$index", "Café item $index",
+                        "Roasted in München and packed for delivery.", Stock(index > 0, index * 3),
+                    )
+                }))
+            }
+        }
         post("/upload") {
             val input = call.receiveChannel()
             val bytes = ByteArray(4096)

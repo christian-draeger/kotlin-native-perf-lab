@@ -687,6 +687,10 @@ function startIntegration() {
   const runSelect = element("integration-run");
   const endpointSelect = element("integration-endpoint");
   const metricSelect = element("integration-metric");
+  const operationLabels = {
+    json: "GET /json", catalog: "GET /catalog/{id}", upload_1k: "POST /upload · 1 KiB",
+    upload_24k: "POST /upload · 24 KiB", upload_64k: "POST /upload · 64 KiB", download: "GET /download",
+  };
   let familyRuns;
   let run;
   function draw() {
@@ -699,10 +703,23 @@ function startIntegration() {
     element("integration-context").textContent = valid + " / " + trials + " valid trials"
       + (run.incomplete ? " · incomplete run" : "");
     renderChart(element("integration-chart"), groups, key);
+    const operationRows = Object.entries(operationLabels).flatMap(([name, label]) => groups.flatMap((group) => {
+      const observation = group.operations?.[name];
+      if (!observation) return [];
+      const row = make("tr");
+      const variant = variantInfo(group.variant).label;
+      row.append(make("th", label), make("td", variant), make("td", format(observation.rps, "rps")),
+        make("td", format(observation.p99, "p99")));
+      return [row];
+    }));
+    element("integration-operations").hidden = !operationRows.length;
+    element("integration-operation-rows").replaceChildren(...operationRows);
   }
 
   function changeRun() {
+    const previousTool = run?.load_tool;
     run = familyRuns.find((entry) => entry.id === runSelect.value);
+    if (run.load_tool === "k6" && previousTool !== "k6") metricSelect.value = "p99";
     const previous = endpointSelect.value;
     const endpoints = [...new Set(run.groups.map((group) => group.endpoint))];
     endpointSelect.replaceChildren(...endpoints.map((endpoint) => new Option(endpoint)));
@@ -711,9 +728,11 @@ function startIntegration() {
     const conditions = [
       run.ci_run_id ? "Exploratory hosted CI" : "",
       run.note.host, run.os, run.machine,
+      run.load_tool === "k6" ? "k6 · fixed arrival rate · mixed HTTP/1.1 traffic" : "wrk · fixed concurrency",
       ...[
         ["connections", " connections"],
         ["threads", " wrk threads"],
+        ["vus_per_scenario", " max VUs per scenario"],
         ["warmup_s", " s warm-up"],
         ["target_duration_s", " s trial"],
       ].flatMap(([key, label]) => run.parameters[key]?.length ? [run.parameters[key].join(" / ") + label] : []),
@@ -727,7 +746,8 @@ function startIntegration() {
   function changeFamily() {
     familyRuns = runs.filter((entry) => entry.integration === familySelect.value);
     runSelect.replaceChildren(...familyRuns.map((entry) => new Option([
-      entry.machine, utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
+      entry.load_tool === "k6" ? "k6 · mixed" : "wrk · single endpoint", entry.machine,
+      utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
     ].filter(Boolean).join(" · "), entry.id)));
     const latestComplete = familyRuns.find((entry) => !entry.incomplete && entry.valid === entry.total);
     if (latestComplete) runSelect.value = latestComplete.id;

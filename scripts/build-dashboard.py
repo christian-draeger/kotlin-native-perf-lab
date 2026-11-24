@@ -26,6 +26,7 @@ METRICS = {
     "rss": ("peak_rss_kib", 1024),
 }
 PARAMETERS = ("connections", "threads", "warmup_s", "target_duration_s")
+EXTRA_PARAMETERS = ("offered_rate", "vus_per_scenario")
 INTEGRATIONS = {
     "ktor-native": "Ktor Native",
     "ktor-jvm": "Ktor JVM",
@@ -110,6 +111,7 @@ def read_run(csv_path, note, checkout, revision):
         "host": environment.get("cpu_model") or note.get("host"),
         "runner": environment.get("runner_label"),
         "load_generator": environment.get("load_generator"),
+        "load_tool": environment.get("load_tool", "wrk") if integration else None,
         "dirty": environment.get("git_worktree") == "dirty",
         "ci_run_id": environment.get("ci_run_id") if ci else None,
         "ci_run_attempt": environment.get("ci_run_attempt") if ci else None,
@@ -124,17 +126,27 @@ def read_run(csv_path, note, checkout, revision):
         "groups": [],
         "note": note,
     }
-    for parameter in PARAMETERS:
-        result["parameters"][parameter] = sorted({int(row[parameter]) for row in rows})
+    for parameter in (*PARAMETERS, *EXTRA_PARAMETERS):
+        result["parameters"][parameter] = sorted({int(row[parameter]) for row in rows if row.get(parameter)})
     for (endpoint, variant), group in sorted(groups.items()):
         valid = [row for row in group if row["valid"] == "1"]
-        result["groups"].append({
+        entry = {
             "endpoint": endpoint,
             "variant": variant,
             "valid": len(valid),
             "total": len(group),
             "stats": stats(valid) if valid else None,
-        })
+        }
+        operations = defaultdict(list)
+        for row in valid:
+            for name, values in json.loads(row.get("operations") or "{}").items():
+                operations[name].append(values)
+        if operations:
+            entry["operations"] = {
+                name: {key: median(row[key] for row in values) for key in ("rps", "p99")}
+                for name, values in operations.items()
+            }
+        result["groups"].append(entry)
     return result
 
 

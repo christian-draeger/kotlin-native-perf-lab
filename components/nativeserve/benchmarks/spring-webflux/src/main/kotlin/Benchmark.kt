@@ -10,6 +10,7 @@ import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.MediaType
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RestController
@@ -21,6 +22,9 @@ import java.time.Duration
 class BenchmarkApplication
 
 data class User(val id: Int, val name: String, val active: Boolean)
+data class Catalog(val id: Int, val items: List<CatalogItem>)
+data class CatalogItem(val sku: String, val name: String, val description: String, val stock: Stock)
+data class Stock(val available: Boolean, val units: Int)
 
 @RestController
 class BenchmarkRoutes {
@@ -29,6 +33,14 @@ class BenchmarkRoutes {
 
     @GetMapping("/json", produces = [MediaType.APPLICATION_JSON_VALUE])
     fun json() = User(42, "benchmark-user", true)
+
+    @GetMapping("/catalog/{id}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    fun catalog(@PathVariable("id") id: Int) = Catalog(id, List(32) { index ->
+        CatalogItem(
+            "$id-$index", "Café item $index",
+            "Roasted in München and packed for delivery.", Stock(index > 0, index * 3),
+        )
+    })
 
     @PostMapping(
         "/upload",

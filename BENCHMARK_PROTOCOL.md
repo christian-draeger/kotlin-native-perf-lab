@@ -71,7 +71,20 @@ Run **Actions → ktServe integration benchmarks** on `main` for a comparison wi
 | Ktor on the JVM | CIO, Netty, ktServe |
 | Spring Boot WebFlux on the JVM | Reactor Netty, ktServe |
 
-The fixtures cover a typed JSON response at `GET /json`, a 24 KiB upload at `POST /upload`, and a streamed response at `GET /download`. The download sends 32 KiB plus three bytes in total, with a 50 ms application delay between chunks. HTTP/1.1 smoke checks verify response parity before measurement. Compare engines within the same application, architecture and workload. Download latency includes the application delay.
+The workflow defaults to **k6** for mixed traffic at 200 and 800 offered requests per second. Each of the six operations has its own fixed arrival rate and preallocated pool of 16 virtual users. Every iteration sends one HTTP/1.1 request. The same request mix runs in every engine process.
+
+| Share | Operation |
+| ---: | --- |
+| 40% | `GET /json` serves a small typed object. |
+| 25% | `GET /catalog/{id}` alternates IDs and serializes 32 nested records with UTF-8 text. |
+| 10% | `POST /upload` reads 1 KiB. |
+| 5% | `POST /upload` reads 24 KiB. |
+| 10% | `POST /upload` reads 64 KiB. |
+| 10% | `GET /download` streams 32 KiB plus three bytes with a 50 ms application delay between chunks. |
+
+The HTTP/1.1 preflight checks payloads and streamed framing. k6 checks HTTP version, status, content type and response payload on each request. The harness rejects a trial if the warm-up or measured window has a failed response, a dropped iteration or an arrival-count deviation beyond tolerance. Raw k6 summaries include the successful duration distribution of each operation. Throughput divides successful responses by the scheduled window. Use p99 and process cost at the same offered rate to compare engines. Download latency includes the application delay. [k6 fixed arrival rate](https://grafana.com/docs/k6/latest/using-k6/scenarios/executors/constant-arrival-rate/)
+
+Select `wrk` in the workflow to repeat the historical fixed-concurrency runs for `/json`, the 24 KiB upload and `/download`. The default core and expanded rankings still use wrk. Worker fixed-rate probes use Vegeta and the experimental HTTP/2 comparison uses h2load. Compare only runs with matching workload and load-tool settings.
 
 The GitHub-hosted comparison runs each engine in an independent server process and records raw workload logs, the measured revision and host information. The server and load generator share the VM with separate CPU affinity sets. Treat these results as exploratory. Controlled conclusions still require two physical hosts, validated JVM warm-up and at least five valid repetitions per cell.
 
