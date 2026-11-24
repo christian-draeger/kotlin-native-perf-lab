@@ -11,6 +11,7 @@ import dev.perflab.nativeserve.transport.TransportFailure
 import dev.perflab.nativeserve.transport.ipv4SocketAddress
 import dev.perflab.nativeserve.transport.openPlatformTransport
 import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
@@ -25,8 +26,11 @@ import platform.posix.send
 import platform.posix.sockaddr_in
 import platform.posix.socket
 
-internal fun probeTransport(port: Int): Unit = memScoped {
-    val transport = openPlatformTransport("127.0.0.1", port, connectionLimit = 2)
+internal fun probeTransport(
+    port: Int,
+    open: MemScope.(String, Int, Int) -> StreamTransport = MemScope::openPlatformTransport,
+): Unit = memScoped {
+    val transport = open("127.0.0.1", port, 2)
     val completions = ProbeCompletions()
     val sockets = mutableListOf<Int>()
 
