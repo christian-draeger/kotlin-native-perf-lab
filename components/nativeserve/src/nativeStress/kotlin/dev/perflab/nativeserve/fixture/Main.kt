@@ -15,8 +15,8 @@ private const val STREAM_BYTES = BODY_BYTES - 3
 
 @OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class)
 fun main(args: Array<String>) {
-    if (args.firstOrNull() == "--epoll") {
-        probeEpoll(args[1].toInt())
+    if (args.firstOrNull() == "--transport") {
+        probeTransport(args[1].toInt())
         return
     }
     val limits = ServerLimits(
