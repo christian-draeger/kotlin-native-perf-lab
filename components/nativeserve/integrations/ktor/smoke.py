@@ -48,6 +48,7 @@ def smoke(binary, engine):
             assert request(port, "/upload", b"x" * (24 * 1024)) == (200, b"24576")
             assert request(port, "/download") == (200, b"s" * (16 * 1024) + b"t" * (16 * 1024 + 3))
             assert request(port, "/missing")[0] == 404
+            assert request(port, "/failure")[0] == 500
 
             if engine == "nativeserve":
                 with socket.create_connection(("127.0.0.1", port), timeout=5) as client:
