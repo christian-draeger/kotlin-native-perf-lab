@@ -1,5 +1,7 @@
 package dev.perflab.nativeserve.fixture
 
+import dev.perflab.nativeserve.RequestBodySink
+import dev.perflab.nativeserve.Response
 import dev.perflab.nativeserve.ResponseSource
 import dev.perflab.nativeserve.ServerLimits
 import dev.perflab.nativeserve.serve
@@ -22,10 +24,12 @@ fun main(args: Array<String>) {
         responseBodyBytes = BODY_BYTES,
         idleMillis = 3_000,
         requestHeadMillis = 500,
+        requestBodyMillis = 1_000,
     )
     val largeBody = "x".repeat(BODY_BYTES)
     var largeRequests = 0
     var openStreams = 0
+    var openRequests = 0
     var stop = false
     fun source(bytes: Int): ResponseSource {
         openStreams++
@@ -33,6 +37,7 @@ fun main(args: Array<String>) {
             var remaining = bytes
 
             override fun read(buffer: ByteArray, limit: Int): Int {
+                if (remaining == 0) return -1
                 val count = minOf(remaining, limit)
                 buffer.fill('s'.code.toByte(), toIndex = count)
                 remaining -= count
@@ -53,8 +58,26 @@ fun main(args: Array<String>) {
         get("/large-count") { text(largeRequests.toString()) }
         get("/too-large") { text(largeBody + "x") }
         get("/stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(STREAM_BYTES)) }
+        get("/chunks") { streamResponse("application/octet-stream", source(32 * 1024 + 3)) }
         get("/truncated-stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(1)) }
         get("/open-streams") { text(openStreams.toString()) }
+        get("/open-requests") { text(openRequests.toString()) }
+        postStreaming("/upload") {
+            openRequests++
+            object : RequestBodySink {
+                var bytes = 0
+
+                override fun accept(buffer: ByteArray, length: Int) {
+                    bytes += length
+                }
+
+                override fun complete(): Response = text(bytes.toString())
+
+                override fun close() {
+                    openRequests--
+                }
+            }
+        }
         get("/stop") {
             stop = true
             text("ok")
@@ -66,4 +89,5 @@ fun main(args: Array<String>) {
         }
     }
     check(openStreams == 0) { "Shutdown left $openStreams response sources open" }
+    check(openRequests == 0) { "Shutdown left $openRequests request sinks open" }
 }

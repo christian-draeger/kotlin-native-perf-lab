@@ -23,7 +23,7 @@ internal class HttpServer(
         try {
             runLoop(stopRequested)
         } finally {
-            clients.values.forEach { it.closeResponse() }
+            clients.values.forEach { it.close() }
         }
     }
 
@@ -109,14 +109,14 @@ internal class HttpServer(
             val (id, connection) = iterator.next()
             if (shouldClose(connection)) {
                 iterator.remove()
-                connection.closeResponse()
+                connection.close()
                 transport.closeConnection(id)
             }
         }
     }
 
     private fun disconnect(id: ConnectionId) {
-        clients.remove(id)?.closeResponse()
+        clients.remove(id)?.close()
         transport.closeConnection(id)
     }
 

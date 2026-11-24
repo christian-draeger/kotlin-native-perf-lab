@@ -187,6 +187,218 @@ class HttpConnectionTest {
         assertEquals(0, source.closes)
     }
 
+    @Test
+    fun chunkedOutputHonorsPartialFramesAndKeepsTheNextRequestQueued() {
+        val parts = ArrayDeque(listOf("abc", "de"))
+        val source = TestSource { buffer, _ ->
+            val part = parts.removeFirstOrNull()?.encodeToByteArray()
+            if (part == null) -1 else {
+                part.copyInto(buffer)
+                part.size
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits(responseBodyBytes = 5))
+        val routes = Routes().apply { get("/health") { streamResponse("text/plain", source) } }
+        connection.receive(request.repeat(2), now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        val head = connection.pendingOutput()
+        assertTrue(head.contains("Transfer-Encoding: chunked\r\n"))
+        assertFalse(head.contains("Content-Length:"))
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+        assertEquals("3\r\n", connection.pendingOutput())
+        assertTrue(connection.wrote(1, now = 2))
+        assertEquals(1, source.reads)
+        assertTrue(connection.wrote(2, now = 2))
+        for (frame in listOf("abc", "\r\n2\r\n", "de", "\r\n0\r\n\r\n")) {
+            assertEquals(frame, connection.pendingOutput())
+            assertEquals(0, source.closes)
+            assertTrue(connection.wrote(connection.outputLength, now = 2))
+        }
+        assertNull(connection.output)
+        assertEquals(request.length, connection.input.size)
+        assertEquals(3, source.reads)
+        assertEquals(1, source.closes)
+    }
+
+    @Test
+    fun emptyChunkedBodySendsATerminatorAndOverflowClosesTheConnection() {
+        val empty = TestSource { _, _ -> -1 }
+        val connection = HttpConnection(0, ServerLimits(responseBodyBytes = 4))
+        val emptyRoutes = Routes().apply { get("/health") { streamResponse("text/plain", empty) } }
+        connection.receive(request, now = 1)
+        assertTrue(connection.prepareResponse(emptyRoutes, now = 1))
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+        assertEquals("0\r\n\r\n", connection.pendingOutput())
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+        assertEquals(1, empty.closes)
+
+        val overflow = TestSource { _, limit -> limit }
+        val overflowRoutes = Routes().apply { get("/health") { streamResponse("text/plain", overflow) } }
+        connection.receive(request, now = 4)
+        assertTrue(connection.prepareResponse(overflowRoutes, now = 4))
+        assertTrue(connection.wrote(connection.outputLength, now = 5))
+        assertEquals("4\r\n", connection.pendingOutput())
+        assertTrue(connection.wrote(connection.outputLength, now = 5))
+        assertEquals(4, connection.outputLength)
+        assertFalse(connection.wrote(4, now = 6))
+        assertNull(connection.output)
+        assertEquals(1, overflow.closes)
+    }
+
+    @Test
+    fun rejectsAnUnknownLengthStreamOnHttp10BeforeReadingIt() {
+        val source = TestSource { _, _ -> error("Unexpected read") }
+        val routes = Routes().apply { get("/health") { streamResponse("text/plain", source) } }
+        val connection = HttpConnection(0, ServerLimits())
+        connection.receive("GET /health HTTP/1.0\r\n\r\n", now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        assertTrue(connection.pendingOutput().startsWith("HTTP/1.0 500 "))
+        assertEquals(0, source.reads)
+        assertEquals(1, source.closes)
+        assertFalse(connection.wrote(connection.outputLength, now = 2))
+    }
+
+    @Test
+    fun consumesPostInFragmentsAndSeparatesTheFollowingRequest() {
+        val pieces = mutableListOf<String>()
+        var closes = 0
+        var health = 0
+        val routes = Routes().apply {
+            postStreaming("/upload/{name}") { request ->
+                assertEquals("sample", request.pathParameter("name"))
+                assertEquals(5, request.bodyLength)
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) {
+                        pieces += buffer.decodeToString(endIndex = length)
+                    }
+
+                    override fun complete(): Response = text(pieces.joinToString(""))
+
+                    override fun close() {
+                        closes++
+                    }
+                }
+            }
+            get("/health") {
+                health++
+                text("ok")
+            }
+        }
+        val connection = HttpConnection(0, ServerLimits())
+        connection.receive("POST /upload/sample HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\nab", now = 1)
+        assertFalse(connection.prepareResponse(routes, now = 1))
+        assertEquals(listOf("ab"), pieces)
+        connection.receive("cde$request", now = 2)
+        assertTrue(connection.prepareResponse(routes, now = 2))
+        assertTrue(connection.pendingOutput().endsWith("\r\n\r\nabcde"))
+        assertEquals(listOf("ab", "cde"), pieces)
+        assertEquals(1, closes)
+        assertEquals(0, health)
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+        assertTrue(connection.prepareResponse(routes, now = 3))
+        assertEquals(1, health)
+        connection.close()
+        assertEquals(1, closes)
+    }
+
+    @Test
+    fun oversizePostDoesNotOpenASinkAndAnInterruptedBodyClosesItsSink() {
+        var opens = 0
+        var closes = 0
+        val routes = Routes().apply {
+            postStreaming("/upload") {
+                opens++
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) {}
+                    override fun complete(): Response = error("Incomplete body must not finish")
+                    override fun close() { closes++ }
+                }
+            }
+        }
+        val head = "POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Length: 5\r\n\r\n"
+        val rejected = HttpConnection(0, ServerLimits(requestBodyBytes = 4))
+        rejected.receive(head, now = 1)
+        assertTrue(rejected.prepareResponse(routes, now = 1))
+        assertTrue(rejected.pendingOutput().startsWith("HTTP/1.1 413 "))
+        assertEquals(0, opens)
+
+        val partial = HttpConnection(0, ServerLimits(requestBodyMillis = 5, idleMillis = 50))
+        partial.receive(head + "a", now = 1)
+        assertFalse(partial.prepareResponse(routes, now = 1))
+        partial.receive("b", now = 5)
+        assertFalse(partial.prepareResponse(routes, now = 5))
+        assertFalse(partial.expired(now = 5))
+        assertTrue(partial.expired(now = 6))
+        assertEquals(1, opens)
+        assertEquals(0, closes)
+        partial.close()
+        partial.close()
+        assertEquals(1, closes)
+    }
+
+    @Test
+    fun decodesFragmentedChunkedRequestsBeforeDispatchingTheNextHead() {
+        var size = 0
+        var closes = 0
+        val routes = Routes().apply {
+            postStreaming("/upload") { request ->
+                assertNull(request.bodyLength)
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) { size += length }
+                    override fun complete(): Response = text(size.toString())
+                    override fun close() { closes++ }
+                }
+            }
+            get("/health") { text("ok") }
+        }
+        val connection = HttpConnection(0, ServerLimits(requestBodyBytes = 5))
+        val partial = listOf(
+            "POST /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n3;name=value\r",
+            "\nab", "c\r", "\n2\r\nde\r\n0\r\nX-Trailer: yes\r\n\r",
+        )
+        for (fragment in partial) {
+            connection.receive(fragment, now = 1)
+            assertFalse(connection.prepareResponse(routes, now = 1))
+        }
+        assertEquals(5, size)
+        assertEquals(0, closes)
+        connection.receive("\n$request", now = 2)
+        assertTrue(connection.prepareResponse(routes, now = 2))
+        assertTrue(connection.pendingOutput().endsWith("\r\n\r\n5"))
+        assertEquals(1, closes)
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+        assertTrue(connection.prepareResponse(routes, now = 3))
+        assertTrue(connection.pendingOutput().endsWith("\r\n\r\nok"))
+    }
+
+    @Test
+    fun invalidChunkedFramingRetiresTheSinkWithoutCompletingIt() {
+        var closed = 0
+        val routes = Routes().apply {
+            postStreaming("/upload") {
+                object : RequestBodySink {
+                    override fun accept(buffer: ByteArray, length: Int) {}
+                    override fun complete(): Response = error("Rejected requests cannot complete")
+                    override fun close() { closed++ }
+                }
+            }
+        }
+        val malformed = mapOf("1\r\nx\n\r" to 400, "0\r\nContent-Length: 1\r\n\r\n" to 400, "4\r\n" to 413)
+        for ((body, status) in malformed) {
+            val connection = HttpConnection(0, ServerLimits(requestBodyBytes = 3))
+            val header = "POST /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"
+            connection.receive(header + body, now = 1)
+            assertTrue(connection.prepareResponse(routes, now = 1))
+            assertTrue(connection.pendingOutput().startsWith("HTTP/1.1 $status "))
+            assertFalse(connection.wrote(connection.outputLength, now = 2))
+            connection.close()
+        }
+        assertEquals(malformed.size, closed)
+    }
+
+    private fun HttpConnection.pendingOutput(): String =
+        assertNotNull(output).decodeToString(endIndex = outputLength)
+
     private fun HttpConnection.startStream(length: Int, source: ResponseSource) {
         val routes = Routes().apply { get("/health") { streamResponse(length, "text/plain", source) } }
         receive(request, now = 1)

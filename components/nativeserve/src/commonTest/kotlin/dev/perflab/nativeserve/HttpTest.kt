@@ -34,6 +34,15 @@ class HttpTest {
         assertEquals(400, rejection("GET / HTTP/1.1\r\n\r\n"))
         assertEquals(400, rejection("GET / HTTP/1.1\r\nHost: localhost\r\nHost: localhost\r\n\r\n"))
         assertEquals(413, rejection("GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1\r\n\r\n"))
+        assertEquals(413, rejection("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2147483648\r\n\r\n"))
+        assertEquals(400, rejection("POST / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\nContent-Length: 4\r\n\r\n"))
+        for (fields in listOf(
+            "Content-Length: 0\r\nTransfer-Encoding: chunked",
+            "Transfer-Encoding: chunked\r\nContent-Length: 0",
+            "Transfer-Encoding: chunked\r\nTransfer-Encoding: chunked",
+        )) {
+            assertEquals(400, rejection("POST / HTTP/1.1\r\nHost: localhost\r\n$fields\r\n\r\n"))
+        }
         assertEquals(400, rejection("GET / HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n"))
         assertEquals(505, rejection("GET / HTTP/2.0\r\nHost: localhost\r\n\r\n"))
         val bounded = RequestBuffer(32)
