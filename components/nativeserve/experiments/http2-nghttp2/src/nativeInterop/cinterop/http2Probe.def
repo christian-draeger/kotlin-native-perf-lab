@@ -1,0 +1,3 @@
+headers = http2_probe.h
+headerFilter = http2_probe.h
+package = dev.perflab.nativeserve.http2.bridge

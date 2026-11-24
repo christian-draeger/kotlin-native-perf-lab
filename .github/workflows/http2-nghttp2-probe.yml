@@ -1,0 +1,103 @@
+name: HTTP/2 session probe
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - 'components/nativeserve/experiments/http2-nghttp2/**'
+      - '.github/workflows/http2-nghttp2-probe.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm_sdk:
+    name: Prepare the Ubuntu ARM64 nghttp2 SDK
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - name: Extract the signed distribution package
+        run: |
+          sudo apt-get update -qq
+          cd "$RUNNER_TEMP"
+          apt-get download libnghttp2-dev
+          package=(libnghttp2-dev_*.deb)
+          test "${#package[@]}" = 1
+          test "$(dpkg-deb -f "${package[0]}" Architecture)" = arm64
+          dpkg-deb -x "${package[0]}" arm-package
+          mkdir -p arm-sdk/usr/include arm-sdk/usr/lib/aarch64-linux-gnu
+          cp -R arm-package/usr/include/nghttp2 arm-sdk/usr/include/
+          cp arm-package/usr/lib/aarch64-linux-gnu/libnghttp2.a arm-sdk/usr/lib/aarch64-linux-gnu/
+          cp arm-package/usr/share/doc/libnghttp2-dev/copyright arm-sdk/LICENSE.nghttp2
+          dpkg-deb -f "${package[0]}" Version | tee arm-sdk/package-version.txt
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: nghttp2-sdk-arm64
+          path: ${{ runner.temp }}/arm-sdk
+          if-no-files-found: error
+
+  build:
+    name: Build both Kotlin/Native probes and test x86_64
+    needs: arm_sdk
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: nghttp2-sdk-arm64
+          path: ${{ runner.temp }}/arm-sdk
+      - name: Install x86_64 SDK from Ubuntu
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libnghttp2-dev
+          dpkg-query -W libnghttp2-dev
+          cat "$RUNNER_TEMP/arm-sdk/package-version.txt"
+          mkdir "$RUNNER_TEMP/x86-headers"
+          cp -R /usr/include/nghttp2 "$RUNNER_TEMP/x86-headers/"
+      - name: Build and exercise both architectures
+        run: |
+          project=components/nativeserve/experiments/http2-nghttp2
+          binary="$project/build/bin/native/releaseExecutable/nativeserve-http2-session-probe.kexe"
+          cc -Wall -Wextra -Werror -fsyntax-only -include "$project/src/nativeInterop/cinterop/http2_probe.h" -xc /dev/null
+          gradle -p "$project" -Pbenchmark.targetArch=x86_64 -Pnghttp2.headers="$RUNNER_TEMP/x86-headers" \
+            -Pnghttp2.archive=/usr/lib/x86_64-linux-gnu/libnghttp2.a linkReleaseExecutableNative
+          "$binary"
+          gradle -p "$project" -Pbenchmark.targetArch=aarch64 -Pnghttp2.headers="$RUNNER_TEMP/arm-sdk/usr/include" \
+            -Pnghttp2.archive="$RUNNER_TEMP/arm-sdk/usr/lib/aarch64-linux-gnu/libnghttp2.a" linkReleaseExecutableNative
+          readelf -h "$binary" | grep -E 'Machine:[[:space:]]+AArch64$'
+          mkdir "$RUNNER_TEMP/h2-arm"
+          install -m 755 "$binary" "$RUNNER_TEMP/h2-arm/h2-probe"
+          cp "$RUNNER_TEMP/arm-sdk/LICENSE.nghttp2" "$RUNNER_TEMP/h2-arm/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: nghttp2-probe-arm64
+          path: ${{ runner.temp }}/h2-arm
+          if-no-files-found: error
+
+  arm_smoke:
+    name: Run the HTTP/2 probe on ARM64
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: nghttp2-probe-arm64
+          path: ${{ runner.temp }}/h2-arm
+      - run: |
+          test "$(uname -m)" = aarch64
+          chmod +x "$RUNNER_TEMP/h2-arm/h2-probe"
+          "$RUNNER_TEMP/h2-arm/h2-probe"
