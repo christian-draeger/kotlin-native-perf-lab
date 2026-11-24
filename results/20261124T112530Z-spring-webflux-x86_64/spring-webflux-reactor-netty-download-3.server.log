@@ -1,0 +1,7 @@
+2026-11-24T11:32:48.493Z  INFO 3990 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : Starting BenchmarkKt using Java 21.0.13 with PID 3990 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/components/nativeserve/benchmarks/spring-webflux/build/install/ktserve-benchmark-spring-webflux/lib/ktserve-benchmark-spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-24T11:32:48.495Z  INFO 3990 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : No active profile set, falling back to 1 default profile: "default"
+2026-11-24T11:32:49.514Z  INFO 3990 --- [           main] o.s.boot.reactor.netty.NettyWebServer    : Netty started on port 41059 (http)
+2026-11-24T11:32:49.528Z  INFO 3990 --- [           main] d.perflab.benchmark.spring.BenchmarkKt   : Started BenchmarkKt in 1.354 seconds (process running for 1.609)
+perflab engine=reactor-netty
+2026-11-24T11:33:09.936Z  INFO 3990 --- [ionShutdownHook] o.s.boot.reactor.netty.GracefulShutdown  : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-24T11:33:09.939Z  INFO 3990 --- [ netty-shutdown] o.s.boot.reactor.netty.GracefulShutdown  : Graceful shutdown complete
