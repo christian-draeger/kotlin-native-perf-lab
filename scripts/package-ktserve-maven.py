@@ -52,6 +52,12 @@ def build_bundle(repository, version, signing_key, output):
     if output.exists():
         raise FileExistsError(f"Bundle already exists at {output}")
     files = list(release_files(repository, version))
+    passphrase = os.environ.pop("SIGNING_IN_MEMORY_KEY_PASSWORD", None)
+    gpg_command = ["gpg"]
+    gpg_input = None
+    if passphrase is not None:
+        gpg_command += ["--batch", "--no-tty", "--pinentry-mode", "loopback", "--passphrase-fd", "0"]
+        gpg_input = (passphrase + "\n").encode()
     with tempfile.TemporaryDirectory(prefix="ktserve-central-", dir=output.parent) as work:
         scratch = Path(work)
         candidate = scratch / "central.zip"
@@ -61,9 +67,9 @@ def build_bundle(repository, version, signing_key, output):
                 file.write_bytes(data)
                 signature = scratch / f"{name.name}.asc"
                 subprocess.run([
-                    "gpg", "--local-user", signing_key, "--armor", "--detach-sign",
+                    *gpg_command, "--local-user", signing_key, "--armor", "--detach-sign",
                     "--output", str(signature), str(file),
-                ], check=True)
+                ], check=True, input=gpg_input)
                 subprocess.run([
                     "gpg", "--batch", "--verify", str(signature), str(file),
                 ], check=True, capture_output=True)
