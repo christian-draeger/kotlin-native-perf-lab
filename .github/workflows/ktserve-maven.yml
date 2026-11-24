@@ -11,6 +11,10 @@ on:
       - 'components/ktserve/examples/hello/**'
       - 'components/ktserve/examples/hello-jvm/**'
       - '.github/workflows/ktserve-maven.yml'
+      - 'scripts/package-ktserve-maven.py'
+      - 'scripts/publish-ktserve-maven.sh'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
@@ -22,16 +26,35 @@ permissions:
   contents: read
 
 concurrency:
-  group: ktserve-maven-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ktserve-maven-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 jobs:
   stage:
     runs-on: macos-15
     timeout-minutes: 25
-    env:
-      KTSERVE_VERSION: ${{ inputs.version || '0.2.0-preview.2' }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - name: Resolve the staging version
+        id: version
+        env:
+          STAGING_VERSION: ${{ inputs.version || '0.2.0-preview.2' }}
+        run: |
+          version="$STAGING_VERSION"
+          if [[ "$GITHUB_EVENT_NAME" == release ]]; then
+            if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
+              echo 'Use a GitHub release tag such as v0.2.0-preview.2.' >&2
+              exit 1
+            fi
+            version="${GITHUB_REF#refs/tags/v}"
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo 'Use a version such as 0.2.0-preview.2.' >&2
+            exit 1
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'KTSERVE_VERSION=%s\n' "$version" >> "$GITHUB_ENV"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
@@ -113,3 +136,45 @@ jobs:
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18082/health)" = ok
+
+  publish:
+    if: github.event_name == 'release' && github.repository == 'christian-draeger/kotlin-native-perf-lab'
+    needs: [stage, linux-consumer]
+    environment: maven-central
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      RELEASE_VERSION: ${{ needs.stage.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ktserve-maven-${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/ktserve-maven-staged
+      - name: Sign the tested Maven artifacts
+        env:
+          SIGNING_IN_MEMORY_KEY: ${{ secrets.SIGNING_IN_MEMORY_KEY }}
+          SIGNING_IN_MEMORY_KEY_ID: ${{ secrets.SIGNING_IN_MEMORY_KEY_ID }}
+          SIGNING_IN_MEMORY_KEY_PASSWORD: ${{ secrets.SIGNING_IN_MEMORY_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${SIGNING_IN_MEMORY_KEY:?Configure the maven-central signing key}"
+          : "${SIGNING_IN_MEMORY_KEY_ID:?Configure the maven-central primary key fingerprint}"
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          trap 'gpgconf --kill gpg-agent; rm -rf -- "$GNUPGHOME"' EXIT
+          if [[ "$SIGNING_IN_MEMORY_KEY" == '-----BEGIN PGP PRIVATE KEY BLOCK-----'* ]]; then
+            printf '%s' "$SIGNING_IN_MEMORY_KEY" | gpg --batch --quiet --import
+          else
+            printf '%s' "$SIGNING_IN_MEMORY_KEY" | base64 --decode | gpg --batch --quiet --import
+          fi
+          unset SIGNING_IN_MEMORY_KEY
+          python3 scripts/package-ktserve-maven.py "$RUNNER_TEMP/ktserve-maven-staged" "$RELEASE_VERSION" \
+            "$SIGNING_IN_MEMORY_KEY_ID!" "$RUNNER_TEMP/ktserve-central.zip"
+      - name: Publish and verify the Central deployment
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: bash scripts/publish-ktserve-maven.sh "$RELEASE_VERSION" "$RUNNER_TEMP/ktserve-central.zip"
