@@ -15,6 +15,7 @@ const variants = {
   "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "kotlin" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
   "ktserve": { label: "ktServe", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
+  "ktserve-workers-2": { label: "ktServe · 2 workers", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },
@@ -149,15 +150,15 @@ function renderMethod(run) {
   element("source-links").replaceChildren(...runSources(run));
 }
 
-function runSources(run) {
+function runSources(run, csv = "results.csv") {
   const sources = [
-    fileLink(run, "CSV", run.folder + "/results.csv"),
+    fileLink(run, "CSV", run.folder + "/" + csv),
     fileLink(run, "Raw logs", run.folder, true),
   ];
   if (run.has_environment) {
     sources.push(fileLink(run, "Environment", run.folder + "/environment.txt"));
   }
-  sources.push(...(run.note.links ?? []).map((link) => fileLink(run, link.label, link.path)));
+  sources.push(...(run.note?.links ?? []).map((link) => fileLink(run, link.label, link.path)));
   if (/^[0-9]+$/.test(run.ci_run_id ?? "")) {
     const action = make("a", "CI workflow");
     action.href = data.repository + "/actions/runs/" + run.ci_run_id;
@@ -674,6 +675,160 @@ function start() {
   startHistory(runs);
 }
 
+const trafficLevels = [
+  [200, "Low traffic"], [800, "Moderate traffic"], [3200, "High traffic"], [6400, "Maximum tested"],
+];
+const trafficOperations = {
+  json: "Small JSON", catalog: "Nested JSON", upload_1k: "1 KiB upload", upload_24k: "24 KiB upload",
+  upload_64k: "64 KiB upload", download: "Paced download", wait: "20 ms simulated wait",
+};
+
+function historicalTraffic(run) {
+  const tiers = {};
+  for (const group of run.groups) {
+    const match = /^Mixed · (\d+) req\/s$/.exec(group.endpoint);
+    if (!match) continue;
+    const cell = tiers[match[1]] ??= {};
+    cell[group.variant] = {
+      ...group, generator_qualified: group.valid,
+      met: group.stats?.p99.max <= 100 ? group.valid : 0,
+    };
+  }
+  return {
+    ...run, tiers, historical: true, host: run.note.host,
+    expected: Math.max(0, ...run.groups.map((group) => group.total)),
+    duration: run.parameters.target_duration_s.join(" / "),
+    target: "The original pilot requires overall p99 at or below 100 ms and zero failed or dropped arrivals.",
+  };
+}
+
+function trafficStatus(cells, expected) {
+  if (cells.some((cell) => !cell || cell.total !== expected)) return "missing";
+  if (cells.some((cell) => cell.generator_qualified !== expected)) return "limited";
+  if (cells.every((cell) => cell.met === expected)) return "met";
+  return "missed";
+}
+
+function startTraffic() {
+  const archived = (data?.integration_runs ?? []).filter((run) => run.integration === "application-mix"
+    && !run.experiment && run.ci_run_id && !run.incomplete && !run.dirty);
+  const current = data?.traffic_runs ?? [];
+  const platforms = [["x86_64", "x86_64"], ["aarch64", "ARM64"]].flatMap(([machine, label]) => {
+    const prior = archived.find((run) => run.machine === machine);
+    const run = current.find((run) => run.machine === machine) ?? (prior && historicalTraffic(prior));
+    return run ? [{ machine, label, run }] : [];
+  });
+  if (!platforms.length) return;
+
+  const platformSelect = element("traffic-platform");
+  const workerSelect = element("traffic-workers");
+  const badges = { met: "Both meet target", missed: "Target missed", limited: "Load unqualified", missing: "No paired result" };
+  const descriptions = {
+    missed: "At least one server missed a response target or a trial failed its checks. Review the trial rows for the breakdown.",
+    limited: "The tests missed scheduled arrivals or lacked verified generator headroom. Server capacity at this rate is unresolved.",
+    missing: "This run has no complete paired measurement at the selected rate.",
+  };
+  let selectedRate = 800;
+  const buttons = trafficLevels.map(([rate, label]) => {
+    const button = make("button", "", "traffic-level");
+    button.type = "button";
+    button.append(make("strong", label), make("span", `${format(rate, "rps")} offered req/s`, "traffic-rate"),
+      make("span", "", "traffic-badge"));
+    button.addEventListener("click", () => {
+      selectedRate = rate;
+      draw();
+    });
+    return button;
+  });
+
+  function draw() {
+    const { label, run } = platforms.find((entry) => entry.machine === platformSelect.value);
+    const worker = workerSelect.value;
+    const variantNames = [worker, "rust-axum"];
+    const tiers = trafficLevels.map(([rate]) => variantNames.map((name) => run.tiers[rate]?.[name]));
+    const statuses = tiers.map((cells) => trafficStatus(cells, run.expected));
+    const firstUnmet = statuses.findIndex((status) => status !== "met");
+    const passed = firstUnmet < 0 ? trafficLevels.length : firstUnmet;
+    element("traffic-range").textContent = passed
+      ? `Both met the target through ${format(trafficLevels[passed - 1][0], "rps")} tested req/s.`
+      : "Compare the recorded checkpoints below.";
+    buttons.forEach((button, index) => {
+      button.setAttribute("aria-pressed", String(trafficLevels[index][0] === selectedRate));
+      button.dataset.outcome = statuses[index];
+      button.lastElementChild.textContent = badges[statuses[index]];
+    });
+    const selected = trafficLevels.findIndex(([rate]) => rate === selectedRate);
+    const cells = tiers[selected];
+    const outcome = statuses[selected];
+    const comparable = cells.every((cell) => cell?.valid === run.expected && cell.stats);
+    const headings = [worker === "ktserve-workers-2" ? "ktServe · 2 workers" : "ktServe · 1 worker", "Axum"];
+    const headline = outcome === "met" ? "Both meet the response target"
+      : outcome === "limited" ? "Load delivery limits this comparison"
+      : outcome === "missed" ? "Response targets missed" : "No paired result at this load";
+    element("traffic-verdict").textContent = headline;
+    element("traffic-verdict-note").textContent = outcome === "met" ? run.target : descriptions[outcome];
+    element("traffic-comparison").replaceChildren(...cells.flatMap((cell, index) => {
+      if (!cell || outcome === "missing") return [];
+      const card = make("article", "", `traffic-server ${variantInfo(variantNames[index]).color}`);
+      const title = make("h4", headings[index]);
+      const metricsList = make("dl", "", "traffic-metrics");
+      const readings = comparable ? [
+        cell.on_time_rps == null
+          ? ["Successful req/s", format(cell.stats.rps.median, "rps")]
+          : ["On-time req/s", format(cell.on_time_rps, "rps")],
+        ["Overall p99", `${format(cell.stats.p99.median, "p99")} ms`],
+        ["CPU per 1M req.", `${format(cell.stats.cpu.median, "cpu")} s`],
+        ["Peak memory", `${format(cell.stats.rss.median, "rss")} MiB`],
+      ] : [
+        ["Observed on-time req/s", cell.on_time_rps == null ? "—" : format(cell.on_time_rps, "rps")],
+        ["Unsent arrivals", cell.dropped == null ? "—" : format(cell.dropped, "rps")],
+        ["Failed responses", cell.failed == null ? "—" : format(cell.failed, "rps")],
+      ];
+      metricsList.append(...readings.flatMap(([name, value]) => [make("dt", name), make("dd", value)]));
+      card.append(title, make("p", `${cell.met} of ${cell.total} trials met the target`), metricsList);
+      return [card];
+    }));
+    const operations = comparable ? Object.entries(trafficOperations).flatMap(([key, name]) => {
+      const latencies = cells.map((cell) => cell.operations?.[key]?.p99);
+      if (latencies.some((latency) => latency == null)) return [];
+      const row = make("tr");
+      const heading = make("th", name);
+      heading.scope = "row";
+      row.append(heading, ...latencies.map((latency) => make("td", `${format(latency, "p99")} ms`)));
+      return [row];
+    }) : [];
+    element("traffic-operations").hidden = !operations.length;
+    element("traffic-operation-rows").replaceChildren(...operations);
+    const context = [
+      run.historical ? "Earlier application-mix pilot" : "Traffic capacity sweep", `Linux ${label}`,
+      run.host, run.duration && `${run.duration} s per trial`, "Shared GitHub runner · exploratory",
+    ].filter(Boolean).join(" · ");
+    element("traffic-method").textContent = `${context}. Mixed HTTP/1.1 over persistent connections. The paced download includes a 50 ms gap between chunks.`;
+    element("traffic-links").replaceChildren(...runSources({ ...run, has_environment: true }, run.historical ? "results.csv" : "traffic.csv"));
+  }
+
+  function changePlatform() {
+    const { run } = platforms.find((entry) => entry.machine === platformSelect.value);
+    const hasTwoWorkers = Object.values(run.tiers).some((tier) => tier["ktserve-workers-2"]);
+    const selected = workerSelect.value;
+    workerSelect.replaceChildren(new Option("1 worker", "ktserve"));
+    if (hasTwoWorkers) {
+      workerSelect.add(new Option("2 workers", "ktserve-workers-2"));
+      if (selected === "ktserve-workers-2") workerSelect.value = selected;
+    }
+    element("traffic-workers-control").hidden = !hasTwoWorkers;
+    draw();
+  }
+
+  platformSelect.replaceChildren(...platforms.map(({ machine, label }) => new Option(label, machine)));
+  platformSelect.addEventListener("change", changePlatform);
+  workerSelect.addEventListener("change", draw);
+  element("traffic-levels").replaceChildren(...buttons);
+  element("traffic-empty").hidden = true;
+  element("traffic-data").hidden = false;
+  changePlatform();
+}
+
 function startIntegration() {
   const families = {
     "ktor-native": "Ktor · Kotlin/Native",
@@ -773,5 +928,6 @@ function startIntegration() {
   changeFamily();
 }
 
+startTraffic();
 start();
 startIntegration();

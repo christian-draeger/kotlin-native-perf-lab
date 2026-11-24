@@ -47,6 +47,17 @@ def stats(rows):
     return output
 
 
+def operation_stats(rows):
+    operations = defaultdict(list)
+    for row in rows:
+        for name, values in json.loads(row.get("operations") or "{}").items():
+            operations[name].append(values)
+    return {
+        name: {key: median(row[key] for row in values) for key in ("rps", "p99")}
+        for name, values in operations.items()
+    }
+
+
 @lru_cache(maxsize=None)
 def commit_label(sha):
     if not sha or not re.fullmatch(r"[0-9a-f]{40}", sha):
@@ -71,14 +82,7 @@ def canonical_variant(variant):
     return variant
 
 
-def read_run(csv_path, note, checkout, revision):
-    folder = csv_path.parent
-    with csv_path.open(newline="") as file:
-        rows = list(csv.DictReader(file))
-    groups = defaultdict(list)
-    for row in rows:
-        groups[row["endpoint"], canonical_variant(row["variant"])].append(row)
-    environment_path = folder / "environment.txt"
+def read_environment(environment_path):
     environment = {}
     if environment_path.is_file():
         for line in environment_path.read_text().splitlines():
@@ -87,6 +91,18 @@ def read_run(csv_path, note, checkout, revision):
             key, separator, value = line.partition("=")
             if separator:
                 environment[key] = value.strip('"')
+    return environment
+
+
+def read_run(csv_path, note, checkout, revision):
+    folder = csv_path.parent
+    with csv_path.open(newline="") as file:
+        rows = list(csv.DictReader(file))
+    groups = defaultdict(list)
+    for row in rows:
+        groups[row["endpoint"], canonical_variant(row["variant"])].append(row)
+    environment_path = folder / "environment.txt"
+    environment = read_environment(environment_path)
     ci = environment.get("benchmark_source") == "github-hosted-actions"
     suite = environment.get("benchmark_suite")
     integration = environment.get("integration_family") if suite == "integration" else None
@@ -147,15 +163,9 @@ def read_run(csv_path, note, checkout, revision):
             "total": len(group),
             "stats": stats(valid) if valid else None,
         }
-        operations = defaultdict(list)
-        for row in valid:
-            for name, values in json.loads(row.get("operations") or "{}").items():
-                operations[name].append(values)
+        operations = operation_stats(valid)
         if operations:
-            entry["operations"] = {
-                name: {key: median(row[key] for row in values) for key in ("rps", "p99")}
-                for name, values in operations.items()
-            }
+            entry["operations"] = operations
         result["groups"].append(entry)
     return result
 
@@ -195,12 +205,71 @@ def measurement_history(runs, variant=None):
     return sorted(profiles.values(), key=lambda profile: profile["runs"][-1]["id"], reverse=True)
 
 
-def tracked_runs(checkout, revision, notes):
-    paths = git(checkout, "ls-files", "-z", "--", "results/*/results.csv").split("\0")
+def tracked_reports(checkout, filename):
+    paths = git(checkout, "ls-files", "-z", "--", f"results/*/{filename}").split("\0")
     for path in filter(None, paths):
         csv_path = checkout / path
         if csv_path.parent.parent == checkout / "results":
-            yield read_run(csv_path, notes.get(csv_path.parent.name, {}), checkout, revision)
+            yield csv_path
+
+
+def tracked_runs(checkout, revision, notes):
+    for csv_path in tracked_reports(checkout, "results.csv"):
+        yield read_run(csv_path, notes.get(csv_path.parent.name, {}), checkout, revision)
+
+
+def read_traffic_run(csv_path, checkout, revision):
+    folder = csv_path.parent
+    environment = read_environment(folder / "environment.txt")
+    if (environment.get("integration_experiment") != "traffic-capacity"
+            or environment.get("benchmark_source") != "github-hosted-actions"
+            or environment.get("git_worktree") != "clean"):
+        return None
+    expected = int(environment["repetitions"])
+    sha = environment["git_sha"]
+    run_id = environment["ci_run_id"]
+    machine = environment["machine"]
+    if expected <= 0 or not re.fullmatch(r"[0-9a-f]{40}", sha) or not run_id.isdecimal():
+        raise ValueError(f"Invalid traffic run identity in {folder}")
+
+    groups = defaultdict(dict)
+    with csv_path.open(newline="") as source:
+        for row in csv.DictReader(source):
+            rate = int(row["offered_rate"])
+            trial = int(row["run"])
+            group = groups[rate, canonical_variant(row["variant"])]
+            if row["git_sha"] != sha or not 1 <= trial <= expected or trial in group or rate <= 0:
+                raise ValueError(f"Invalid or duplicate traffic trial in {folder}")
+            group[trial] = row
+
+    tiers = defaultdict(dict)
+    for (rate, variant), trials in groups.items():
+        rows = list(trials.values())
+        delivery = [row for row in rows if row["valid"] == row["generator_qualified"] == "1"]
+        tiers[rate][variant] = {
+            "total": len(rows),
+            "valid": len(delivery),
+            "generator_qualified": sum(row["generator_qualified"] == "1" for row in rows),
+            "met": sum(row["slo_met"] == "1" for row in delivery),
+            "failed": sum(int(row["failed_responses"]) for row in rows),
+            "dropped": sum(int(row["dropped_iterations"]) for row in rows),
+            "on_time_rps": median(float(row["within_budget_rps"]) for row in rows),
+            "stats": stats(delivery) if delivery else None,
+            "operations": operation_stats(delivery),
+        }
+    return {
+        "date": datetime.strptime(folder.name.partition("-")[0], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc).isoformat(),
+        "folder": quote(folder.relative_to(checkout).as_posix()),
+        "revision": revision,
+        "sha": sha,
+        "ci_run_id": run_id,
+        "machine": machine,
+        "host": environment.get("cpu_model"),
+        "duration": environment.get("target_duration_seconds"),
+        "expected": expected,
+        "target": environment["traffic_target"],
+        "tiers": dict(tiers),
+    }
 
 
 def main(destination, ci_checkout):
@@ -208,9 +277,13 @@ def main(destination, ci_checkout):
     repo = os.environ.get("GITHUB_REPOSITORY", "christian-draeger/kotlin-native-perf-lab")
     revision = git(ROOT, "rev-parse", "HEAD").strip()
     runs = list(tracked_runs(ROOT, revision, notes))
+    traffic_runs = []
     if ci_checkout:
         ci_revision = git(ci_checkout, "rev-parse", "HEAD").strip()
         runs.extend(tracked_runs(ci_checkout, ci_revision, {}))
+        traffic_runs = [run for csv_path in tracked_reports(ci_checkout, "traffic.csv")
+                        if (run := read_traffic_run(csv_path, ci_checkout, ci_revision)) is not None]
+    traffic_runs.sort(key=lambda run: run["date"], reverse=True)
     runs.sort(key=lambda run: run["date"], reverse=True)
     integration_runs = [run for run in runs if run["integration"]]
     comparison_runs = [run for run in runs if not run["integration"]]
@@ -221,6 +294,7 @@ def main(destination, ci_checkout):
         "history": measurement_history(comparison_runs, variant="ktserve"),
         "framework_history": measurement_history(comparison_runs),
         "integration_runs": integration_runs,
+        "traffic_runs": traffic_runs,
     }
     destination.mkdir(parents=True, exist_ok=True)
     for asset in ("index.html", "styles.css", "app.js"):

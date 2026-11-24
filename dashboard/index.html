@@ -33,7 +33,7 @@
           <h1 id="hero-title">HTTP serving,<br><em>built in Kotlin.</em></h1>
           <p class="hero-description">ktServe gives Kotlin apps an HTTP server with a small routing API. It also plugs in beneath Ktor and Spring Boot WebFlux as a server engine.</p>
           <div class="hero-actions">
-            <a class="button button-primary" href="#overview">Explore benchmarks <span aria-hidden="true">↓</span></a>
+            <a class="button button-primary" href="#traffic">Compare traffic levels <span aria-hidden="true">↓</span></a>
             <a class="button button-secondary" href="https://github.com/christian-draeger/kotlin-native-perf-lab#try-ktserve">Get started <span aria-hidden="true">↗</span></a>
           </div>
         </div>
@@ -48,6 +48,42 @@
     }
 }</code></pre>
             <div class="code-window-footer"><span><i aria-hidden="true"></i>GET /health</span><span class="code-response">200 OK</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="traffic-section" id="traffic" aria-labelledby="traffic-title">
+      <div class="shell">
+        <div class="traffic-heading">
+          <div class="section-heading">
+            <h2 id="traffic-title">Performance by traffic level.</h2>
+            <p>Find the tested loads where ktServe and Axum both meet the response target, and compare what each uses to get there.</p>
+          </div>
+          <a class="text-link" href="#overview">Explore all benchmarks <span aria-hidden="true">↓</span></a>
+        </div>
+        <p class="notice" id="traffic-empty">Traffic measurements appear here when a paired run is published.</p>
+        <noscript><p class="history-context"><a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/blob/main/results/preview-scorecard.md">Read the benchmark scorecard on GitHub ↗</a></p></noscript>
+        <div id="traffic-data" hidden>
+          <div class="traffic-controls">
+            <label>Linux architecture <select id="traffic-platform"></select></label>
+            <label id="traffic-workers-control" hidden>ktServe configuration <select id="traffic-workers"></select></label>
+            <p id="traffic-range" class="traffic-range" role="status"></p>
+          </div>
+          <div class="traffic-levels" id="traffic-levels" role="group" aria-label="Offered requests per second"></div>
+          <div class="traffic-panel" aria-live="polite">
+            <h3 id="traffic-verdict"></h3>
+            <p id="traffic-verdict-note" class="history-context"></p>
+            <div class="traffic-comparison" id="traffic-comparison"></div>
+            <details id="traffic-operations" hidden>
+              <summary>Response times by operation</summary>
+              <div class="table-scroll"><table aria-label="Median trial p99 in milliseconds by operation">
+                <thead><tr><th>Operation</th><th>ktServe p99</th><th>Axum p99</th></tr></thead>
+                <tbody id="traffic-operation-rows"></tbody>
+              </table></div>
+            </details>
+            <p id="traffic-method" class="history-context"></p>
+            <div class="source-links" id="traffic-links"></div>
           </div>
         </div>
       </div>

@@ -13,6 +13,45 @@ spec.loader.exec_module(dashboard)
 
 
 class DashboardTest(unittest.TestCase):
+    def test_traffic_keeps_unqualified_load_out_of_comparable_metrics(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            report = root / "results/20261124T221558Z-x86_64-mix"
+            report.mkdir(parents=True)
+            sha = "a" * 40
+            (report / "environment.txt").write_text(
+                "integration_experiment=traffic-capacity\nbenchmark_source=github-hosted-actions\n"
+                f"git_worktree=clean\ngit_sha={sha}\nci_run_id=1234\nmachine=x86_64\n"
+                "repetitions=2\ntraffic_target=API p99 within 20 ms\n"
+            )
+            path = report / "traffic.csv"
+            base = {
+                "variant": "ktserve", "offered_rate": 3200, "run": 1, "git_sha": sha,
+                "valid": 1, "generator_qualified": 1, "slo_met": 1, "within_budget_rps": 3150,
+                "failed_responses": 0, "dropped_iterations": 0, "rps": 3200,
+                "p50_us": 100, "p95_us": 150, "p99_us": 200,
+                "cpu_seconds_per_million_requests": 123, "peak_rss_kib": 21000,
+            }
+            invalid = {**base, "run": 2, "generator_qualified": 0, "slo_met": 0,
+                       "dropped_iterations": 300, "within_budget_rps": 2800, "rps": 9000}
+            with path.open("w", newline="") as output:
+                writer = csv.DictWriter(output, fieldnames=base)
+                writer.writeheader()
+                writer.writerows([base, invalid, {**base, "variant": "rust-axum", "slo_met": 0}])
+            run = dashboard.read_traffic_run(path, root, "archived-data")
+            self.assertEqual(run["expected"], 2)
+            group = run["tiers"][3200]["ktserve"]
+            self.assertEqual((group["total"], group["valid"], group["generator_qualified"], group["met"]), (2, 1, 1, 1))
+            self.assertEqual(group["dropped"], 300)
+            self.assertEqual(group["on_time_rps"], 2975)
+            self.assertEqual(group["stats"]["rps"]["median"], 3200)
+            self.assertEqual(run["tiers"][3200]["rust-axum"]["met"], 0)
+
+            with path.open("a", newline="") as output:
+                csv.DictWriter(output, fieldnames=base).writerow(base)
+            with self.assertRaisesRegex(ValueError, "duplicate traffic trial"):
+                dashboard.read_traffic_run(path, root, "archived-data")
+
     def test_history_uses_valid_ktserve_trials_and_keeps_workloads_apart(self):
         parameters = {name: [value] for name, value in zip(dashboard.PARAMETERS, (16, 2, 10, 5))}
         ktserve = {
