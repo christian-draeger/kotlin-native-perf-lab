@@ -1,0 +1,108 @@
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+kotlin_version=2.4.21
+machine=aarch64
+kernel=7.0.0-1017-azure
+git_sha=31090ba61864d6108cfdf205cfc2cdc4aa407cad
+git_worktree=clean
+integration_family=application-mix
+benchmark_suite=integration
+load_generator=local k6 on loopback with disjoint CPU affinity
+load_tool=k6
+load_tool_version=k6 v2.4.0 (commit/dd9395906d, go1.26.11, linux/arm64)
+server_cpus=0,1
+load_cpus=2,3
+request_protocol=HTTP/1.1
+workload_model=constant HTTP arrival rate, one request per iteration
+workloads=json:30%,wait:10%,catalog:25%,upload-1k:10%,upload-24k:5%,upload-64k:10%,download:10%
+upload_sizes_bytes=1024,24576,65536
+offered_rates=200,800,3200,6400
+max_vus_per_scenario=96
+precondition_seconds=10
+wait_delay_ms=20
+application_mix_profile=capacity
+integration_experiment=traffic-capacity
+traffic_target=Zero failed or dropped arrivals and p99 within 20 ms for API routes, 50 ms for wait, and 100 ms for download
+traffic_budgets_ms={"json":20,"catalog":20,"upload_1k":20,"upload_24k":20,"upload_64k":20,"wait":50,"download":100}
+generator_cpu_fraction_limit=0.8
+calibration_target=loopback Go stub with matched payloads and fixture waits
+capacity_warmup_max_rate=800
+payload_validation=exact UTF-8 response bytes
+ktserve_worker_counts=1,2
+ktserve_socket_mode=level-triggered epoll with poll application wake-up and default TCP_NODELAY
+ktserve_two_worker_listener=shared
+tokio_worker_threads=2
+download_size_bytes=32771
+download_inter_chunk_delay_ms=50
+repetitions=3
+warmup_seconds=10
+target_duration_seconds=10
+engine_ktserve=ktserve
+engine_ktserve-workers-2=ktserve-workers-2
+engine_rust-axum=rust-axum
+engine_ktor-jvm=ktor-jvm
+openjdk version "21.0.13.1" 2026-11-17 LTS
+OpenJDK Runtime Environment Temurin-21.0.13.1+2 (build 21.0.13.1+2-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13.1+2 (build 21.0.13.1+2-LTS, mixed mode, sharing)
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+------------------------------------------------------------
+Gradle 9.7.0
+------------------------------------------------------------
+
+Build time:    2026-08-06 14:07:35 UTC
+Revision:      3defbfc59d757b873d787b2261de5c7f8a00970a
+
+Kotlin:        2.4.0
+Groovy:        4.0.32
+Ant:           Apache Ant(TM) version 1.10.17 compiled on April 6 2026
+Launcher JVM:  21.0.13.1 (Eclipse Adoptium 21.0.13.1+2-LTS)
+Daemon JVM:    /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-100000002.0.LTS/arm64 (no Daemon JVM specified, using current Java home)
+OS:            Linux 7.0.0-1017-azure aarch64
+go version go1.27.4 linux/arm64
+Architecture:                            aarch64
+CPU op-mode(s):                          32-bit, 64-bit
+Byte Order:                              Little Endian
+CPU(s):                                  4
+On-line CPU(s) list:                     0-3
+Vendor ID:                               ARM
+Model name:                              Neoverse-N2
+Model:                                   0
+Thread(s) per core:                      1
+Core(s) per socket:                      4
+Socket(s):                               1
+Stepping:                                r0p0
+BogoMIPS:                                2000.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 sm3 sm4 asimddp sha512 sve asimdfhm uscat ilrcpc flagm sb paca pacg dcpodp sve2 sveaes svebitperm svesha3 svesm4 flagm2 frint svei8mm svebf16 i8mm bf16
+L1d cache:                               256 KiB (4 instances)
+L1i cache:                               256 KiB (4 instances)
+L2 cache:                                4 MiB (4 instances)
+L3 cache:                                128 MiB (1 instance)
+NUMA node(s):                            1
+NUMA node0 CPU(s):                       0-3
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Mitigation; Speculative Store Bypass disabled via prctl
+Vulnerability Spectre v1:                Mitigation; __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; CSV2, BHB
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+benchmark_source=github-hosted-actions
+ci_run_id=45504842708
+ci_run_attempt=1
+benchmark_outcome=failure
+runner_image=ubuntu24-arm64
+runner_image_version=20261116.188.1
+runner_label=ubuntu-24.04-arm
+native_build_arch=x86_64
+native_build_run_id=45504842708

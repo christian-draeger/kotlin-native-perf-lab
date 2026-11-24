@@ -1,0 +1,2 @@
+time="2026-11-24T23:17:07Z" level=warning msg="Insufficient VUs, reached 96 active VUs and cannot initialize more" executor=constant-arrival-rate scenario=json
+perflab_load elapsed_s=10.57 user_s=9.71 system_s=1.06 peak_rss_kib=593152
