@@ -1,9 +1,11 @@
 package codes.draeger
 
+import codes.draeger.benchmark.upstream.UpstreamClient
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.install
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.response.respond
@@ -27,11 +29,17 @@ private data class CatalogItem(val sku: String, val name: String, val descriptio
 @Serializable
 private data class Stock(val available: Boolean, val units: Int)
 
-fun Application.configureApi(suite: String?) {
+fun Application.configureApi(suite: String?, upstreamPort: Int? = null) {
+    val upstream = upstreamPort?.let(::UpstreamClient)
+    if (upstream != null) monitor.subscribe(ApplicationStopped) { upstream.close() }
     install(ContentNegotiation) {
         json(Json { encodeDefaults = true })
     }
     routing {
+        if (upstream != null) get("/upstream/{scenario}") {
+            val result = upstream.request(requireNotNull(call.parameters["scenario"]))
+            call.respondText(result.message, ContentType.Text.Plain, HttpStatusCode.fromValue(result.status))
+        }
         get("/health") {
             call.respondText("ok", ContentType.Text.Plain)
         }

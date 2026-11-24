@@ -28,10 +28,12 @@ kotlin {
     nativeTarget.binaries.executable { entryPoint = "codes.draeger.main" }
 
     sourceSets {
+        commonMain.get().kotlin.srcDir("../../components/ktserve/benchmarks/upstream/kotlin")
         commonMain.dependencies {
             implementation("io.ktor:ktor-server-core:$ktorVersion")
             implementation("io.ktor:ktor-server-content-negotiation:$ktorVersion")
             implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
+            implementation("io.ktor:ktor-client-cio:$ktorVersion")
         }
         jvmMain.dependencies {
             implementation("io.ktor:ktor-server-cio:$ktorVersion")

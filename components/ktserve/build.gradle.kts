@@ -75,6 +75,18 @@ kotlin {
             entryPoint = "codes.draeger.ktserve.fixture.main"
         }
         if (targetOs == "linux") {
+            val upstreamProbe = native.compilations.create("upstreamProbe") {
+                associateWith(native.compilations.getByName("main"))
+                defaultSourceSet.kotlin.srcDir("benchmarks/upstream/kotlin")
+                defaultSourceSet.dependencies {
+                    implementation("io.ktor:ktor-client-cio:3.6.1")
+                }
+            }
+            native.binaries.executable("upstreamProbe", listOf(RELEASE)) {
+                compilation = upstreamProbe
+                baseName = "ktserve-upstream-probe"
+                entryPoint = "codes.draeger.ktserve.example.runUpstreamProbe"
+            }
             val jsonProbe = native.compilations.create("jsonProbe") {
                 associateWith(native.compilations.getByName("main"))
                 defaultSourceSet.dependencies {
