@@ -1,0 +1,148 @@
+name: ktServe integration benchmarks
+
+on:
+  pull_request:
+    paths:
+      - 'components/nativeserve/benchmarks/**'
+      - 'components/nativeserve/integrations/**'
+      - 'components/nativeserve/src/**'
+      - 'scripts/benchmark-integrations.py'
+      - 'scripts/parse_wrk.py'
+      - 'scripts/proc_metrics.py'
+      - 'scripts/wrk-stats.lua'
+      - '.github/workflows/integration-benchmarks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arm_build:
+    name: Cross-link the Kotlin/Native Ktor app for ARM64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Link the release app
+        run: |
+          project=components/nativeserve/integrations/ktor
+          binary="$project/build/bin/native/releaseExecutable/nativeserve-ktor-example.kexe"
+          bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
+          readelf -h "$binary" | grep -E 'Machine:[[:space:]]+AArch64$'
+          install -D "$binary" "$RUNNER_TEMP/integration-arm/ktor-example"
+          gradle --version > "$RUNNER_TEMP/integration-arm/gradle-version.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        id: upload
+        with:
+          name: ktserve-integration-arm-build-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/integration-arm
+          if-no-files-found: error
+
+  benchmark:
+    name: ${{ matrix.family }} (${{ matrix.arch }})
+    needs: arm_build
+    strategy:
+      fail-fast: false
+      matrix:
+        family: [ktor-native, ktor-jvm, spring-webflux]
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      FAMILY: ${{ matrix.family }}
+      EXPECTED_ARCH: ${{ matrix.arch }}
+      RUNNER_LABEL: ${{ matrix.runner }}
+      LC_ALL: C
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Prepare the output directory
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          result="$RUNNER_TEMP/integration-results/$(date -u +%Y%m%dT%H%M%SZ)-$FAMILY-$EXPECTED_ARCH"
+          mkdir -p "$result"
+          printf 'RESULT_DIR=%s\n' "$result" >> "$GITHUB_ENV"
+          {
+            printf 'benchmark_source=github-hosted-actions\nrunner_label=%s\n' "$RUNNER_LABEL"
+            printf 'ci_run_id=%s\nci_run_attempt=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            grep '^PRETTY_NAME=' /etc/os-release
+            printf 'kotlin_version=%s\n' "$(sed -n 's/.*kotlin("multiplatform") version "\([^"]*\)".*/\1/p' components/nativeserve/integrations/ktor/build.gradle.kts)"
+          } > "$result/environment.txt"
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        if: matrix.family != 'ktor-native' || matrix.arch == 'x86_64'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        if: matrix.family != 'ktor-native' || matrix.arch == 'x86_64'
+        with:
+          gradle-version: '9.7.0'
+      - name: Build the JVM application
+        if: matrix.family != 'ktor-native'
+        run: |
+          app="ktserve-benchmark-$FAMILY"
+          project="components/nativeserve/benchmarks/$FAMILY"
+          bash scripts/ci-gradle.sh -p "$project" installDist
+          printf 'EXECUTABLE=%s\n' "$project/build/install/$app/bin/$app" >> "$GITHUB_ENV"
+          gradle --version > "$RESULT_DIR/gradle-version.txt"
+      - name: Link the x86_64 app
+        if: matrix.family == 'ktor-native' && matrix.arch == 'x86_64'
+        run: |
+          project=components/nativeserve/integrations/ktor
+          bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch=x86_64 linkReleaseExecutableNative
+          printf 'EXECUTABLE=%s\n' "$project/build/bin/native/releaseExecutable/nativeserve-ktor-example.kexe" >> "$GITHUB_ENV"
+          gradle --version > "$RESULT_DIR/gradle-version.txt"
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.family == 'ktor-native' && matrix.arch == 'aarch64'
+        with:
+          artifact-ids: ${{ needs.arm_build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/integration-arm
+      - name: Prepare the ARM64 app
+        if: matrix.family == 'ktor-native' && matrix.arch == 'aarch64'
+        run: |
+          chmod +x "$RUNNER_TEMP/integration-arm/ktor-example"
+          printf 'EXECUTABLE=%s\n' "$RUNNER_TEMP/integration-arm/ktor-example" >> "$GITHUB_ENV"
+          cp "$RUNNER_TEMP/integration-arm/gradle-version.txt" "$RESULT_DIR/"
+      - name: Check response parity
+        if: github.event_name == 'pull_request'
+        id: smoke
+        run: python3 scripts/benchmark-integrations.py --family "$FAMILY" --executable "$EXECUTABLE" --output "$RESULT_DIR" --smoke-only
+      - name: Install the load generator
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk time
+      - name: Measure the engines in isolation
+        if: github.event_name == 'workflow_dispatch'
+        id: measure
+        run: python3 scripts/benchmark-integrations.py --family "$FAMILY" --executable "$EXECUTABLE" --output "$RESULT_DIR"
+      - name: Record outcome
+        if: ${{ !cancelled() && env.RESULT_DIR != '' }}
+        env:
+          BENCHMARK_OUTCOME: ${{ github.event_name == 'pull_request' && steps.smoke.outcome || steps.measure.outcome }}
+        run: |
+          if [[ "$BENCHMARK_OUTCOME" != success ]]; then BENCHMARK_OUTCOME=failure; fi
+          printf 'benchmark_outcome=%s\n' "$BENCHMARK_OUTCOME" >> "$RESULT_DIR/environment.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() && env.RESULT_DIR != '' }}
+        with:
+          name: integration-benchmark-${{ matrix.family }}-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/integration-results
+          if-no-files-found: error

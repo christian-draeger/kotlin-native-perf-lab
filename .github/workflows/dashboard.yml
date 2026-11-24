@@ -14,6 +14,10 @@ on:
       - 'dashboard/**'
       - 'scripts/**'
       - '.github/workflows/dashboard.yml'
+  workflow_run:
+    workflows: ['ktServe integration benchmarks']
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       run_benchmark:
@@ -26,7 +30,7 @@ on:
         options: ['3', '5']
         default: '5'
       suite:
-        description: Complete ranking or quicker NativeServe, Ktor and Axum feedback
+        description: Complete ranking or quicker ktServe, Ktor and Axum feedback
         type: choice
         options: [expanded, core, workers]
         default: expanded
@@ -38,7 +42,7 @@ on:
         type: boolean
         default: false
       benchmark_label:
-        description: Optional feature or change label shown in the NativeServe history
+        description: Optional feature or change label shown in ktServe history
         type: string
 
 permissions:
@@ -104,7 +108,7 @@ jobs:
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
           sudo apt-get update -qq
-          sudo apt-get install -y wrk
+          sudo apt-get install -y wrk time
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
       - name: Check the ARM64 cross-build
         if: matrix.arch == 'aarch64'
@@ -230,18 +234,34 @@ jobs:
 
   store:
     needs: benchmark
-    if: ${{ !cancelled() && inputs.suite != 'workers' && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure') }}
+    if: >-
+      ${{ !cancelled() && (
+        (github.event_name == 'workflow_dispatch' && inputs.suite != 'workers'
+          && (needs.benchmark.result == 'success' || needs.benchmark.result == 'failure'))
+        || (github.event_name == 'workflow_run'
+          && github.event.workflow_run.event == 'workflow_dispatch'
+          && (github.event.workflow_run.conclusion == 'success' || github.event.workflow_run.conclusion == 'failure')
+          && github.event.workflow_run.head_branch == 'main'
+          && github.event.workflow_run.head_repository.full_name == github.repository)
+      ) }}
     runs-on: ubuntu-24.04
     permissions:
+      actions: read
       contents: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          pattern: linux-benchmark-*-${{ github.run_attempt }}
+          pattern: ${{ github.event_name == 'workflow_run' && format('integration-benchmark-*-{0}', github.event.workflow_run.run_attempt) || format('linux-benchmark-*-{0}', github.run_attempt) }}
+          run-id: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.run_id }}
+          github-token: ${{ github.token }}
           merge-multiple: true
           path: ${{ runner.temp }}/raw-benchmark
       - name: Commit the raw results to benchmark-data
+        env:
+          SOURCE_RUN: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || github.run_id }}
+          SOURCE_ATTEMPT: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.run_attempt || github.run_attempt }}
+          SOURCE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
         run: |
           if git ls-remote --exit-code origin refs/heads/benchmark-data >/dev/null; then
             git fetch --no-tags --depth=1 origin refs/heads/benchmark-data
@@ -251,9 +271,30 @@ jobs:
             git switch --orphan benchmark-data
           fi
           mkdir -p results
-          for directory in "$RUNNER_TEMP"/raw-benchmark/*; do
+          shopt -s nullglob
+          directories=("$RUNNER_TEMP"/raw-benchmark/*)
+          test "${#directories[@]}" -gt 0
+          series_count=0
+          for directory in "${directories[@]}"; do
             series="${directory##*/}"
-            [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users)$ ]]
+            if [[ "$GITHUB_EVENT_NAME" == workflow_run ]]; then
+              [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(ktor-native|ktor-jvm|spring-webflux)-(x86_64|aarch64)$ ]]
+              if [[ ! -s "$directory/results.csv" ]]; then
+                echo "No measured trials in $series. See the source workflow logs."
+                continue
+              fi
+              metadata="$directory/environment.txt"
+              grep -Fxq "integration_family=${BASH_REMATCH[1]}" "$metadata"
+              grep -Fxq "machine=${BASH_REMATCH[2]}" "$metadata"
+              grep -Fxq 'benchmark_suite=integration' "$metadata"
+              grep -Fxq 'benchmark_source=github-hosted-actions' "$metadata"
+              grep -Fxq "git_sha=$SOURCE_SHA" "$metadata"
+              grep -Fxq "ci_run_id=$SOURCE_RUN" "$metadata"
+              grep -Fxq "ci_run_attempt=$SOURCE_ATTEMPT" "$metadata"
+            else
+              [[ "$series" =~ ^[0-9]{8}T[0-9]{6}Z-(x86_64|aarch64)-(health|json|users)$ ]]
+            fi
+            series_count=$((series_count + 1))
             if [[ -e "results/$series" ]]; then
               diff -r -- "$directory" "results/$series"
               continue
@@ -261,15 +302,16 @@ jobs:
             cp -R "$directory" "results/$series"
             git add -f -- "results/$series"
           done
+          test "$series_count" -gt 0
           if ! git diff --cached --quiet; then
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-              commit -m "Record Linux CI benchmark run $GITHUB_RUN_ID"
+              commit -m "Record Linux CI benchmark run $SOURCE_RUN"
             git push origin HEAD:refs/heads/benchmark-data
           fi
 
   build:
     needs: [benchmark, store]
-    if: ${{ !cancelled() && (needs.benchmark.result == 'skipped' || needs.store.result == 'success') }}
+    if: ${{ !cancelled() && (needs.store.result == 'success' || (github.event_name != 'workflow_run' && needs.benchmark.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

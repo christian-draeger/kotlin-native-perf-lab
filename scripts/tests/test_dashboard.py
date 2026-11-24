@@ -120,3 +120,9 @@ class DashboardTest(unittest.TestCase):
             self.assertNotEqual(health_series["id"], arm_series["id"])
             self.assertEqual(health_series["note"]["label"], "GitHub Actions · Linux ARM64")
             self.assertEqual(health_series["suite"], "core")
+
+            with (health / "environment.txt").open("a") as output:
+                output.write("benchmark_suite=integration\nintegration_family=ktor-jvm\n")
+            integration = dashboard.read_run(health / "results.csv", {}, root, "archive-revision")
+            self.assertEqual(integration["integration"], "ktor-jvm")
+            self.assertEqual(integration["note"]["label"], "Ktor JVM · Linux ARM64")
