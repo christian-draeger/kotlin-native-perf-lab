@@ -122,6 +122,7 @@ def test_limits(port, pid):
 
 
 def test_streams(port, server):
+    assert fetch(port, "/chunks") == (200, b"s" * (32 * 1024 + 3))
     with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
         conn.sendall(request("/stream") + request("/health"))
         with conn.makefile("rb") as response:

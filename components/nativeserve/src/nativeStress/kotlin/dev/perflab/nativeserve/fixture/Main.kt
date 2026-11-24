@@ -33,6 +33,7 @@ fun main(args: Array<String>) {
             var remaining = bytes
 
             override fun read(buffer: ByteArray, limit: Int): Int {
+                if (remaining == 0) return -1
                 val count = minOf(remaining, limit)
                 buffer.fill('s'.code.toByte(), toIndex = count)
                 remaining -= count
@@ -53,6 +54,7 @@ fun main(args: Array<String>) {
         get("/large-count") { text(largeRequests.toString()) }
         get("/too-large") { text(largeBody + "x") }
         get("/stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(STREAM_BYTES)) }
+        get("/chunks") { streamResponse("application/octet-stream", source(32 * 1024 + 3)) }
         get("/truncated-stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(1)) }
         get("/open-streams") { text(openStreams.toString()) }
         get("/stop") {

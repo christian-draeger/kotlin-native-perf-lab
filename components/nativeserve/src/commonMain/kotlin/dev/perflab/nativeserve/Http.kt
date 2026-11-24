@@ -29,16 +29,16 @@ class Response internal constructor(
 /** A response body pulled synchronously on the connection's I/O loop. */
 fun interface ResponseSource : AutoCloseable {
     /**
-     * Write 1 to [limit] bytes from index zero and return the count. A nonpositive
-     * count before the declared length is sent ends the connection. Return promptly
-     * and release any reference to [buffer] before returning.
+     * Write 1 to [limit] bytes from index zero and return the count, or return -1
+     * at end of input. An early EOF on a known-length response ends the connection.
+     * Return promptly and release any reference to [buffer] before returning.
      */
     fun read(buffer: ByteArray, limit: Int): Int
 
     override fun close() {}
 }
 
-internal class ResponseStream(val length: Int, val source: ResponseSource)
+internal class ResponseStream(val length: Int?, val source: ResponseSource)
 
 /**
  * Stream a body with a known byte length. Pass a fresh [source] per response.
@@ -47,6 +47,14 @@ internal class ResponseStream(val length: Int, val source: ResponseSource)
  */
 fun streamResponse(length: Int, contentType: String, source: ResponseSource, status: Int = 200): Response {
     require(length >= 0) { "Response length must be nonnegative" }
+    return sourceResponse(length, contentType, source, status)
+}
+
+/** Stream an HTTP/1.1 response up to the configured size limit, using chunked framing. */
+fun streamResponse(contentType: String, source: ResponseSource, status: Int = 200): Response =
+    sourceResponse(null, contentType, source, status)
+
+private fun sourceResponse(length: Int?, contentType: String, source: ResponseSource, status: Int): Response {
     require(status != 204 && status != 205 && status != 304) { "This response status forbids content" }
     require(contentType.isNotBlank() && contentType.all { it in ' '..'~' }) { "Invalid response Content-Type" }
     return Response(status, contentType, ByteArray(0), ResponseStream(length, source))
@@ -91,7 +99,10 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
         append(version).append(' ').append(status).append(' ').append(reason).append("\r\n")
         contentType?.let { append("Content-Type: ").append(it).append("\r\n") }
         if (status == 405) append("Allow: GET\r\n")
-        if (status != 204 && status != 304) append("Content-Length: ").append(length).append("\r\n")
+        if (status != 204 && status != 304) {
+            if (length < 0) append("Transfer-Encoding: chunked\r\n")
+            else append("Content-Length: ").append(length).append("\r\n")
+        }
         append(if (keepAlive) "Connection: keep-alive\r\n" else "Connection: close\r\n")
         append("\r\n")
     }.encodeToByteArray()
