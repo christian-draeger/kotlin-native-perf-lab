@@ -13,11 +13,12 @@ class ServerLimits(
     val drainMillis: Long = 2_000,
     val requestBodyBytes: Int = 64 * 1024,
     val requestBodyMillis: Long = 30_000,
+    val handlerMillis: Long = 30_000,
 ) {
     init {
         require(connections > 0 && headerBytes >= 64 && responseBodyBytes > 0)
         require(idleMillis > 0 && requestHeadMillis > 0 && drainMillis > 0)
-        require(requestBodyBytes >= 0 && requestBodyMillis > 0)
+        require(requestBodyBytes >= 0 && requestBodyMillis > 0 && handlerMillis > 0)
     }
 }
 
@@ -31,6 +32,13 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         private set
     private var incoming: IncomingBody? = null
     private var stream: PendingStream? = null
+    private var handler: PendingHandler? = null
+    val awaitingHandler: Boolean get() = handler != null
+    var readPending = false
+    var writePending = false
+    private var monitor: ByteArray? = null
+    private var monitorPending = false
+    private var draining = false
     private var closeAfterWrite = false
     private var lastActivity = connectedAt
     private var headStarted: Long? = null
@@ -38,21 +46,48 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     fun expired(now: Long): Boolean =
         now - lastActivity >= limits.idleMillis ||
             headStarted?.let { now - it >= limits.requestHeadMillis } == true ||
-            incoming?.let { now - it.started >= limits.requestBodyMillis } == true
+            incoming?.let { now - it.started >= limits.requestBodyMillis } == true ||
+            handler?.let { now - it.started >= limits.handlerMillis } == true
 
     fun beginDrain(): Boolean {
+        draining = true
         closeAfterWrite = true
-        return output != null
+        return output != null || awaitingHandler
     }
 
     fun received(count: Int, now: Long) {
         lastActivity = now
-        if (input.size == 0 && incoming == null) headStarted = now
+        readPending = false
+        if (monitorPending) {
+            monitorPending = false
+            checkNotNull(monitor).copyInto(input.bytes, input.size, endIndex = count)
+        }
+        if (input.size == 0 && incoming == null && !awaitingHandler && output == null) headStarted = now
         input.append(count)
     }
 
-    fun prepareResponse(routes: Routes, now: Long): Boolean {
+    // While the handler runs, monitor EOF without leasing a range used by the parser.
+    fun monitorBuffer(): ByteArray {
+        monitorPending = true
+        return monitor ?: ByteArray(minOf(4096, limits.headerBytes)).also { monitor = it }
+    }
+
+    fun finishHandler(now: Long): Boolean {
+        val pending = handler ?: return false
+        val response = pending.call.takeResponse() ?: return false
+        handler = null
+        lastActivity = now
+        queue(response, pending.version, pending.keepAlive)
+        return true
+    }
+
+    fun prepareResponse(
+        routes: Routes,
+        now: Long,
+        start: ((suspend () -> Response) -> SuspendedGet)? = null,
+    ): Boolean {
         if (output != null) return true
+        if (awaitingHandler) return false
         incoming?.let { return consumeBody(it) }
         when (val head = input.parse()) {
             ParsedHead.Incomplete -> {
@@ -68,7 +103,11 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
                 input.consume(head.consumed)
                 headStarted = null
                 if (head.request.method == "POST") return preparePost(routes, head, now)
-                queue(routes.respond(head.request), head.version, head.keepAlive)
+                val launch: ((suspend () -> Response) -> Unit)? = start?.let {
+                    { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now) }
+                }
+                val response = routes.respond(head.request, launch) ?: return false
+                queue(response, head.version, head.keepAlive)
             }
         }
         return true
@@ -172,6 +211,8 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     }
 
     fun close() {
+        handler?.call?.cancel()
+        handler = null
         closeRequest()
         closeResponse()
     }
@@ -191,19 +232,27 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
             setOutput(emptyResponse(500).encode(version, keepAlive = false))
             return
         }
-        closeAfterWrite = !keepAlive
+        val persistent = keepAlive && !draining
+        closeAfterWrite = !persistent
         if (stream == null) {
-            setOutput(response.encode(version, keepAlive))
+            setOutput(response.encode(version, persistent))
         } else {
             val length = stream.length
             this.stream = PendingStream(stream.source, length ?: limits.responseBodyBytes, chunked)
-            setOutput(response.encodeHead(version, keepAlive, length ?: -1))
+            setOutput(response.encodeHead(version, persistent, length ?: -1))
         }
     }
 
     private class IncomingBody(
         val sink: RequestBodySink,
         val decoder: RequestBodyDecoder,
+        val version: String,
+        val keepAlive: Boolean,
+        val started: Long,
+    )
+
+    private class PendingHandler(
+        val call: SuspendedGet,
         val version: String,
         val keepAlive: Boolean,
         val started: Long,
@@ -225,7 +274,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     }
 }
 
-private fun AutoCloseable.release() {
+internal fun AutoCloseable.release() {
     try {
         close()
     } catch (_: Exception) {

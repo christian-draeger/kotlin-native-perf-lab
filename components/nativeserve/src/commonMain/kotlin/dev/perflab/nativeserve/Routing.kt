@@ -1,11 +1,22 @@
 package dev.perflab.nativeserve
 
 class Routes {
-    private val gets = MethodRoutes<(Request) -> Response>()
+    private val gets = MethodRoutes<GetHandler>()
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
+    internal var hasSuspendingGets = false
+        private set
 
     fun get(path: String, handler: (Request) -> Response) {
-        gets.add(path, handler)
+        gets.add(path, GetHandler.Immediate(handler))
+    }
+
+    /**
+     * Run a suspending HTTP/1.x GET outside the I/O loop. Handlers can run concurrently.
+     * A disconnect, timeout, or shutdown cancels the handler's coroutine.
+     */
+    fun getSuspending(path: String, handler: suspend (Request) -> Response) {
+        gets.add(path, GetHandler.Suspending(handler))
+        hasSuspendingGets = true
     }
 
     /** Open one body sink per POST. HTTP/1.1 accepts chunked bodies. */
@@ -13,21 +24,37 @@ class Routes {
         posts.add(path, handler)
     }
 
-    internal fun respond(request: Request): Response = try {
-        if (request.method == "GET") {
-            gets.resolve(request) { handler, matched -> handler(matched) }
-                ?: if (posts.matches(request)) methodNotAllowed("POST") else emptyResponse(404)
-        } else {
-            val get = gets.matches(request)
-            val post = posts.matches(request)
-            when {
-                get && post -> methodNotAllowed("GET, POST")
-                post -> methodNotAllowed("POST")
-                else -> emptyResponse(405)
+    internal fun respond(request: Request): Response = checkNotNull(respond(request, null))
+
+    internal fun respond(
+        request: Request,
+        start: ((suspend () -> Response) -> Unit)?,
+    ): Response? {
+        return try {
+            if (request.method == "GET") {
+                gets.resolve(request) { handler, matched ->
+                    when (handler) {
+                        is GetHandler.Immediate -> return handler.run(matched)
+                        is GetHandler.Suspending -> {
+                            if (start == null) return emptyResponse(501)
+                            start { handler.run(matched) }
+                            return null
+                        }
+                    }
+                }
+                if (posts.matches(request)) methodNotAllowed("POST") else emptyResponse(404)
+            } else {
+                val get = gets.matches(request)
+                val post = posts.matches(request)
+                when {
+                    get && post -> methodNotAllowed("GET, POST")
+                    post -> methodNotAllowed("POST")
+                    else -> emptyResponse(405)
+                }
             }
+        } catch (_: Exception) {
+            emptyResponse(500)
         }
-    } catch (_: Exception) {
-        emptyResponse(500)
     }
 
     internal fun openPost(request: Request): PostBody = try {
@@ -37,6 +64,11 @@ class Routes {
     } catch (_: Exception) {
         PostBody.Rejected(emptyResponse(500))
     }
+}
+
+private sealed interface GetHandler {
+    class Immediate(val run: (Request) -> Response) : GetHandler
+    class Suspending(val run: suspend (Request) -> Response) : GetHandler
 }
 
 internal sealed interface PostBody {

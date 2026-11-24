@@ -6,6 +6,10 @@ import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.Submission
 import dev.perflab.nativeserve.transport.TransportCompletions
 import dev.perflab.nativeserve.transport.TransportFailure
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlin.time.TimeSource
 
 internal class HttpServer(
@@ -14,6 +18,10 @@ internal class HttpServer(
     private val limits: ServerLimits,
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
+    private val suspended = mutableSetOf<ConnectionId>()
+    private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+    private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
+        if (routes.hasSuspendingGets) ({ run -> SuspendedGet(handlerScope.value, run) }) else null
     private val clock = TimeSource.Monotonic.markNow()
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
@@ -24,6 +32,7 @@ internal class HttpServer(
             runLoop(stopRequested)
         } finally {
             clients.values.forEach { it.close() }
+            if (handlerScope.isInitialized()) handlerScope.value.cancel()
         }
     }
 
@@ -39,7 +48,8 @@ internal class HttpServer(
             }
             val deadline = drainDeadline
             if (deadline != null && (clients.isEmpty() || beforePoll >= deadline)) break
-            val timeout = if (deadline == null) 250 else minOf(250L, deadline - beforePoll).toInt()
+            var timeout = if (deadline == null) 250 else minOf(250L, deadline - beforePoll).toInt()
+            if (suspended.isNotEmpty()) timeout = minOf(timeout, 2)
             batchTime = -1L
             transport.poll(timeout, this)
             val afterPoll = completionTime()
@@ -47,6 +57,7 @@ internal class HttpServer(
                 closeMatching { it.expired(afterPoll) }
                 nextSweep = afterPoll + 250
             }
+            finishHandlers(afterPoll)
         }
     }
 
@@ -65,7 +76,7 @@ internal class HttpServer(
     override fun read(connection: ConnectionId, operation: OperationId, byteCount: Int) {
         val client = clients[connection] ?: return
         if (byteCount == 0) {
-            disconnect(connection)
+            if (client.output == null) disconnect(connection) else client.beginDrain()
             return
         }
         val time = completionTime()
@@ -75,6 +86,7 @@ internal class HttpServer(
 
     override fun wrote(connection: ConnectionId, operation: OperationId, byteCount: Int) {
         val client = clients[connection] ?: return
+        client.writePending = false
         val time = completionTime()
         if (client.wrote(byteCount, time)) advance(connection, client, time) else disconnect(connection)
     }
@@ -88,15 +100,40 @@ internal class HttpServer(
     }
 
     private fun advance(id: ConnectionId, client: HttpConnection, time: Long) {
-        val operation = OperationId(nextOperation++)
-        val result = if (client.prepareResponse(routes, time)) {
+        if (client.writePending) return
+        val result = if (client.prepareResponse(routes, time, launchHandler)) {
             val output = checkNotNull(client.output)
-            transport.write(id, operation, output, client.outputOffset, client.outputLength - client.outputOffset)
+            client.writePending = true
+            transport.write(
+                id, OperationId(nextOperation++), output, client.outputOffset, client.outputLength - client.outputOffset,
+            )
         } else {
+            if (client.awaitingHandler) suspended.add(id)
             val input = client.input
-            transport.read(id, operation, input.bytes, input.size, input.bytes.size - input.size)
+            val available = input.bytes.size - input.size
+            if (client.readPending || available == 0) return
+            client.readPending = true
+            if (client.awaitingHandler) {
+                val buffer = client.monitorBuffer()
+                transport.read(id, OperationId(nextOperation++), buffer, 0, minOf(buffer.size, available))
+            } else {
+                transport.read(id, OperationId(nextOperation++), input.bytes, input.size, available)
+            }
         }
         if (result != Submission.ACCEPTED) disconnect(id)
+    }
+
+    private fun finishHandlers(time: Long) {
+        if (suspended.isEmpty()) return
+        val iterator = suspended.iterator()
+        while (iterator.hasNext()) {
+            val id = iterator.next()
+            val client = clients.getValue(id)
+            if (client.finishHandler(time)) {
+                iterator.remove()
+                advance(id, client, time)
+            }
+        }
     }
 
     private fun acceptNext() {
@@ -109,6 +146,7 @@ internal class HttpServer(
             val (id, connection) = iterator.next()
             if (shouldClose(connection)) {
                 iterator.remove()
+                suspended.remove(id)
                 connection.close()
                 transport.closeConnection(id)
             }
@@ -116,6 +154,7 @@ internal class HttpServer(
     }
 
     private fun disconnect(id: ConnectionId) {
+        suspended.remove(id)
         clients.remove(id)?.close()
         transport.closeConnection(id)
     }

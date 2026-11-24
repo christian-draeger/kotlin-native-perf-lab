@@ -37,7 +37,10 @@ kotlin {
     }
     sourceSets.commonMain {
         kotlin.srcDir("../../src/commonMain/kotlin")
-        dependencies { implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0") }
+        dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+        }
     }
     sourceSets.getByName("nativeMain") {
         kotlin.srcDir("../../src/nativeMain/kotlin/dev/perflab/nativeserve/transport")
