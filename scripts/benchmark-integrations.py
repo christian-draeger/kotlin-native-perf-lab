@@ -13,7 +13,7 @@ import socket
 import subprocess
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -76,6 +76,26 @@ def wait_until_ready(process, port, log, expected_engine):
     raise RuntimeError(f"Server did not become healthy. See {log}")
 
 
+def stop_server(process, port, family):
+    if process.poll() is not None:
+        return
+    if family == "ktor-native":
+        try:
+            request(port, "/stop")
+            process.wait(timeout=6)
+            return
+        except (OSError, ValueError, http.client.HTTPException, subprocess.TimeoutExpired):
+            pass
+    with suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGTERM)
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        with suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+
+
 @contextmanager
 def server(args, engine, affinity, log):
     with socket.socket() as listener:
@@ -95,13 +115,7 @@ def server(args, engine, affinity, log):
             check_responses(port)
             yield process, port
         finally:
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=15)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
+            stop_server(process, port, args.family)
 
 
 def run_output(*command):
