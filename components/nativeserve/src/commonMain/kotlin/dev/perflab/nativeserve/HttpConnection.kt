@@ -11,10 +11,13 @@ class ServerLimits(
     val idleMillis: Long = 30_000,
     val requestHeadMillis: Long = 5_000,
     val drainMillis: Long = 2_000,
+    val requestBodyBytes: Int = 64 * 1024,
+    val requestBodyMillis: Long = 30_000,
 ) {
     init {
         require(connections > 0 && headerBytes >= 64 && responseBodyBytes > 0)
         require(idleMillis > 0 && requestHeadMillis > 0 && drainMillis > 0)
+        require(requestBodyBytes >= 0 && requestBodyMillis > 0)
     }
 }
 
@@ -26,6 +29,7 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         private set
     var outputLength = 0
         private set
+    private var incoming: IncomingBody? = null
     private var stream: PendingStream? = null
     private var closeAfterWrite = false
     private var lastActivity = connectedAt
@@ -33,7 +37,8 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
 
     fun expired(now: Long): Boolean =
         now - lastActivity >= limits.idleMillis ||
-            headStarted?.let { now - it >= limits.requestHeadMillis } == true
+            headStarted?.let { now - it >= limits.requestHeadMillis } == true ||
+            incoming?.let { now - it.started >= limits.requestBodyMillis } == true
 
     fun beginDrain(): Boolean {
         closeAfterWrite = true
@@ -42,12 +47,13 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
 
     fun received(count: Int, now: Long) {
         lastActivity = now
-        if (input.size == 0) headStarted = now
+        if (input.size == 0 && incoming == null) headStarted = now
         input.append(count)
     }
 
     fun prepareResponse(routes: Routes, now: Long): Boolean {
         if (output != null) return true
+        incoming?.let { return consumeBody(it) }
         when (val head = input.parse()) {
             ParsedHead.Incomplete -> {
                 // Pipelined bytes start their deadline when the previous response lets us parse them.
@@ -61,18 +67,47 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
             is ParsedHead.Complete -> {
                 input.consume(head.consumed)
                 headStarted = null
-                val response = routes.respond(head.request)
-                val responseStream = response.stream
-                val chunked = responseStream != null && responseStream.length == null
-                if ((responseStream?.length ?: response.body.size) > limits.responseBodyBytes ||
-                    chunked && head.version != "HTTP/1.1"
-                ) {
-                    responseStream?.source?.release()
-                    queue(emptyResponse(500), head.version, keepAlive = false)
-                } else {
-                    queue(response, head.version, head.keepAlive)
-                }
+                if (head.request.method == "POST") return preparePost(routes, head, now)
+                queue(routes.respond(head.request), head.version, head.keepAlive)
             }
+        }
+        return true
+    }
+
+    private fun preparePost(routes: Routes, head: ParsedHead.Complete, now: Long): Boolean {
+        val length = head.request.bodyLength
+        if (length > limits.requestBodyBytes) {
+            queue(emptyResponse(413), head.version, keepAlive = false)
+            return true
+        }
+        return when (val post = routes.openPost(head.request)) {
+            is PostBody.Rejected -> {
+                queue(post.response, head.version, head.keepAlive && length == 0)
+                true
+            }
+            is PostBody.Open -> {
+                val body = IncomingBody(post.sink, head.version, head.keepAlive, now, length)
+                incoming = body
+                consumeBody(body)
+            }
+        }
+    }
+
+    private fun consumeBody(body: IncomingBody): Boolean {
+        val count = minOf(body.remaining, input.size)
+        try {
+            if (count > 0) {
+                body.sink.accept(input.bytes, count)
+                input.consume(count)
+                body.remaining -= count
+            }
+            if (body.remaining > 0) return false
+            val response = body.sink.complete()
+            closeRequest()
+            queue(response, body.version, body.keepAlive)
+        } catch (_: Exception) {
+            closeRequest()
+            queue(emptyResponse(500), body.version, keepAlive = false)
         }
         return true
     }
@@ -132,17 +167,43 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
         pending.source.release()
     }
 
+    fun close() {
+        closeRequest()
+        closeResponse()
+    }
+
+    private fun closeRequest() {
+        val body = incoming ?: return
+        incoming = null
+        body.sink.release()
+    }
+
     private fun queue(response: Response, version: String, keepAlive: Boolean) {
+        val stream = response.stream
+        val chunked = stream != null && stream.length == null
+        if ((stream?.length ?: response.body.size) > limits.responseBodyBytes || chunked && version != "HTTP/1.1") {
+            stream?.source?.release()
+            closeAfterWrite = true
+            setOutput(emptyResponse(500).encode(version, keepAlive = false))
+            return
+        }
         closeAfterWrite = !keepAlive
-        val responseStream = response.stream
-        if (responseStream == null) {
+        if (stream == null) {
             setOutput(response.encode(version, keepAlive))
         } else {
-            val length = responseStream.length
-            stream = PendingStream(responseStream.source, length ?: limits.responseBodyBytes, chunked = length == null)
+            val length = stream.length
+            this.stream = PendingStream(stream.source, length ?: limits.responseBodyBytes, chunked)
             setOutput(response.encodeHead(version, keepAlive, length ?: -1))
         }
     }
+
+    private class IncomingBody(
+        val sink: RequestBodySink,
+        val version: String,
+        val keepAlive: Boolean,
+        val started: Long,
+        var remaining: Int,
+    )
 
     private fun setOutput(bytes: ByteArray, length: Int = bytes.size) {
         output = bytes
@@ -160,10 +221,10 @@ internal class HttpConnection(connectedAt: Long, private val limits: ServerLimit
     }
 }
 
-private fun ResponseSource.release() {
+private fun AutoCloseable.release() {
     try {
         close()
     } catch (_: Exception) {
-        // A source has already been released from HTTP state. Keep serving other clients.
+        // The body has already been released from HTTP state. Keep serving other clients.
     }
 }

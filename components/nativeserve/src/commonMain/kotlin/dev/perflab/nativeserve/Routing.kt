@@ -1,10 +1,54 @@
 package dev.perflab.nativeserve
 
 class Routes {
-    private val exact = mutableMapOf<String, (Request) -> Response>()
-    private val patterns = mutableListOf<RoutePattern>()
+    private val gets = MethodRoutes<(Request) -> Response>()
+    private val posts = MethodRoutes<(Request) -> RequestBodySink>()
 
     fun get(path: String, handler: (Request) -> Response) {
+        gets.add(path, handler)
+    }
+
+    /** Open one body sink per POST with an optional Content-Length. */
+    fun postStreaming(path: String, handler: (Request) -> RequestBodySink) {
+        posts.add(path, handler)
+    }
+
+    internal fun respond(request: Request): Response = try {
+        if (request.method == "GET") {
+            gets.resolve(request) { handler, matched -> handler(matched) }
+                ?: if (posts.matches(request)) methodNotAllowed("POST") else emptyResponse(404)
+        } else {
+            val get = gets.matches(request)
+            val post = posts.matches(request)
+            when {
+                get && post -> methodNotAllowed("GET, POST")
+                post -> methodNotAllowed("POST")
+                else -> emptyResponse(405)
+            }
+        }
+    } catch (_: Exception) {
+        emptyResponse(500)
+    }
+
+    internal fun openPost(request: Request): PostBody = try {
+        val sink = posts.resolve(request) { handler, matched -> handler(matched) }
+        if (sink != null) PostBody.Open(sink)
+        else PostBody.Rejected(emptyResponse(if (gets.matches(request) || posts.isEmpty()) 405 else 404))
+    } catch (_: Exception) {
+        PostBody.Rejected(emptyResponse(500))
+    }
+}
+
+internal sealed interface PostBody {
+    class Open(val sink: RequestBodySink) : PostBody
+    class Rejected(val response: Response) : PostBody
+}
+
+private class MethodRoutes<Handler> {
+    private val exact = mutableMapOf<String, Handler>()
+    private val patterns = mutableListOf<RoutePattern<Handler>>()
+
+    fun add(path: String, handler: Handler) {
         require(path.startsWith('/') && '?' !in path && '#' !in path) { "Expected an absolute route path" }
         val parts = path.removePrefix("/").split('/')
         val names = parts.map { part ->
@@ -30,16 +74,13 @@ class Routes {
         patterns.add(RoutePattern(shape, names, handler))
     }
 
-    internal fun respond(request: Request): Response = try {
-        dispatch(request)
-    } catch (_: Exception) {
-        emptyResponse(500)
-    }
+    fun isEmpty(): Boolean = exact.isEmpty() && patterns.isEmpty()
 
-    private fun dispatch(request: Request): Response {
-        if (request.method != "GET") return emptyResponse(405)
-        exact[request.path]?.let { return it(request) }
-        if (patterns.isEmpty()) return emptyResponse(404)
+    fun matches(request: Request): Boolean = resolve(request) { _, _ -> true } == true
+
+    inline fun <Result> resolve(request: Request, action: (Handler, Request) -> Result): Result? {
+        exact[request.path]?.let { return action(it, request) }
+        if (patterns.isEmpty()) return null
         val parts = request.path.removePrefix("/").split('/')
         for (route in patterns) {
             if (parts.size != route.shape.size) continue
@@ -54,14 +95,15 @@ class Routes {
                 }
                 route.names[index]?.let { values[it] = value }
             }
-            if (matches) return route.handler(request.withParameters(values))
+            if (matches) return action(route.handler, request.withParameters(values))
         }
-        return emptyResponse(404)
+        return null
     }
 
-    private data class RoutePattern(
-        val shape: List<String?>,
-        val names: List<String?>,
-        val handler: (Request) -> Response,
-    )
 }
+
+private data class RoutePattern<Handler>(
+    val shape: List<String?>,
+    val names: List<String?>,
+    val handler: Handler,
+)
