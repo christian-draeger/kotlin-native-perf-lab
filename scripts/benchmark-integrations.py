@@ -163,6 +163,7 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
             "upload_sizes_bytes=1024,24576,65536",
             f"offered_rates={','.join(map(str, args.rates))}",
             f"max_vus_per_scenario={args.vus}",
+            f"precondition_seconds={args.precondition}",
         ]
     else:
         load_version = subprocess.run(
@@ -279,15 +280,18 @@ def trial_k6(args, git_sha, engine, rate, run, server_affinity, load_affinity):
     stem = args.output / f"{variant}-mixed-{rate}-{run}"
     metrics = (sys.executable, SCRIPTS / "proc_metrics.py")
     with server(args, engine, server_affinity, stem.with_suffix(".server.log")) as (process, port):
+        cold = load_k6(args, load_affinity, port, rate, args.precondition, stem.with_name(stem.name + "-cold"))
         warmup = load_k6(args, load_affinity, port, rate, args.warmup, stem.with_name(stem.name + "-warmup"))
         before, _, _ = run_output(*metrics, str(process.pid)).split()
         row = load_k6(args, load_affinity, port, rate, args.duration, stem)
         after, peak, rss = run_output(*metrics, str(process.pid)).split()
     cpu = float(after) - float(before)
-    valid = row["valid"] and warmup["valid"] and cpu >= 0
+    valid = row["valid"] and warmup["valid"] and cold["failed_responses"] == 0 and cpu >= 0
     row.update({
         "variant": variant, "endpoint": f"Mixed · {rate} req/s", "run": run, "valid": int(valid),
         "connections": "", "threads": "", "offered_rate": rate, "vus_per_scenario": args.vus,
+        "precondition_s": args.precondition, "precondition_dropped_iterations": cold["dropped_iterations"],
+        "precondition_failed_responses": cold["failed_responses"], "warmup_dropped_iterations": warmup["dropped_iterations"],
         "warmup_s": args.warmup, "target_duration_s": args.duration,
         "cpu_seconds": round(cpu, 6),
         "cpu_seconds_per_million_requests": round(cpu / row["successful_responses"] * 1_000_000, 3) if valid else "",
@@ -371,6 +375,7 @@ def main():
     parser.add_argument("--compare-native-wakeup", action="store_true")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800], help="Mixed requests per second for k6")
     parser.add_argument("--vus", type=int, default=16, help="k6 virtual users per scenario")
+    parser.add_argument("--precondition", type=int, default=15, help="k6 cold load before steady-state validation")
     parser.add_argument("--connections", type=int, default=16)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--repeats", type=int, default=3)
@@ -379,7 +384,7 @@ def main():
     args = parser.parse_args()
     if not os.access(args.executable, os.X_OK):
         parser.error(f"Expected an executable application launcher at {args.executable}")
-    if min(args.repeats, args.duration, args.warmup, args.threads) < 1 or args.connections < args.threads:
+    if min(args.repeats, args.duration, args.precondition, args.warmup, args.threads) < 1 or args.connections < args.threads:
         parser.error("Expected positive durations, repeats and at least one connection per load thread")
     if args.vus < 1 or any(rate < 20 or rate % 20 for rate in args.rates) or len(set(args.rates)) != len(args.rates):
         parser.error("Expected a positive VU count and distinct k6 arrival rates in multiples of 20")
