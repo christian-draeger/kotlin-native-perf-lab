@@ -90,6 +90,17 @@ fun main() {
 
 Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
 
+Use `getSuspending` when an HTTP/1.x handler calls a suspending API.
+
+```kotlin
+getSuspending("/profile/{id}") { request ->
+    val id = request.pathInt("id") ?: return@getSuspending badRequest()
+    json(profileStore.load(id))
+}
+```
+
+Suspending handlers run on `Dispatchers.Default` and can run concurrently across connections. Each connection has one active handler and sends pipelined responses in order. A peer EOF while the handler is pending, `ServerLimits.handlerMillis`, or the end of the shutdown drain cancels the coroutine. Cancellation is cooperative. Applications should use cancellable I/O and release their own resources in `finally`. The experimental h2c engine returns HTTP 501 for these routes.
+
 For a body with a known byte length, return `streamResponse` from a route. NativeServe sends the response head and pulls up to 16 KiB at a time as the connection writes progress.
 
 ```kotlin
@@ -101,7 +112,7 @@ get("/download") {
 }
 ```
 
-Create a new source for each response. Return promptly from `read` and `close`, which run on the owning I/O loop. Write up to `limit` bytes starting at index zero and release any references to the buffer before returning. Override `close` to release source resources. NativeServe takes ownership when the handler returns the response and closes it after the final write completes or the response is cancelled. `ServerLimits.responseBodyBytes` also applies to streamed bodies. If the source ends early or fails after the head is sent, the server closes the connection so the client can detect the incomplete body.
+Create a new source for each response. Return promptly from `read` and `close`. Writes pull data on the owning I/O loop. A response returned by a cancelled coroutine may be closed on the handler dispatcher. Write up to `limit` bytes starting at index zero and release any references to the buffer before returning. Override `close` to release source resources. NativeServe takes ownership when the handler returns the response and closes it after the final write completes or the response is cancelled. `ServerLimits.responseBodyBytes` also applies to streamed bodies. If the source ends early or fails after the head is sent, the server closes the connection so the client can detect the incomplete body.
 
 For an HTTP/1.1 stream with an unknown length, use `streamResponse(contentType, source)` and return `-1` at end of input. NativeServe applies chunked framing and terminates the stream when it reaches EOF. The response size limit applies to the body bytes. An unknown-length response to an HTTP/1.0 request returns HTTP 500 and closes the source. [HTTP/1.1 message framing](https://www.rfc-editor.org/rfc/rfc9112.html#name-chunked-transfer-coding)
 
@@ -117,11 +128,12 @@ The example handles Ctrl+C and SIGTERM by closing the listener and draining queu
 | Poll descriptor and event storage | epoll or kqueue owns its descriptor. Event storage lives in the scope of `serve`. |
 | Accepted descriptor | The backend tracks each descriptor by its connection ID and closes any remaining sockets when `serve` exits. The HTTP loop owns the HTTP state for each connection. |
 | Request storage | One fixed Kotlin byte array per client. It keeps unread pipelined bytes and is pinned only during `recv`. |
+| Suspended handler | One coroutine and a single-result handoff per active connection. The connection can allocate one additional read buffer of up to 4 KiB to observe EOF or receive pipelined bytes. |
 | Output storage | Each client retains at most one encoded response or a response head with a reusable chunk buffer of up to 16 KiB. The stream buffer is reused after the preceding write completes. The array is pinned only during `send`. The poller checks for write readiness while output is pending. |
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
-Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. Set ingress request size and timeout limits that match the backend's `ServerLimits`. Route handlers run on the I/O loop so a handler should return promptly.
+Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. Set ingress request size and timeout limits that match the backend's `ServerLimits`. Synchronous route handlers run on the I/O loop and should return promptly.
 
 The native resource suite uses a separate release fixture with short deadlines and large bodies to check slow and disconnected clients, descriptor caps and retained heap. To run it locally from the repository root on Linux x86_64:
 

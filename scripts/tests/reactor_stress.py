@@ -209,6 +209,25 @@ def test_request_bodies(port):
     print("Request streaming checks passed (pipeline, disconnect, deadline)")
 
 
+def test_suspended_handlers(port):
+    def active(count):
+        return fetch(port, "/open-handlers") == (200, str(count).encode("ascii"))
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(request("/suspend/resume"))
+        wait_until(lambda: active(1), "Handler never suspended")
+        conn.sendall(request("/health"))
+        assert fetch(port, "/complete-handler") == (200, b"ok")
+        with conn.makefile("rb") as stream:
+            assert response(stream)[2] == b"resumed"
+            assert response(stream)[2] == b"ok"
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(request("/suspend/cancel"))
+        wait_until(lambda: active(1), "Handler never entered before disconnect")
+    wait_until(lambda: active(0), "Disconnect did not cancel the suspended handler", seconds=2)
+    print("Suspending GET checks passed (concurrency, pipeline, disconnect)")
+
+
 def main(binary):
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
@@ -226,6 +245,7 @@ def main(binary):
             wait_until(ready, "Fixture never became ready")
             test_limits(port, server.pid)
             test_request_bodies(port)
+            test_suspended_handlers(port)
             test_streams(port, server)
         finally:
             if server.poll() is None:

@@ -42,14 +42,12 @@ kotlin {
     }
     sourceSets {
         commonMain.dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
         }
         getByName("nativeMain") {
             if (targetOs == "macos") kotlin.setSrcDirs(listOf("src/macosMain/kotlin"))
             kotlin.srcDir("src/nativeShared/kotlin")
-            if (targetOs == "linux") dependencies {
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-            }
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

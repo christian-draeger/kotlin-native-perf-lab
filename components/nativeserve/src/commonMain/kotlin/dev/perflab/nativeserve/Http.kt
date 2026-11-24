@@ -107,6 +107,7 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
         417 -> "Expectation Failed"
         431 -> "Request Header Fields Too Large"
         500 -> "Internal Server Error"
+        501 -> "Not Implemented"
         505 -> "HTTP Version Not Supported"
         else -> ""
     }
