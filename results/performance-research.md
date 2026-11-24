@@ -155,7 +155,22 @@ The corresponding `/download` pilot streamed 32 KiB plus three bytes with a 50 m
 | ARM64 | ktServe eventfd | 305.5 | 91.264 | 484.29 | 36.32 |
 | ARM64 | CIO | 313.5 | 53.192 | 746.17 | 123.39 |
 
-Eventfd brought download throughput close to CIO and left a median p99 gap of about 37–38 ms. The x86_64 eventfd trials ranged from 54.440 to 90.947 ms p99. On ARM64, eventfd used about 15% more CPU per response than polling. Keep the current default pending independently driven measurements. In the next diagnostic, test accepted-socket `TCP_NODELAY` separately and correlate send and acknowledgement timing with the application producer's wake-ups. [Ktor Native streaming investigation #130](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/130)
+Eventfd brought download throughput close to CIO and left a median p99 gap of about 37–38 ms. The x86_64 eventfd trials ranged from 54.440 to 90.947 ms p99. On ARM64, eventfd used about 15% more CPU per response than polling. Keep the current default pending independently driven measurements. [Ktor Native streaming investigation #130](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/130)
+
+#### TCP_NODELAY on Ktor Native downloads
+
+The follow-up held the ktServe wake-up mode at eventfd and changed only the accepted-socket TCP setting. CIO ran from the same Ktor Native release binary as a reference. All 18 hosted trials were valid at 16 persistent connections, with a ten-second warm-up and five measured seconds. Each host used separate CPU masks for the engine and load generator. These are medians of three trials per cell. [Raw trials, host metadata and traces](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45466086351)
+
+| Linux | Engine and TCP setting | Successful req/s | p99 ms | CPU s / million | Peak RSS MiB |
+| --- | --- | ---: | ---: | ---: | ---: |
+| x86_64 | ktServe eventfd, default TCP | 310.341 | 90.650 | 307.890 | 38.69 |
+| x86_64 | ktServe eventfd, TCP_NODELAY | 313.363 | 53.104 | 286.990 | 38.36 |
+| x86_64 | CIO | 313.372 | 53.770 | 522.959 | 140.50 |
+| ARM64 | ktServe eventfd, default TCP | 304.287 | 91.341 | 500.989 | 36.69 |
+| ARM64 | ktServe eventfd, TCP_NODELAY | 313.423 | 53.786 | 497.449 | 36.32 |
+| ARM64 | CIO | 313.206 | 53.208 | 733.418 | 114.82 |
+
+In a separate ARM64 trace on a reused connection, the server completed the two 8 KiB `sendto` calls within 1.128 ms. The payload packet went out at 41.262 ms, after the client acknowledged the earlier header at 41.238 ms. With `TCP_NODELAY`, the client read those first 16 KiB at 1.258 ms in the corresponding trace. The single-connection diagnostic overlaps the first-chunk wait with the intentional application delay. The table uses the untraced load trials for end-to-end p99. `KTSERVE_EPOLL_TCP_NODELAY=on` is available for opt-in tests. The broader streaming investigation and independently driven comparison remain tracked in [#130](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/130).
 
 JVM ktServe now uses `Selector.wakeup()` as handler output and body buffers become ready. In the exploratory WebFlux `/json` comparison, throughput moved from 9,284 to 58,965 req/s on x86_64 and from 20,581 to 22,410 on ARM64. The Reactor Netty medians in the new run were 85,948 and 12,383 req/s respectively. Reactor Netty retained its upload throughput lead on both architectures. The existing WebFlux adapter copies outbound Spring buffers before handing them to the bounded coroutine queue. A narrower fixed-length publisher path is a separate hypothesis. It must preserve cancellation, demand, buffer release and flush behavior. [JVM implementation](https://github.com/christian-draeger/kotlin-native-perf-lab/pull/137) · [Before](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45384009996) · [After](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45391876507) · [WebFlux comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/45)
 
