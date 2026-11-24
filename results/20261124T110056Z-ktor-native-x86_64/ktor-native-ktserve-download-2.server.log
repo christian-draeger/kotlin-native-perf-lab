@@ -1,0 +1,3 @@
+[INFO] (io.ktor.server.Application): Application started in 0.001 seconds.
+NativeServe backend=epoll tcp=ipv4
+[INFO] (io.ktor.server.Application): Responding at http://127.0.0.1:54253
