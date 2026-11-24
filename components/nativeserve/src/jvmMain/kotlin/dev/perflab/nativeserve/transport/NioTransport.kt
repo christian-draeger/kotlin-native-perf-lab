@@ -160,6 +160,8 @@ private class NioTransport(
             return
         }
         val key = try {
+            // A small body can follow a separate header write on a reused HTTP connection.
+            socket.setOption(StandardSocketOptions.TCP_NODELAY, true)
             socket.configureBlocking(false)
             socket.register(selector, 0)
         } catch (_: IOException) {
