@@ -733,6 +733,7 @@ function startIntegration() {
       run.ci_run_id ? "Exploratory hosted CI" : "",
       run.note.host, run.os, run.machine,
       run.load_tool === "k6" ? "k6 · fixed arrival rate · mixed HTTP/1.1 traffic" : "wrk · fixed concurrency",
+      run.experiment === "application-mix-churn" ? "Fresh TCP per request · includes connection setup" : "",
       ...[
         ["connections", " connections"],
         ["threads", " wrk threads"],
@@ -753,6 +754,7 @@ function startIntegration() {
     runSelect.replaceChildren(...familyRuns.map((entry) => new Option([
       entry.experiment === "epoll-application-wakeup" ? `wrk · ${entry.groups[0]?.endpoint ?? "streaming"} wake-up pilot`
         : entry.experiment === "epoll-tcp-nodelay" ? "wrk · /download TCP_NODELAY pilot"
+        : entry.experiment === "application-mix-churn" ? "k6 · mixed · fresh TCP"
         : entry.load_tool === "k6" ? "k6 · mixed" : "wrk · single endpoint", entry.machine,
       utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
     ].filter(Boolean).join(" · "), entry.id)));
