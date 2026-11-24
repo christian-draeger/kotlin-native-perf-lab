@@ -81,6 +81,17 @@ jobs:
             start_server "$variant" "$log"
             stop_server
           done
+      - name: Check the shared epoll connection budget
+        env:
+          PORT: '18082'
+        run: |
+          ROOT="$PWD"
+          source scripts/server-process.sh
+          trap stop_server EXIT
+          start_server ktserve-workers-2 "$RUNNER_TEMP/ktserve-worker-admission.log"
+          python3 scripts/tests/ktserve_worker_admission_smoke.py "$PORT" "$server_pid"
+          wait "$server_pid"
+          server_pid=''
       - name: Exercise ktServe resource bounds
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}
