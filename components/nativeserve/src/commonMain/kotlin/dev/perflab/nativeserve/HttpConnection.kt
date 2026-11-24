@@ -29,6 +29,7 @@ internal class HttpConnection(
     private val limits: ServerLimits,
     private val dispatcher: (() -> CoroutineScope)? = null,
     private val countRequest: (() -> Unit)? = null,
+    private val signalApplicationProgress: (() -> Unit)? = null,
 ) {
     val input = RequestBuffer(limits.headerBytes)
     var output: ByteArray? = null
@@ -141,7 +142,7 @@ internal class HttpConnection(
             queue(emptyResponse(413), head.version, keepAlive = false)
             return true
         }
-        val content = RequestContent()
+        val content = RequestContent(signalApplicationProgress)
         handler = PendingHandler(
             start { application(head.request, content) }, head.version, head.keepAlive, now,
             headOnly = head.request.method == "HEAD",
@@ -318,7 +319,8 @@ internal class HttpConnection(
             val length = stream.length
             val source = when (stream) {
                 is ResponseStream.Pull -> stream.source
-                is ResponseStream.Produce -> AsyncResponseSource(checkNotNull(dispatcher).invoke(), stream)
+                is ResponseStream.Produce ->
+                    AsyncResponseSource(checkNotNull(dispatcher).invoke(), stream, signalApplicationProgress)
             }
             this.stream = PendingStream(source, length ?: limits.responseBodyBytes, chunked)
             setOutput(response.encodeHead(version, persistent, length ?: CHUNKED_RESPONSE_LENGTH))

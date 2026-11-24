@@ -4,7 +4,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 
-internal class SuspendedGet(scope: CoroutineScope, handler: suspend () -> Response) {
+internal class SuspendedGet(
+    scope: CoroutineScope,
+    signalApplicationProgress: (() -> Unit)?,
+    handler: suspend () -> Response,
+) {
     private val completed = Channel<Response>(1, onUndeliveredElement = { it.releaseSource() })
     private val job = scope.launch {
         val response = try {
@@ -14,7 +18,7 @@ internal class SuspendedGet(scope: CoroutineScope, handler: suspend () -> Respon
             emptyResponse(500)
         }
         // Failed trySend leaves ownership with the producer. A successful send transfers it.
-        if (completed.trySend(response).isFailure) response.releaseSource()
+        if (completed.trySend(response).isSuccess) signalApplicationProgress?.invoke() else response.releaseSource()
     }
 
     fun takeResponse(): Response? = completed.tryReceive().getOrNull()

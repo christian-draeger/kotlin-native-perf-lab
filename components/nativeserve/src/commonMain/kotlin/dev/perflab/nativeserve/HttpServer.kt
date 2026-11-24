@@ -22,17 +22,19 @@ internal class HttpServer(
     private val routes: Routes,
     private val limits: ServerLimits,
     private val counters: HttpServerCounters? = null,
+    timeSource: TimeSource = TimeSource.Monotonic,
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
+    private val signalApplicationProgress = transport.signalApplicationProgress
     private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     private val dispatcher: () -> CoroutineScope = { handlerScope.value }
     private val countRequest: (() -> Unit)? = counters?.let { totals -> { totals.requests++ } }
     private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
         if (routes.hasSuspendingGets || routes.applicationHandler != null) {
-            { run -> SuspendedGet(handlerScope.value, run) }
+            { run -> SuspendedGet(handlerScope.value, signalApplicationProgress, run) }
         } else null
-    private val clock = TimeSource.Monotonic.markNow()
+    private val clock = timeSource.markNow()
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
     private var batchTime = -1L
@@ -59,7 +61,12 @@ internal class HttpServer(
             val deadline = drainDeadline
             if (deadline != null && (clients.isEmpty() || beforePoll >= deadline)) break
             var timeout = if (deadline == null) 250 else minOf(250L, deadline - beforePoll).toInt()
-            if (suspended.isNotEmpty()) timeout = minOf(timeout, 2)
+            if (signalApplicationProgress == null) {
+                if (suspended.isNotEmpty()) timeout = minOf(timeout, 2)
+            } else if (clients.isNotEmpty()) {
+                // A readiness event can return shortly before the next timeout sweep.
+                timeout = minOf(timeout.toLong(), (nextSweep - beforePoll).coerceAtLeast(0)).toInt()
+            }
             batchTime = -1L
             transport.poll(timeout, this)
             val afterPoll = completionTime()
@@ -78,7 +85,7 @@ internal class HttpServer(
         }
         val time = completionTime()
         counters?.let { it.accepted++ }
-        val client = HttpConnection(time, limits, dispatcher, countRequest)
+        val client = HttpConnection(time, limits, dispatcher, countRequest, signalApplicationProgress)
         clients[connection] = client
         advance(connection, client, time)
         acceptNext()

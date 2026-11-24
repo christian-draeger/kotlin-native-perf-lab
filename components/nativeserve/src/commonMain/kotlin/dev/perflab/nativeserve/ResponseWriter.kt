@@ -8,7 +8,10 @@ internal const val RESPONSE_CHUNK_BYTES = 16 * 1024
 internal const val SOURCE_WAITING = -2
 
 /** Writes a response incrementally and suspends when the client cannot accept more data. */
-class ResponseWriter internal constructor(private val chunks: Channel<ByteArray>) {
+class ResponseWriter internal constructor(
+    private val chunks: Channel<ByteArray>,
+    private val signalApplicationProgress: (() -> Unit)?,
+) {
     suspend fun write(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
         require(offset >= 0 && length >= 0 && offset <= bytes.size - length)
         val end = offset + length
@@ -16,19 +19,26 @@ class ResponseWriter internal constructor(private val chunks: Channel<ByteArray>
         while (start < end) {
             val limit = start + minOf(end - start, RESPONSE_CHUNK_BYTES)
             chunks.send(bytes.copyOfRange(start, limit))
+            signalApplicationProgress?.invoke()
             start = limit
         }
     }
 }
 
-internal class AsyncResponseSource(scope: CoroutineScope, private val stream: ResponseStream.Produce) : ResponseSource {
+internal class AsyncResponseSource(
+    scope: CoroutineScope,
+    private val stream: ResponseStream.Produce,
+    signalApplicationProgress: (() -> Unit)?,
+) : ResponseSource {
     private val chunks = Channel<ByteArray>(1)
     private val job = scope.launch {
         try {
-            stream.producer(ResponseWriter(chunks))
+            stream.producer(ResponseWriter(chunks, signalApplicationProgress))
             chunks.close()
         } catch (cause: Exception) {
             chunks.close(cause)
+        } finally {
+            signalApplicationProgress?.invoke()
         }
     }
     private var chunk: ByteArray? = null

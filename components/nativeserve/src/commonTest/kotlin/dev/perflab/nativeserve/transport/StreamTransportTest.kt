@@ -1,8 +1,13 @@
 package dev.perflab.nativeserve.transport
 
+import dev.perflab.nativeserve.HttpServer
+import dev.perflab.nativeserve.Routes
+import dev.perflab.nativeserve.ServerLimits
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TestTimeSource
 
 private val acceptId = OperationId(1)
 private val readId = OperationId(2)
@@ -22,6 +27,24 @@ class StreamTransportTest {
         transport.peerReady()
         assertEquals(Submission.ACCEPTED, transport.accept(acceptId))
         return (poll().single() as Completion.Accepted).connection
+    }
+
+    @Test
+    fun aNotificationDoesNotPostponeTheNextTimeoutSweep() {
+        val clock = TestTimeSource()
+        val waits = mutableListOf<Int>()
+        val signalingTransport = object : StreamTransport by transport {
+            override val signalApplicationProgress: () -> Unit = {}
+
+            override fun poll(timeoutMillis: Int, completions: TransportCompletions) {
+                waits += timeoutMillis
+                if (waits.size == 2) clock += 240.milliseconds
+                transport.poll(timeoutMillis, completions)
+            }
+        }
+        transport.peerReady()
+        HttpServer(signalingTransport, Routes(), ServerLimits(), timeSource = clock).run { waits.size == 3 }
+        assertEquals(listOf(250, 250, 10), waits)
     }
 
     @Test
