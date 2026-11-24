@@ -4,7 +4,7 @@ Add the starter to a Spring Boot 4.2.0 WebFlux application on JDK 21 and enable 
 
 ```kotlin
 dependencies {
-    implementation("io.github.christian-draeger:ktserve-spring-boot-starter")
+    implementation("codes.draeger:ktserve-spring-boot-starter")
 }
 ```
 

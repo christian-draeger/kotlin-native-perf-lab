@@ -3,14 +3,14 @@
 Select ktServe by passing its `KtServe` engine factory to Ktor's `embeddedServer`. Use the same application module for CIO, Netty, or ktServe.
 
 ```kotlin
-import io.github.christian_draeger.ktserve.ktor.KtServe
+import codes.draeger.ktserve.ktor.KtServe
 
 embeddedServer(KtServe, host = "127.0.0.1", port = 8080) {
     routing { get("/health") { call.respondText("ok") } }
 }.start(wait = true)
 ```
 
-The [independent Gradle starter](../../examples/ktor-jvm) resolves `io.github.christian-draeger:ktserve-ktor` from this checkout with a Gradle composite. Run it from the repository root on JDK 21.
+The [independent Gradle starter](../../examples/ktor-jvm) resolves `codes.draeger:ktserve-ktor` from this checkout with a Gradle composite. Run it from the repository root on JDK 21.
 
 ```sh
 ./components/ktserve/gradlew -p components/ktserve/examples/ktor-jvm run

@@ -46,7 +46,7 @@ jobs:
           project=components/ktserve
           "$project/gradlew" -p "$project" "-Pktserve.version=$KTSERVE_VERSION" \
             publishAllPublicationsToStagingRepository
-          group="$project/build/maven-staging/$KTSERVE_VERSION/io/github/christian-draeger"
+          group="$project/build/maven-staging/$KTSERVE_VERSION/codes/draeger"
           for pom in "$group"/*/"$KTSERVE_VERSION"/*.pom; do
             grep -Fq '<name>Apache License, Version 2.0</name>' "$pom"
           done
