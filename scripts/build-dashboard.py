@@ -26,6 +26,11 @@ METRICS = {
     "rss": ("peak_rss_kib", 1024),
 }
 PARAMETERS = ("connections", "threads", "warmup_s", "target_duration_s")
+INTEGRATIONS = {
+    "ktor-native": "Ktor Native",
+    "ktor-jvm": "Ktor JVM",
+    "spring-webflux": "Spring Boot WebFlux",
+}
 
 
 def git(checkout, *args):
@@ -74,6 +79,9 @@ def read_run(csv_path, note, checkout, revision):
                 environment[key] = value.strip('"')
     ci = environment.get("benchmark_source") == "github-hosted-actions"
     suite = environment.get("benchmark_suite")
+    integration = environment.get("integration_family") if suite == "integration" else None
+    if suite == "integration" and integration not in INTEGRATIONS:
+        raise ValueError(f"Unknown integration family in {environment_path}")
     if ci:
         architecture = environment.get("machine", "unknown")
         label = "ARM64" if architecture == "aarch64" else architecture
@@ -81,8 +89,10 @@ def read_run(csv_path, note, checkout, revision):
             "label": f"GitHub Actions · Linux {label}",
             "kind": "Exploratory CI run",
             "host": environment.get("cpu_model"),
-            "note": "wrk and the servers shared one GitHub-hosted VM. Runner CPUs and host conditions vary across series.",
+            "note": "The load generator and servers shared one GitHub-hosted VM. Runner CPUs and host conditions vary across series.",
         }
+        if integration:
+            note["label"] = f"{INTEGRATIONS[integration]} · Linux {label}"
     timestamp = datetime.strptime(folder.name.partition("-")[0], "%Y%m%dT%H%M%SZ").replace(tzinfo=timezone.utc)
     result = {
         "id": folder.name + ("-ci" if ci else ""),
@@ -104,6 +114,7 @@ def read_run(csv_path, note, checkout, revision):
         "ci_run_id": environment.get("ci_run_id") if ci else None,
         "ci_run_attempt": environment.get("ci_run_attempt") if ci else None,
         "suite": suite,
+        "integration": integration,
         "scope": environment.get("benchmark_endpoint") or None,
         "incomplete": ci and environment.get("benchmark_outcome") != "success",
         "valid": sum(row["valid"] == "1" for row in rows),
@@ -178,16 +189,22 @@ def main(destination, ci_checkout):
     if ci_checkout:
         ci_revision = git(ci_checkout, "rev-parse", "HEAD").strip()
         runs.extend(tracked_runs(ci_checkout, ci_revision, {}))
+    runs.sort(key=lambda run: run["date"], reverse=True)
+    integration_runs = [run for run in runs if run["integration"]]
+    comparison_runs = [run for run in runs if not run["integration"]]
     data = {
         "repository": f"https://github.com/{repo}",
         "revision": revision,
-        "runs": sorted(runs, key=lambda run: run["date"], reverse=True),
-        "history": measurement_history(runs, variant="kotlin-reactor"),
-        "framework_history": measurement_history(runs),
+        "runs": comparison_runs,
+        "history": measurement_history(comparison_runs, variant="kotlin-reactor"),
+        "framework_history": measurement_history(comparison_runs),
+        "integration_runs": integration_runs,
     }
     destination.mkdir(parents=True, exist_ok=True)
     for asset in ("index.html", "styles.css", "app.js"):
         shutil.copyfile(ASSETS / asset, destination / asset)
+    if (ASSETS / "assets").is_dir():
+        shutil.copytree(ASSETS / "assets", destination / "assets", dirs_exist_ok=True)
     (destination / "data.js").write_text(
         "window.benchmarkData = " + json.dumps(data, allow_nan=False, separators=(",", ":")) + ";\n"
     )

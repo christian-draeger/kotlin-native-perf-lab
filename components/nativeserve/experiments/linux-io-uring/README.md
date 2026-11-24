@@ -1,6 +1,6 @@
-# Experimental NativeServe io_uring transport
+# Experimental ktServe io_uring transport
 
-This standalone Linux x86_64 and ARM64 build uses the shared NativeServe HTTP/1.x application and Kotlin request/response API. It can run either io_uring or epoll in the same executable. Linux release builds outside this experiment continue to select epoll.
+This standalone Linux x86_64 and ARM64 build uses the shared ktServe HTTP/1.x application and Kotlin request/response API. It can run either io_uring or epoll in the same executable. Linux release builds outside this experiment continue to select epoll.
 
 The CI build uses Ubuntu 24.04's signed `liburing-dev` 2.5 package and links the architecture-specific static archive. Startup checks `IORING_FEAT_NODROP`, `IORING_FEAT_SUBMIT_STABLE`, `IORING_FEAT_EXT_ARG`, and support for single-shot accept, send, receive, and async cancel. The kernel and the execution environment must allow ring creation. `--capabilities` prints the feature mask or exits with status 77 and the actual Linux error number. Backend selection does not silently fall back. [liburing manual](https://github.com/axboe/liburing/tree/master/man)
 

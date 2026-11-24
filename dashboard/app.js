@@ -14,7 +14,7 @@ const variants = {
   "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "kotlin" },
   "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "kotlin" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
-  "kotlin-reactor": { label: "NativeServe", detail: "Kotlin/Native · HTTP server", color: "reactor" },
+  "kotlin-reactor": { label: "ktServe", detail: "Kotlin/Native · HTTP server", color: "reactor" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },
@@ -29,6 +29,13 @@ const variants = {
   micronaut: { label: "Micronaut", detail: "Kotlin · Netty", color: "kotlin" },
   http4k: { label: "http4k", detail: "Kotlin · Jetty", color: "kotlin" },
   javalin: { label: "Javalin", detail: "Kotlin · Jetty", color: "kotlin" },
+  "ktor-native-cio": { label: "Ktor with CIO", detail: "Kotlin/Native", color: "kotlin" },
+  "ktor-native-ktserve": { label: "Ktor with ktServe", detail: "Kotlin/Native · epoll", color: "reactor" },
+  "ktor-jvm-cio": { label: "Ktor with CIO", detail: "JVM", color: "kotlin" },
+  "ktor-jvm-netty": { label: "Ktor with Netty", detail: "JVM", color: "kotlin" },
+  "ktor-jvm-ktserve": { label: "Ktor with ktServe", detail: "JVM · JDK NIO", color: "reactor" },
+  "spring-webflux-reactor-netty": { label: "WebFlux with Reactor Netty", detail: "Spring Boot · JVM", color: "kotlin" },
+  "spring-webflux-ktserve": { label: "WebFlux with ktServe", detail: "Spring Boot · JVM · JDK NIO", color: "reactor" },
 };
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
   dateStyle: "medium", timeStyle: "short",
@@ -69,11 +76,9 @@ function sortComparison(groups, metric) {
   });
 }
 
-function renderChart(groups, metric) {
+function renderChart(container, groups, metric) {
   const info = metrics[metric];
   const scale = Math.max(1, ...groups.map((group) => group.stats?.[metric].max ?? 0)) * 1.06;
-  element("metric-name").textContent = info.name;
-  element("metric-direction").textContent = info.direction;
   const rows = groups.map((group) => {
     const variant = variantInfo(group.variant);
     const stats = group.stats?.[metric];
@@ -99,12 +104,12 @@ function renderChart(groups, metric) {
       range.style.width = (stats.max - stats.min) / scale * 100 + "%";
       track.append(bar, range);
       row.append(track, make("p",
-        [format(stats.min, metric), format(stats.max, metric)].join("–") + " " + info.unit,
+        "Range " + [format(stats.min, metric), format(stats.max, metric)].join("–") + " " + info.unit,
         "run-range"));
     }
     return row;
   });
-  element("chart").replaceChildren(...rows);
+  container.replaceChildren(...rows);
 }
 
 function renderTable(groups, endpoint) {
@@ -132,13 +137,17 @@ function renderMethod(run) {
     ["Warm-up", "warmup_s", " s"],
     ["Target duration", "target_duration_s", " s"],
   ].flatMap(([label, key, unit]) => {
-    const values = run.parameters[key];
+    const values = run.parameters[key] ?? [];
     return [make("dt", label), make("dd", values.length ? values.join(" / ") + unit : "—")];
   });
   element("parameters").replaceChildren(...parameters);
   const caveat = run.note.note ?? (run.local ? "wrk and the servers shared one host." : "");
   element("caveat").textContent = caveat;
   element("caveat").hidden = !caveat;
+  element("source-links").replaceChildren(...runSources(run));
+}
+
+function runSources(run) {
   const sources = [
     fileLink(run, "CSV", run.folder + "/results.csv"),
     fileLink(run, "Raw logs", run.folder, true),
@@ -158,99 +167,152 @@ function renderMethod(run) {
     commit.setAttribute("aria-label", "Measured commit " + run.sha.slice(0, 7));
     sources.push(commit);
   }
-  element("source-links").replaceChildren(...sources);
+  return sources;
 }
 
-function historyPlot(canvas, runs, bounds, metric) {
-  if (!runs.length || !bounds.length || !canvas.clientWidth) return null;
-  const ctx = canvas.getContext("2d");
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  const pixelRatio = window.devicePixelRatio || 1;
-  canvas.width = Math.round(width * pixelRatio);
-  canvas.height = Math.round(height * pixelRatio);
-  ctx.scale(pixelRatio, pixelRatio);
-  ctx.font = "12px system-ui, sans-serif";
-  const max = Math.max(...bounds.map((values) => values.max));
-  const min = Math.min(...bounds.map((values) => values.min));
-  const padding = Math.max((max - min) * 0.12, max * 0.025, 0.001);
-  const upper = max + padding;
-  const lower = Math.max(0, min - padding);
-  const ticks = Array.from({ length: 5 }, (_, index) => lower + (upper - lower) * index / 4);
-  const left = Math.max(...ticks.map((value) => ctx.measureText(format(value, metric)).width)) + 14;
-  const right = width - 12;
-  const top = 12;
-  const bottom = height - 24;
-  const y = (value) => bottom - (value - lower) / (upper - lower) * (bottom - top);
-  const first = Date.parse(runs[0].date);
-  const last = Date.parse(runs.at(-1).date);
-  const x = (run) => first === last ? (left + right) / 2
-    : left + (Date.parse(run.date) - first) / (last - first) * (right - left);
+const timeCharts = new WeakMap();
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-  ctx.fillStyle = "#50617a";
-  ctx.strokeStyle = "#dce5f0";
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  for (const value of ticks) {
-    const line = y(value);
-    ctx.fillText(format(value, metric), left - 8, line);
+function palette(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function chartPoint(run, values) {
+  return { x: Date.parse(run.date), y: values.median, min: values.min, max: values.max };
+}
+
+const historyMarks = {
+  id: "historyMarks",
+  beforeDatasetsDraw(chart, _args, options) {
+    const { ctx, chartArea, scales } = chart;
+    if (options.selectedTime == null && !options.ranges) return;
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(left, line);
-    ctx.lineTo(right, line);
-    ctx.stroke();
-  }
-  ctx.textBaseline = "bottom";
-  const sameDay = first !== last && shortDate.format(first) === shortDate.format(last);
-  const axisDate = (date) => sameDay ? shortTime.format(date)
-    : last - first < 48 * 60 * 60 * 1000 ? shortDate.format(date) + " " + shortTime.format(date)
-      : shortDate.format(date);
-  ctx.textAlign = first === last ? "center" : "left";
-  ctx.fillText(axisDate(first), x(runs[0]), height);
-  if (last !== first && width >= 520) {
-    ctx.textAlign = "center";
-    ctx.fillText(axisDate((first + last) / 2), (left + right) / 2, height);
-  }
-  if (last !== first && width > 180) {
-    ctx.textAlign = "right";
-    ctx.fillText(axisDate(last), right, height);
-  }
+    ctx.rect(chartArea.left, chartArea.top, chartArea.width, chartArea.height);
+    ctx.clip();
+    if (options.selectedTime != null) {
+      const left = scales.x.getPixelForValue(options.selectedTime);
+      ctx.strokeStyle = "#74658b";
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(left, chartArea.top);
+      ctx.lineTo(left, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (options.ranges) {
+      ctx.strokeStyle = "#f3ad92a0";
+      for (const point of chart.data.datasets[0].data) {
+        const left = scales.x.getPixelForValue(point.x);
+        const top = scales.y.getPixelForValue(point.max);
+        const bottom = scales.y.getPixelForValue(point.min);
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(left, bottom);
+        ctx.moveTo(left - 4, top);
+        ctx.lineTo(left + 4, top);
+        ctx.moveTo(left - 4, bottom);
+        ctx.lineTo(left + 4, bottom);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  },
+};
 
-  return { ctx, x, y, top, bottom };
+function drawTimeChart(canvas, datasets, metric, { ranges = false, selectedTime = null } = {}) {
+  if (!window.Chart || !datasets.length) return;
+  const points = datasets.flatMap((dataset) => dataset.data);
+  const first = Math.min(...points.map((point) => point.x));
+  const last = Math.max(...points.map((point) => point.x));
+  const min = Math.min(...points.map((point) => ranges ? point.min : point.y));
+  const max = Math.max(...points.map((point) => ranges ? point.max : point.y));
+  const hour = 60 * 60 * 1000;
+  const timePadding = Math.max(5 * 60 * 1000, (last - first) * 0.035);
+  const valuePadding = Math.max((max - min) * 0.125, max * 0.025, 0.001);
+  const axisDate = (time) => {
+    if (last - first >= 48 * hour) return shortDate.format(time);
+    if (shortDate.format(first) === shortDate.format(last)) return shortTime.format(time);
+    return shortDate.format(time) + " " + shortTime.format(time);
+  };
+  const text = palette("--muted");
+  const grid = palette("--chart-grid");
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    parsing: false,
+    animation: reducedMotion.matches ? false : { duration: 420 },
+    layout: { padding: { top: 10, right: 8 } },
+    interaction: { axis: "xy", mode: "nearest", intersect: false },
+    plugins: {
+      legend: { display: false },
+      historyMarks: { ranges, selectedTime },
+      tooltip: {
+        backgroundColor: "#242235",
+        borderColor: "#615778",
+        borderWidth: 1,
+        padding: 11,
+        callbacks: {
+          title: ([item]) => utcDateFormat.format(item.raw.x) + " UTC",
+          label: ({ dataset, raw }) => dataset.label + " · " + format(raw.y, metric) + " " + metrics[metric].unit,
+          afterLabel: ({ raw }) => ranges ? "Trial range " + format(raw.min, metric) + "–"
+            + format(raw.max, metric) + " " + metrics[metric].unit : "",
+        },
+      },
+    },
+    scales: {
+      x: {
+        type: "linear",
+        min: first - timePadding,
+        max: last + timePadding,
+        afterBuildTicks(scale) {
+          // Use UTC dates drawn from the actual run span, rather than rounding epoch milliseconds.
+          const times = first === last ? [first] : scale.width < 430 ? [first, last] : [first, (first + last) / 2, last];
+          scale.ticks = times.map((value) => ({ value }));
+        },
+        ticks: { color: text, callback: axisDate, maxRotation: 0, padding: 7, align: "inner" },
+        grid: { color: grid, drawTicks: false },
+        border: { color: grid },
+      },
+      y: {
+        suggestedMin: Math.max(0, min - valuePadding),
+        suggestedMax: max + valuePadding,
+        ticks: { color: text, callback: (value) => format(value, metric), maxTicksLimit: 6, padding: 8 },
+        grid: { color: grid, drawTicks: false },
+        border: { display: false },
+      },
+    },
+  };
+  const chart = timeCharts.get(canvas);
+  if (chart) {
+    chart.data.datasets = datasets;
+    chart.options = options;
+    chart.update("none");
+  } else {
+    timeCharts.set(canvas, new window.Chart(canvas, { type: "line", data: { datasets }, options, plugins: [historyMarks] }));
+  }
 }
 
 function drawHistory(canvas, points, metric) {
-  const plot = historyPlot(canvas, points.map((point) => point.run), points.map((point) => point.values), metric);
-  if (!plot) return;
-  const { ctx, x, y } = plot;
-  const accent = getComputedStyle(canvas).getPropertyValue("--reactor-accent").trim();
-  ctx.strokeStyle = "#d7a18b";
-  for (const point of points) {
-    const center = x(point.run);
-    const low = y(point.values.min);
-    const high = y(point.values.max);
-    ctx.beginPath();
-    ctx.moveTo(center, low);
-    ctx.lineTo(center, high);
-    ctx.moveTo(center - 4, low);
-    ctx.lineTo(center + 4, low);
-    ctx.moveTo(center - 4, high);
-    ctx.lineTo(center + 4, high);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  points.forEach((point, index) => {
-    if (index === 0) ctx.moveTo(x(point.run), y(point.values.median));
-    else ctx.lineTo(x(point.run), y(point.values.median));
-  });
-  ctx.stroke();
-  ctx.fillStyle = accent;
-  for (const point of points) {
-    ctx.beginPath();
-    ctx.arc(x(point.run), y(point.values.median), 4, 0, 2 * Math.PI);
-    ctx.fill();
-  }
+  const accent = palette("--reactor-accent");
+  drawTimeChart(canvas, [{
+    label: "ktServe",
+    data: points.map(({ run, values }) => chartPoint(run, values)),
+    borderColor: accent,
+    backgroundColor({ chart }) {
+      if (!chart.chartArea) return "transparent";
+      const fill = chart.ctx.createLinearGradient(0, chart.chartArea.top, 0, chart.chartArea.bottom);
+      fill.addColorStop(0, "#ff8e642d");
+      fill.addColorStop(1, "#ff8e6400");
+      return fill;
+    },
+    pointBackgroundColor: accent,
+    pointBorderWidth: 0,
+    pointRadius: 3,
+    pointHoverRadius: 6,
+    borderWidth: 2.5,
+    fill: "start",
+  }], metric, { ranges: true });
 }
 
 function profileLabel(profile) {
@@ -350,52 +412,31 @@ function startHistory(runs) {
   profileSelect.addEventListener("change", changeProfile);
   endpointSelect.addEventListener("change", update);
   metricSelect.addEventListener("change", update);
-  new ResizeObserver(() => drawHistory(canvas, points, metricSelect.value)).observe(canvas);
   element("history-controls").hidden = false;
   changeProfile();
 }
 
 function drawFrameworkHistory(canvas, samples, series, metric, selectedRun, highlighted) {
-  const bounds = samples.flatMap(({ groups }) => series.flatMap(({ name }) => {
-    const values = groups.get(name)?.stats[metric];
-    return values ? [{ min: values.median, max: values.median }] : [];
-  }));
-  const plot = historyPlot(canvas, samples.map(({ run }) => run), bounds, metric);
-  if (!plot) return;
-  const { ctx, x, y, top, bottom } = plot;
-  if (selectedRun) {
-    ctx.strokeStyle = "#a8b8cf";
-    ctx.beginPath();
-    ctx.moveTo(x(selectedRun), top);
-    ctx.lineTo(x(selectedRun), bottom);
-    ctx.stroke();
-  }
-  for (const { name, color, dash } of series) {
+  const datasets = series.map(({ name, color, dash }) => {
     const own = name === "kotlin-reactor";
-    ctx.globalAlpha = highlighted && highlighted !== name ? 0.18 : 1;
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = own ? 3 : 1.65;
-    ctx.setLineDash(dash);
-    ctx.beginPath();
-    const markers = [];
-    for (const { run, groups } of samples) {
-      const values = groups.get(name)?.stats[metric];
-      if (!values) continue;
-      const point = [x(run), y(values.median)];
-      if (markers.length) ctx.lineTo(...point);
-      else ctx.moveTo(...point);
-      markers.push(point);
-    }
-    ctx.stroke();
-    for (const [left, upper] of markers) {
-      ctx.beginPath();
-      ctx.arc(left, upper, own ? 3.5 : 2.5, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-  }
-  ctx.globalAlpha = 1;
-  ctx.setLineDash([]);
+    const visibleColor = highlighted && highlighted !== name ? color + "42" : color;
+    return {
+      label: variantInfo(name).label,
+      data: samples.flatMap(({ run, groups }) => {
+        const values = groups.get(name)?.stats[metric];
+        return values ? [chartPoint(run, values)] : [];
+      }),
+      borderColor: visibleColor,
+      pointBackgroundColor: visibleColor,
+      borderDash: dash,
+      borderWidth: own ? 2.75 : 1.5,
+      pointBorderWidth: 0,
+      pointRadius: own ? 3.75 : 2.35,
+      pointHoverRadius: 5,
+      order: own ? 0 : 1,
+    };
+  });
+  drawTimeChart(canvas, datasets, metric, { selectedTime: selectedRun ? Date.parse(selectedRun.date) : null });
 }
 
 function startFrameworkHistory(runs) {
@@ -424,6 +465,7 @@ function startFrameworkHistory(runs) {
   const metricSelect = element("framework-metric");
   const runSelect = element("framework-run");
   const canvas = element("framework-chart");
+  const plot = element("framework-plot");
   const details = element("framework-history").querySelector("details");
   const visibility = element("framework-visibility");
   const dashes = [[], [8, 4], [2, 4], [8, 3, 2, 3], [4, 3], [11, 4, 4, 4], [1, 3], [14, 5], [5, 3, 2, 3, 2, 3]];
@@ -432,9 +474,9 @@ function startFrameworkHistory(runs) {
 
   function draw() {
     const visible = series.filter(({ button }) => button.getAttribute("aria-pressed") === "true");
-    canvas.hidden = !visible.length;
+    plot.hidden = !visible.length;
     element("framework-empty").hidden = Boolean(visible.length);
-    visibility.textContent = visible.length === series.length ? "NativeServe only" : "Show all";
+    visibility.textContent = visible.length === series.length ? "ktServe only" : "Show all";
     const selectedRun = details.open ? byId.get(runSelect.value) : null;
     canvas.setAttribute("aria-label", metrics[metricSelect.value].name + " over time for " + visible.length + " frameworks");
     drawFrameworkHistory(canvas, samples, visible, metricSelect.value, selectedRun,
@@ -495,7 +537,6 @@ function startFrameworkHistory(runs) {
     });
     element("framework-series").replaceChildren(...series.map(({ button }) => button));
     for (const entry of series) entry.color = getComputedStyle(entry.button).getPropertyValue("--series").trim();
-    series.reverse(); // Paint NativeServe last.
     visibility.hidden = !endpoint.names.has("kotlin-reactor") || series.length < 2;
     element("framework-caveat").textContent =
       (samples.some(({ run }) => run.ci_run_id) ? "Exploratory CI on matching runner CPU models. " : "")
@@ -528,7 +569,6 @@ function startFrameworkHistory(runs) {
   });
   element("framework-history").hidden = false;
   changeProfile();
-  new ResizeObserver(draw).observe(canvas);
 }
 
 function start() {
@@ -582,7 +622,9 @@ function start() {
   function showComparison() {
     const endpoint = endpointSelect.value;
     const groups = sortComparison(run.groups.filter((group) => group.endpoint === endpoint), metric);
-    renderChart(groups, metric);
+    element("metric-name").textContent = metrics[metric].name;
+    element("metric-direction").textContent = metrics[metric].direction;
+    renderChart(element("chart"), groups, metric);
     renderTable(groups, endpoint);
   }
 
@@ -621,8 +663,83 @@ function start() {
   updateRun();
   element("run-picker").hidden = false;
   element("dashboard").hidden = false;
+  element("details").hidden = false;
+  element("reactor-history").hidden = false;
   startFrameworkHistory(runs);
   startHistory(runs);
 }
 
+function startIntegration() {
+  const families = {
+    "ktor-native": "Ktor · Kotlin/Native",
+    "ktor-jvm": "Ktor · JVM",
+    "spring-webflux": "Spring Boot WebFlux · JVM",
+  };
+  const runs = data?.integration_runs ?? [];
+  const available = Object.keys(families).filter((family) => runs.some((run) => run.integration === family));
+  element("integration-empty").hidden = Boolean(available.length);
+  if (!available.length) return;
+
+  const familySelect = element("integration-family");
+  const runSelect = element("integration-run");
+  const endpointSelect = element("integration-endpoint");
+  const metricSelect = element("integration-metric");
+  let familyRuns;
+  let run;
+  function draw() {
+    const key = metricSelect.value;
+    const endpoint = endpointSelect.value;
+    const groups = sortComparison(run.groups.filter((group) => group.endpoint === endpoint), key);
+    const valid = groups.reduce((total, group) => total + group.valid, 0);
+    const trials = groups.reduce((total, group) => total + group.total, 0);
+    element("integration-axis").textContent = metrics[key].name + " · " + metrics[key].direction;
+    element("integration-context").textContent = valid + " / " + trials + " valid trials"
+      + (run.incomplete ? " · incomplete run" : "");
+    renderChart(element("integration-chart"), groups, key);
+  }
+
+  function changeRun() {
+    run = familyRuns.find((entry) => entry.id === runSelect.value);
+    const previous = endpointSelect.value;
+    const endpoints = [...new Set(run.groups.map((group) => group.endpoint))];
+    endpointSelect.replaceChildren(...endpoints.map((endpoint) => new Option(endpoint)));
+    if (endpoints.includes(previous)) endpointSelect.value = previous;
+    else if (endpoints.includes("/json")) endpointSelect.value = "/json";
+    const conditions = [
+      run.ci_run_id ? "Exploratory hosted CI" : "",
+      run.note.host, run.os, run.machine,
+      ...[
+        ["connections", " connections"],
+        ["threads", " wrk threads"],
+        ["warmup_s", " s warm-up"],
+        ["target_duration_s", " s trial"],
+      ].flatMap(([key, label]) => run.parameters[key]?.length ? [run.parameters[key].join(" / ") + label] : []),
+    ];
+    const caveat = run.note.note ?? (run.local ? "The load generator and server shared one host." : "");
+    element("integration-workload").textContent = conditions.filter(Boolean).join(" · ") + (caveat ? ". " + caveat : "");
+    element("integration-links").replaceChildren(...runSources(run));
+    draw();
+  }
+
+  function changeFamily() {
+    familyRuns = runs.filter((entry) => entry.integration === familySelect.value);
+    runSelect.replaceChildren(...familyRuns.map((entry) => new Option([
+      entry.machine, utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
+    ].filter(Boolean).join(" · "), entry.id)));
+    const latestComplete = familyRuns.find((entry) => !entry.incomplete && entry.valid === entry.total);
+    if (latestComplete) runSelect.value = latestComplete.id;
+    changeRun();
+  }
+
+  familySelect.replaceChildren(...available.map((family) => new Option(families[family], family)));
+  metricSelect.replaceChildren(...metricOptions());
+  familySelect.addEventListener("change", changeFamily);
+  runSelect.addEventListener("change", changeRun);
+  endpointSelect.addEventListener("change", draw);
+  metricSelect.addEventListener("change", draw);
+  element("integration-data").hidden = false;
+  changeFamily();
+}
+
 start();
+startIntegration();

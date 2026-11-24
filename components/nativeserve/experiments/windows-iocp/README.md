@@ -1,4 +1,4 @@
-# Experimental NativeServe IOCP transport
+# Experimental ktServe IOCP transport
 
 This standalone Kotlin/Native executable checks whether the pinned toolchain can call Winsock and I/O completion ports on Windows. It binds a TCP listener to an ephemeral IPv4 loopback port, associates the accepted socket with a completion port, receives one byte through `WSARecv` and then cancels a second receive. It checks the connection key, operation pointer, byte count and cancellation status returned by the kernel.
 

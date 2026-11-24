@@ -16,6 +16,22 @@ def error_count(stats):
     return sum(int(stats[key]) for key in ("connect", "read", "write", "timeout", "http_errors"))
 
 
+def read_load_timing(path):
+    lines = [line for line in path.read_text().splitlines() if line.startswith("perflab_load ")]
+    if not lines:
+        return {"load_cpu_seconds": "", "load_peak_rss_kib": "", "load_cpu_equivalents": ""}
+    if len(lines) != 1:
+        raise ValueError(f"Expected at most one load timing line in {path}")
+    timing = dict(field.split("=", 1) for field in lines[0].split()[1:])
+    cpu = float(timing["user_s"]) + float(timing["system_s"])
+    elapsed = float(timing["elapsed_s"])
+    return {
+        "load_cpu_seconds": round(cpu, 3),
+        "load_peak_rss_kib": int(timing["peak_rss_kib"]),
+        "load_cpu_equivalents": round(cpu / elapsed, 3) if elapsed > 0 else "",
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
     for key in ("log", "warmup-log", "csv"):
@@ -71,6 +87,7 @@ def main():
         "warmup_s": args.warmup,
         "warmup_stability": args.warmup_stability,
         "git_sha": args.git_sha,
+        **read_load_timing(args.log),
     }
     new_file = not args.csv.exists()
     with args.csv.open("a", newline="") as output:

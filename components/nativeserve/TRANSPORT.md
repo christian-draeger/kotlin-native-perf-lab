@@ -1,4 +1,4 @@
-# NativeServe stream transport
+# ktServe stream transport
 
 The routing API configures handlers in the HTTP core. The core owns request framing, response encoding, per-connection HTTP state and server policy. It drives the internal `StreamTransport` interface. Platform backends implement that interface and own the listener, sockets, readiness registrations, kernel submission queues and native addressing. HTTP code receives connection IDs, operation IDs, byte counts and portable outcomes. Backends can log the underlying platform error with operation context.
 

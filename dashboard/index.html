@@ -3,175 +3,283 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Linux HTTP benchmarks and framework performance over time.">
-  <title>Kotlin Native Performance Lab · Benchmark dashboard</title>
+  <meta name="description" content="ktServe is an HTTP server framework and embeddable engine for Kotlin/Native and the JVM. Explore its architecture, integrations and open benchmarks.">
+  <meta name="theme-color" content="#101019">
+  <title>ktServe — HTTP serving in Kotlin</title>
   <link rel="stylesheet" href="./styles.css">
   <script src="./data.js" defer></script>
+  <script src="./assets/chart.umd.min.js" defer></script>
   <script src="./app.js" defer></script>
 </head>
 <body>
-  <header class="site-header">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top">
     <div class="shell header-inner">
-      <a class="wordmark" href="./">
-        <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
-        Kotlin Native Performance Lab
-      </a>
-      <nav aria-label="Navigation">
-        <a href="#framework-history" id="framework-history-link">Framework history</a>
-        <a href="#reactor-history" id="history-link">NativeServe history</a>
-        <a href="#details" id="details-link">Measurements</a>
-        <a id="repository" href="https://github.com/christian-draeger/kotlin-native-perf-lab">Repository</a>
+      <a class="wordmark" href="#top"><span class="mark" aria-hidden="true"></span>ktServe</a>
+      <nav aria-label="Main navigation">
+        <a href="#architecture">Architecture</a>
+        <a href="#integrations">Integrations</a>
+        <a href="#overview">Benchmarks</a>
+        <a class="repository-link" id="repository" href="https://github.com/christian-draeger/kotlin-native-perf-lab">GitHub <span aria-hidden="true">↗</span></a>
       </nav>
     </div>
   </header>
 
-  <main id="overview">
-    <section class="hero">
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
       <div class="shell hero-inner">
-        <div>
-          <h1>Benchmark overview</h1>
-          <p>NativeServe performance alongside Rust, Go, JVM, JavaScript and Python servers.</p>
+        <div class="hero-copy">
+          <p class="eyebrow"><i aria-hidden="true"></i>Kotlin/Native + JVM</p>
+          <h1 id="hero-title">HTTP serving,<br><em>built in Kotlin.</em></h1>
+          <p class="hero-description">ktServe gives Kotlin apps an HTTP server with a small routing API. It also plugs in beneath Ktor and Spring Boot WebFlux as a server engine.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#overview">Explore benchmarks <span aria-hidden="true">↓</span></a>
+            <a class="button button-secondary" href="https://github.com/christian-draeger/kotlin-native-perf-lab/tree/main/components/nativeserve#run-the-example">Run the example <span aria-hidden="true">↗</span></a>
+          </div>
         </div>
-        <div class="run-picker" id="run-picker" hidden>
-          <label for="run-select">Measurement series</label>
-          <select id="run-select"></select>
+        <div class="hero-visual">
+          <div class="code-window">
+            <div class="code-window-title"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Application.kt</span><span class="code-language">Kotlin</span></div>
+            <pre><code><span class="code-keyword">import</span> dev.perflab.nativeserve.*
+
+<span class="code-keyword">fun</span> <span class="code-function">main</span>() {
+    <span class="code-function">serve</span>(port = <span class="code-value">8080</span>) {
+        <span class="code-function">get</span>(<span class="code-string">"/health"</span>) { <span class="code-function">text</span>(<span class="code-string">"ok"</span>) }
+    }
+}</code></pre>
+            <div class="code-window-footer"><span><i aria-hidden="true"></i>GET /health</span><span class="code-response">200 OK</span></div>
+          </div>
         </div>
       </div>
     </section>
 
-    <div class="shell content">
-      <noscript><p class="notice">The dashboard requires JavaScript. The results are also available in the repository.</p></noscript>
-      <p class="notice" id="empty" hidden>No benchmark series have been published yet.</p>
+    <section class="product-section" id="architecture" aria-labelledby="architecture-title">
+      <div class="shell architecture-grid">
+        <div class="section-copy">
+          <h2 id="architecture-title">One HTTP core.<br>Three transports.</h2>
+          <p>ktServe keeps HTTP parsing, connection state, routing and body streaming in a shared Kotlin core. A small transport interface handles socket reads, writes and readiness on each platform.</p>
+          <a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/blob/main/components/nativeserve/TRANSPORT.md">Read the transport design <span aria-hidden="true">↗</span></a>
+        </div>
+        <figure class="architecture-diagram" aria-label="An HTTP request flows through a platform transport, the shared Kotlin HTTP core, and an application">
+          <div class="diagram-entry"><span class="request-pulse" aria-hidden="true"></span>HTTP/1.x request</div>
+          <div class="diagram-arrow" aria-hidden="true"></div>
+          <div class="diagram-transports" aria-label="Platform transports">
+            <div><span>Linux</span><strong>epoll</strong></div>
+            <div><span>Apple Silicon</span><strong>kqueue</strong></div>
+            <div><span>JVM</span><strong>JDK NIO</strong></div>
+          </div>
+          <div class="diagram-arrow" aria-hidden="true"></div>
+          <div class="diagram-core"><strong>ktServe HTTP core</strong><span>Parsing · connection state · streaming</span></div>
+          <div class="diagram-arrow" aria-hidden="true"></div>
+          <div class="diagram-apps" aria-label="Application entry points">
+            <span>ktServe routing</span><span>Ktor engine</span><span>WebFlux adapter</span>
+          </div>
+          <figcaption>Request path. The response returns through the same transport.</figcaption>
+        </figure>
+      </div>
+    </section>
 
-      <div id="dashboard" hidden>
-        <div class="run-status">
-          <span id="run-kind" class="tag"></span>
-          <span id="run-context"></span>
-          <span id="trial-count" class="trial-count"></span>
+    <section class="product-section integrations-section" id="integrations" aria-labelledby="integrations-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h2 id="integrations-title">Use the framework you know.</h2>
+          <p>Pick ktServe for a new service, or keep your existing routing and handler APIs and select ktServe as the engine.</p>
+        </div>
+        <div class="integration-grid">
+          <article class="integration-card">
+            <span class="integration-runtime">Kotlin/Native + JVM</span>
+            <h3>Ktor</h3>
+            <p>Select the ktServe engine in <code>embeddedServer</code>. Your Ktor application module keeps its routes, plugins and content negotiation. The engine runs on Linux Native and the JVM.</p>
+            <div class="integration-links">
+              <a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/tree/main/components/nativeserve/examples/ktor-jvm">JVM example ↗</a>
+              <a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/tree/main/components/nativeserve/integrations/ktor">Engine guide ↗</a>
+            </div>
+          </article>
+          <article class="integration-card">
+            <span class="integration-runtime">JVM</span>
+            <h3>Spring Boot WebFlux</h3>
+            <p>Enable the ktServe starter to run a WebFlux app on the JVM with its reactive handler pipeline. Activation is explicit, so the same app can also run with Reactor Netty.</p>
+            <div class="integration-links">
+              <a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/tree/main/components/nativeserve/examples/spring-webflux">Boot example ↗</a>
+              <a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/tree/main/components/nativeserve/integrations/spring-boot-starter">Starter guide ↗</a>
+            </div>
+          </article>
+        </div>
+        <div class="integration-note">
+          <p>The supported path on this page uses HTTP/1.x. HTTP/2 and additional transports are tracked as experiments.</p>
+          <a class="text-link" href="#integration-benchmarks">See same-app engine benchmarks <span aria-hidden="true">↓</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="benchmark-section" id="overview" aria-labelledby="benchmark-title">
+      <div class="shell content">
+        <div class="benchmark-heading">
+          <div class="section-heading">
+            <h2 id="benchmark-title">The performance lab.</h2>
+            <p>How close can an idiomatic Kotlin server get to Rust/Axum? Our working target is at least 90% of Axum's throughput, with p99 latency and CPU cost within 10% at comparable successful load.</p>
+          </div>
+          <div class="benchmark-objective">
+            <span>Benchmark methodology</span>
+            <p>Hosted CI runs are exploratory. Controlled comparisons use an independent load generator. The raw results and recorded conditions are linked from each run.</p>
+            <a class="text-link" href="https://github.com/christian-draeger/kotlin-native-perf-lab/blob/main/ROADMAP.md">Read the roadmap ↗</a>
+          </div>
+        </div>
+        <nav class="benchmark-nav" aria-label="Benchmark sections">
+          <a href="#comparison-title">Rankings</a>
+          <a href="#integration-benchmarks">Engine comparisons</a>
+          <a href="#framework-history" id="framework-history-link">Framework history</a>
+          <a href="#reactor-history" id="history-link">ktServe history</a>
+          <a href="#details" id="details-link">Trial medians</a>
+        </nav>
+        <noscript><p class="notice">Enable JavaScript to explore the bench data. Run results are also available from the GitHub repository.</p></noscript>
+        <p class="notice" id="empty" hidden>No framework benchmark series have been published yet.</p>
+
+        <div id="dashboard" hidden>
+          <div class="run-toolbar">
+            <div class="run-picker" id="run-picker" hidden>
+              <label for="run-select">Measurement series</label>
+              <select id="run-select"></select>
+            </div>
+            <div class="run-status">
+              <span id="run-kind" class="tag"></span>
+              <span id="run-context"></span>
+              <span id="trial-count" class="trial-count"></span>
+            </div>
+          </div>
+
+          <div class="grid">
+            <section class="card comparison" aria-labelledby="comparison-title">
+              <div class="card-heading">
+                <h3 id="comparison-title">Framework rankings</h3>
+                <label class="route-picker">Endpoint<select id="endpoint"></select></label>
+              </div>
+              <div class="metric-picker" id="metrics" role="group" aria-label="Metric">
+                <button type="button" data-metric="rps" aria-pressed="true">Throughput</button>
+                <button type="button" data-metric="p99" aria-pressed="false">P99 latency</button>
+                <button type="button" data-metric="cpu" aria-pressed="false">CPU cost</button>
+                <button type="button" data-metric="rss" aria-pressed="false">Peak RSS</button>
+              </div>
+              <div class="chart-caption">
+                <strong id="metric-name"></strong>
+                <span id="metric-direction"></span>
+              </div>
+              <div id="chart" class="chart" aria-live="polite"></div>
+              <div class="chart-legend">
+                <span><i class="median-key"></i>Median</span>
+                <span><i class="range-key"></i>Trial min–max</span>
+                <span><i class="swatch reactor"></i>ktServe</span>
+                <span><i class="swatch kotlin"></i>Kotlin ecosystem</span>
+              </div>
+            </section>
+
+            <aside class="card method" aria-labelledby="method-title">
+              <h3 id="method-title">Test conditions</h3>
+              <p id="host" class="host"></p>
+              <dl id="parameters"></dl>
+              <p id="caveat" class="caveat" hidden></p>
+              <div class="source-links" id="source-links"></div>
+            </aside>
+          </div>
         </div>
 
-        <div class="grid">
-          <section class="card comparison" aria-labelledby="comparison-title">
-            <div class="card-heading">
-              <h2 id="comparison-title">Comparison overview</h2>
-              <label class="route-picker">Endpoint
-                <select id="endpoint"></select>
-              </label>
+        <section class="card integration-results" id="integration-benchmarks" aria-labelledby="integration-benchmarks-title">
+          <div class="card-heading">
+            <div>
+              <h3 id="integration-benchmarks-title">Same app, different engine</h3>
+              <p class="history-context">Compare ktServe with CIO or Netty in Ktor and Reactor Netty in Spring Boot WebFlux. Each family runs the same application across its engines.</p>
             </div>
-            <div class="metric-picker" id="metrics" role="group" aria-label="Metric">
-              <button type="button" data-metric="rps" aria-pressed="true">Throughput</button>
-              <button type="button" data-metric="p99" aria-pressed="false">P99 latency</button>
-              <button type="button" data-metric="cpu" aria-pressed="false">CPU cost</button>
-              <button type="button" data-metric="rss" aria-pressed="false">Peak RSS</button>
+          </div>
+          <p id="integration-empty" class="notice" hidden>Engine measurements will appear here after the first published integration run.</p>
+          <div id="integration-data" hidden>
+            <div class="history-controls integration-controls">
+              <label>Application<select id="integration-family"></select></label>
+              <label>Run<select id="integration-run"></select></label>
+              <label>Endpoint<select id="integration-endpoint"></select></label>
+              <label>Metric<select id="integration-metric"></select></label>
             </div>
             <div class="chart-caption">
-              <strong id="metric-name"></strong>
-              <span id="metric-direction"></span>
+              <strong id="integration-axis"></strong>
+              <span id="integration-context"></span>
             </div>
-            <div id="chart" class="chart" aria-live="polite"></div>
+            <div id="integration-chart" class="chart" aria-live="polite"></div>
             <div class="chart-legend">
               <span><i class="median-key"></i>Median</span>
-              <span><i class="range-key"></i>Run min–max</span>
-              <span><i class="swatch reactor"></i>NativeServe</span>
-              <span><i class="swatch kotlin"></i>Kotlin ecosystem</span>
+              <span><i class="range-key"></i>Trial min–max</span>
             </div>
-          </section>
-
-          <aside class="card method" aria-labelledby="method-title">
-            <h2 id="method-title">Test conditions</h2>
-            <p id="host" class="host"></p>
-            <dl id="parameters"></dl>
-            <p id="caveat" class="caveat" hidden></p>
-            <div class="source-links" id="source-links"></div>
-          </aside>
-        </div>
+            <p id="integration-workload" class="history-context"></p>
+            <div class="source-links" id="integration-links"></div>
+          </div>
+        </section>
 
         <section class="card history-card" id="framework-history" aria-labelledby="framework-history-title" hidden>
           <div class="card-heading">
             <div>
-              <h2 id="framework-history-title">Frameworks over time</h2>
+              <h3 id="framework-history-title">Frameworks over time</h3>
               <p class="history-context" id="framework-workload"></p>
             </div>
-            <div class="history-controls">
-              <label>Runner and workload <select id="framework-profile"></select></label>
-              <label>Endpoint <select id="framework-endpoint"></select></label>
-              <label>Metric <select id="framework-metric"></select></label>
-            </div>
           </div>
-          <div class="chart-caption framework-caption">
+          <div class="history-controls">
+            <label>Runner and workload<select id="framework-profile"></select></label>
+            <label>Endpoint<select id="framework-endpoint"></select></label>
+            <label>Metric<select id="framework-metric"></select></label>
+          </div>
+          <div class="chart-caption">
             <strong id="framework-axis"></strong>
             <span id="framework-direction"></span>
           </div>
-          <canvas id="framework-chart" role="img" aria-label="Framework trial medians over time"
-            aria-describedby="framework-caveat"></canvas>
+          <div class="timeline" id="framework-plot">
+            <canvas id="framework-chart" role="img" aria-label="Framework trial medians over time" aria-describedby="framework-caveat"></canvas>
+          </div>
           <p class="history-context" id="framework-empty" hidden>Select a framework to display its measurements.</p>
           <div class="framework-legend">
             <div id="framework-series" role="group" aria-label="Visible frameworks"></div>
-            <button id="framework-visibility" class="framework-button" type="button">NativeServe only</button>
+            <button id="framework-visibility" class="framework-button" type="button">ktServe only</button>
           </div>
           <p class="history-context" id="framework-caveat"></p>
           <details class="framework-readings">
             <summary>Run values and raw logs</summary>
             <div class="framework-run">
-              <label>Run (UTC) <select id="framework-run"></select></label>
-              <a id="framework-raw">Raw logs</a>
+              <label>Run (UTC)<select id="framework-run"></select></label>
+              <a class="text-link" id="framework-raw">Raw logs ↗</a>
             </div>
             <div class="table-scroll" tabindex="0" role="region" aria-label="Framework values for the selected run">
               <table>
-                <thead>
-                  <tr>
-                    <th scope="col">Framework</th>
-                    <th scope="col">Median</th>
-                    <th scope="col">Trials</th>
-                  </tr>
-                </thead>
+                <thead><tr><th scope="col">Framework</th><th scope="col">Median</th><th scope="col">Trials</th></tr></thead>
                 <tbody id="framework-rows"></tbody>
               </table>
             </div>
           </details>
         </section>
 
-        <section class="card history-card reactor-history" id="reactor-history" aria-labelledby="history-title">
+        <section class="card history-card reactor-history" id="reactor-history" aria-labelledby="history-title" hidden>
           <div class="card-heading">
             <div>
-              <h2 id="history-title">NativeServe over time</h2>
+              <h3 id="history-title">ktServe over time</h3>
               <p class="history-context" id="history-workload"></p>
             </div>
-            <div class="history-controls" id="history-controls" hidden>
-              <label>Runner and workload <select id="history-profile"></select></label>
-              <label>Endpoint <select id="history-endpoint"></select></label>
-              <label>Metric <select id="history-metric"></select></label>
-            </div>
           </div>
-          <p class="history-context" id="history-empty" hidden>No comparable NativeServe runs for this workload yet.</p>
+          <div class="history-controls" id="history-controls" hidden>
+            <label>Runner and workload<select id="history-profile"></select></label>
+            <label>Endpoint<select id="history-endpoint"></select></label>
+            <label>Metric<select id="history-metric"></select></label>
+          </div>
+          <p class="history-context" id="history-empty" hidden>No comparable ktServe runs for this workload yet.</p>
           <div id="history-data" hidden>
             <div class="history-latest">
-              <div>
-                <span id="history-metric-name"></span>
-                <strong id="history-value"></strong>
-              </div>
-              <div>
-                <span id="history-delta" aria-live="polite"></span>
-                <span id="history-direction"></span>
-              </div>
+              <div><span id="history-metric-name"></span><strong id="history-value"></strong></div>
+              <div><span id="history-delta" aria-live="polite"></span><span id="history-direction"></span></div>
             </div>
-            <canvas id="history-chart" aria-hidden="true"></canvas>
+            <div class="timeline"><canvas id="history-chart" aria-hidden="true"></canvas></div>
             <div class="chart-legend">
               <span><i class="median-key history-key"></i>Trial median</span>
               <span><i class="range-key"></i>Trial min–max</span>
             </div>
             <p class="history-context" id="history-caveat"></p>
-            <div class="table-scroll" tabindex="0" role="region" aria-label="NativeServe runs">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="ktServe runs">
               <table>
                 <thead>
-                  <tr>
-                    <th scope="col">Run (UTC)</th>
-                    <th scope="col">Measured change</th>
-                    <th scope="col">Median</th>
-                    <th scope="col">Min–max</th>
-                    <th scope="col">Trials</th>
-                    <th scope="col">Source</th>
-                  </tr>
+                  <tr><th scope="col">Run (UTC)</th><th scope="col">Measured change</th><th scope="col">Median</th><th scope="col">Min–max</th><th scope="col">Trials</th><th scope="col">Source</th></tr>
                 </thead>
                 <tbody id="history-rows"></tbody>
               </table>
@@ -179,24 +287,16 @@
           </div>
         </section>
 
-        <section class="card details" id="details" aria-labelledby="detail-title">
-          <div class="card-heading">
-            <h2 id="detail-title">Measurements</h2>
-            <code id="table-endpoint"></code>
-          </div>
+        <section class="card details" id="details" aria-labelledby="detail-title" hidden>
+          <div class="card-heading"><h3 id="detail-title">Trial medians</h3><code id="table-endpoint"></code></div>
           <div class="table-scroll" tabindex="0" role="region" aria-label="Benchmark table">
             <table>
               <caption>Medians by variant. Latency columns summarize the percentiles from individual trials.</caption>
               <thead>
                 <tr>
-                  <th scope="col">Variant</th>
-                  <th scope="col">Valid</th>
-                  <th scope="col">Req/s</th>
-                  <th scope="col">P50 <span>ms</span></th>
-                  <th scope="col">P95 <span>ms</span></th>
-                  <th scope="col">P99 <span>ms</span></th>
-                  <th scope="col">CPU <span>s / 1M req.</span></th>
-                  <th scope="col">Peak RSS <span>MiB</span></th>
+                  <th scope="col">Variant</th><th scope="col">Valid</th><th scope="col">Req/s</th>
+                  <th scope="col">P50 <span>ms</span></th><th scope="col">P95 <span>ms</span></th><th scope="col">P99 <span>ms</span></th>
+                  <th scope="col">CPU <span>s / 1M req.</span></th><th scope="col">Peak RSS <span>MiB</span></th>
                 </tr>
               </thead>
               <tbody id="rows"></tbody>
@@ -204,7 +304,18 @@
           </div>
         </section>
       </div>
-    </div>
+    </section>
   </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <a class="wordmark" href="#top"><span class="mark" aria-hidden="true"></span>ktServe</a>
+      <nav aria-label="Project links">
+        <a href="https://github.com/christian-draeger/kotlin-native-perf-lab">Source code ↗</a>
+        <a href="https://github.com/christian-draeger/kotlin-native-perf-lab/milestones">Milestones ↗</a>
+        <a href="#overview">Benchmarks ↑</a>
+      </nav>
+    </div>
+  </footer>
 </body>
 </html>

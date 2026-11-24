@@ -14,6 +14,7 @@ python3 "$ROOT/scripts/worker-topology.py" "$SERVER_CPUS" "$LOAD_CPUS" > "$out/t
   git -C "$ROOT" rev-parse HEAD
   printf 'reference_sha=%s\nserver_cpus=%s\nload_cpus=%s\n' "$NATIVESERVE_REFERENCE_SHA" "$SERVER_CPUS" "$LOAD_CPUS"
   printf '%s\n' 'Exploratory same-host comparison. HTTP/1.1 /json, at most 64 connections, 4s warm-up, 5s measured.'
+  printf '%s\n' 'Client sample records user/system CPU, wall time and peak RSS. Compare requested rate, actual rate and HTTP 200 counts in the report.'
   vegeta -version
 } > "$out/environment.txt"
 trap stop_server EXIT
@@ -51,7 +52,10 @@ for rate in 20000 40000; do
         -connections=64 -max-connections=64 -timeout=2s -http2=false -max-body=0)
       printf 'GET %s/json\n' "$base" | "${attack[@]}" -duration=4s | vegeta report -type=json > "$prefix.warmup.json"
       read -r start _ _ < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
-      printf 'GET %s/json\n' "$base" | "${attack[@]}" -duration=5s > "$prefix.bin"
+      printf 'GET %s/json\n' "$base" |
+        LC_ALL=C /usr/bin/time -o "$prefix.client.txt" \
+          -f 'perflab_load elapsed_s=%e user_s=%U system_s=%S peak_rss_kib=%M' \
+          "${attack[@]}" -duration=5s > "$prefix.bin"
       read -r end peak rss < <(python3 "$ROOT/scripts/proc_metrics.py" "$server_pid")
       printf '%s,%s,%s,%s\n' "$start" "$end" "$peak" "$rss" > "$prefix.proc.csv"
       stop_server
