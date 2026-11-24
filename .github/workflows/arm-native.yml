@@ -6,32 +6,82 @@ on:
       smoke_fixtures:
         type: boolean
         default: false
+      reuse_smoke:
+        type: boolean
+        default: false
     outputs:
       artifact_id:
         description: Kotlin JVM distribution and Linux ARM64 release executables
         value: ${{ jobs.cross_build.outputs.artifact_id }}
+      artifact_run_id:
+        description: Workflow run that produced the release artifact
+        value: ${{ jobs.cross_build.outputs.artifact_run_id }}
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   cross_build:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
-      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_id: ${{ steps.reuse.outputs.artifact_id || steps.upload.outputs.artifact-id }}
+      artifact_run_id: ${{ steps.reuse.outputs.run_id || github.run_id }}
     steps:
+      - name: Find an already verified build for this commit
+        id: reuse
+        if: inputs.reuse_smoke && github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repo="repos/$GITHUB_REPOSITORY"
+          if ! runs="$(gh api -X GET "$repo/actions/workflows/smoke.yml/runs" \
+            -f branch=main -f event=push -f status=success -f head_sha="$GITHUB_SHA" -F per_page=5)"; then
+            echo 'Could not query existing builds. Building from source.'
+            exit 0
+          fi
+          candidate="$(jq -r --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" '
+            [.workflow_runs[] | select(.head_sha == $sha and .head_repository.full_name == $repo
+              and .name == "Ubuntu smoke" and .head_branch == "main" and .event == "push"
+              and .conclusion == "success")][0] | if . then [.id, .run_attempt] | @tsv else empty end
+          ' <<<"$runs")"
+          if [[ -z "$candidate" ]]; then
+            echo 'No successful smoke run for this commit. Building from source.'
+            exit 0
+          fi
+          read -r run_id attempt <<<"$candidate"
+          [[ "$run_id" =~ ^[0-9]+$ && "$attempt" =~ ^[0-9]+$ ]]
+          name="linux-aarch64-kotlin-native-$attempt"
+          if ! artifacts="$(gh api "$repo/actions/runs/$run_id/artifacts")"; then
+            echo 'Could not query the existing artifact. Building from source.'
+            exit 0
+          fi
+          artifact_id="$(jq -r --arg name "$name" '
+            [.artifacts[] | select(.name == $name and .expired == false)]
+              | if length == 1 then .[0].id else empty end
+          ' <<<"$artifacts")"
+          if [[ ! "$artifact_id" =~ ^[0-9]+$ ]]; then
+            echo 'No usable release artifact for that smoke run. Building from source.'
+            exit 0
+          fi
+          printf 'artifact_id=%s\nrun_id=%s\n' "$artifact_id" "$run_id" >> "$GITHUB_OUTPUT"
+          printf 'Using ARM64 artifact %s from verified smoke run %s at %s.\n' "$artifact_id" "$run_id" "$GITHUB_SHA"
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        if: steps.reuse.outputs.artifact_id == ''
         with:
           persist-credentials: false
       - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        if: steps.reuse.outputs.artifact_id == ''
         with:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        if: steps.reuse.outputs.artifact_id == ''
         with:
           gradle-version: '9.7.0'
       - name: Build and verify the ARM64 release executables
+        if: steps.reuse.outputs.artifact_id == ''
         env:
           LC_ALL: C
           INCLUDE_SMOKE_FIXTURES: ${{ inputs.smoke_fixtures }}
@@ -56,6 +106,7 @@ jobs:
             done
           fi
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: steps.reuse.outputs.artifact_id == ''
         id: upload
         with:
           name: linux-aarch64-kotlin-native-${{ github.run_attempt }}
