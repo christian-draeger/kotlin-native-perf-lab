@@ -1,0 +1,10 @@
+variant,endpoint,run,valid,requests,rps,p50_us,p95_us,p99_us,cpu_start_seconds,cpu_end_seconds,cpu_seconds,cpu_seconds_per_million_requests,peak_rss_kib,end_rss_kib,connect_errors,read_errors,write_errors,timeouts,http_errors,warmup_errors,threads,connections,target_duration_s,duration_s,warmup_s,warmup_stability,git_sha,load_cpu_seconds,load_peak_rss_kib,load_cpu_equivalents
+ktor-native-cio,/upload,1,1,34897,6842.926,2098,4763,6454,18.47,27.76,9.29,266.212,151036,147840,0,0,0,0,0,0,2,16,5,5.099719,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.56,4860,0.11
+ktor-native-ktserve,/upload,1,1,16877,3373.553,4947,7377,7984,5.67,8.52,2.85,168.869,37300,27524,0,0,0,0,0,0,2,16,5,5.002737,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.24,4668,0.048
+ktor-native-ktserve-eventfd,/upload,1,1,56263,11031.024,1220,3275,5465,17.34,26.18,8.84,157.119,38020,27368,0,0,0,0,0,0,2,16,5,5.100433,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.76,4732,0.149
+ktor-native-ktserve,/upload,2,1,17158,3428.202,4932,7314,7912,5.65,8.49,2.84,165.52,37060,27664,0,0,0,0,0,0,2,16,5,5.004956,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.24,4732,0.048
+ktor-native-ktserve-eventfd,/upload,2,1,54048,10805.971,1275,3063,4795,17.42,26.13,8.71,161.153,37444,27208,0,0,0,0,0,0,2,16,5,5.001679,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.71,4732,0.142
+ktor-native-cio,/upload,2,1,36248,7107.437,2047,4397,5764,18.47,27.81,9.34,257.669,145092,145092,0,0,0,0,0,0,2,16,5,5.10001,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.57,4732,0.112
+ktor-native-ktserve-eventfd,/upload,3,1,53042,10605.214,1295,3225,5263,17.57,26.26,8.69,163.832,37060,27600,0,0,0,0,0,0,2,16,5,5.001502,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.77,4732,0.154
+ktor-native-cio,/upload,3,1,33802,6755.338,2151,4885,6702,18.4,27.61,9.21,272.469,140160,140160,0,0,0,0,0,0,2,16,5,5.003747,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.55,4852,0.11
+ktor-native-ktserve,/upload,3,1,16762,3348.747,4941,7368,7889,5.73,8.56,2.83,168.834,37188,27152,0,0,0,0,0,0,2,16,5,5.005454,10,unchecked,d48320a220152294cba2fdddabfbd956f439df92,0.23,4732,0.046
