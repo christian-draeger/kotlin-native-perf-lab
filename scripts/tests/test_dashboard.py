@@ -36,13 +36,18 @@ class DashboardTest(unittest.TestCase):
         ), 1):
             run = deepcopy({**common, **overrides})
             runs.append({**run, "id": str(day), "date": f"2026-11-{day:02}"})
-        profiles = dashboard.reactor_history(runs[::-1])
+        profiles = dashboard.measurement_history(runs[::-1], variant="kotlin-reactor")
         self.assertEqual(len(profiles), 4)
         self.assertEqual(
             [[entry["id"] for entry in profile["runs"]] for profile in profiles],
             [["5"], ["4"], ["3"], ["1", "2"]],
         )
         self.assertEqual(profiles[-1]["runs"][0]["endpoints"], ["/health"])
+        framework_profiles = dashboard.measurement_history(runs[::-1])
+        self.assertEqual(
+            [[entry["id"] for entry in profile["runs"]] for profile in framework_profiles],
+            [["1", "2", "9"], ["5"], ["4"], ["3"]],
+        )
 
     def test_separates_groups_and_excludes_invalid_trials(self):
         with TemporaryDirectory() as directory:
@@ -113,4 +118,5 @@ class DashboardTest(unittest.TestCase):
             self.assertEqual(health_series["ci_run_attempt"], "2")
             self.assertEqual(health_series["date"], arm_series["date"])
             self.assertNotEqual(health_series["id"], arm_series["id"])
-            self.assertEqual(health_series["note"]["label"], "GitHub Actions · Linux ARM64 · Core suite")
+            self.assertEqual(health_series["note"]["label"], "GitHub Actions · Linux ARM64")
+            self.assertEqual(health_series["suite"], "core")
