@@ -18,7 +18,7 @@ on:
       application:
         description: Measure all apps, the JVM apps, or one application on both Linux architectures
         type: choice
-        options: [all, jvm, ktor-native, ktor-jvm, spring-webflux, native-wakeup]
+        options: [all, jvm, ktor-native, ktor-jvm, spring-webflux, native-wakeup, native-nodelay]
         default: all
       load_tool:
         description: Mixed k6 arrival rates or historical wrk single-endpoint runs
@@ -37,7 +37,7 @@ permissions:
 jobs:
   arm_build:
     name: Cross-link the Kotlin/Native Ktor app for ARM64
-    if: github.event_name == 'pull_request' || inputs.application == 'all' || inputs.application == 'ktor-native' || inputs.application == 'native-wakeup'
+    if: github.event_name == 'pull_request' || inputs.application == 'all' || inputs.application == 'ktor-native' || inputs.application == 'native-wakeup' || inputs.application == 'native-nodelay'
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     outputs:
@@ -78,6 +78,7 @@ jobs:
         family: >-
           ${{ fromJSON(inputs.application == 'ktor-native' && '["ktor-native"]'
             || inputs.application == 'native-wakeup' && '["ktor-native"]'
+            || inputs.application == 'native-nodelay' && '["ktor-native"]'
             || inputs.application == 'ktor-jvm' && '["ktor-jvm"]'
             || inputs.application == 'spring-webflux' && '["spring-webflux"]'
             || inputs.application == 'jvm' && '["ktor-jvm", "spring-webflux"]'
@@ -94,7 +95,7 @@ jobs:
       FAMILY: ${{ matrix.family }}
       EXPECTED_ARCH: ${{ matrix.arch }}
       RUNNER_LABEL: ${{ matrix.runner }}
-      LOAD_TOOL: ${{ inputs.application == 'native-wakeup' && 'wrk' || inputs.load_tool || 'k6' }}
+      LOAD_TOOL: ${{ (inputs.application == 'native-wakeup' || inputs.application == 'native-nodelay') && 'wrk' || inputs.load_tool || 'k6' }}
       APP_SELECTION: ${{ inputs.application }}
       WAKEUP_WORKLOAD: ${{ inputs.native_wakeup_workload }}
       LC_ALL: C
@@ -159,6 +160,9 @@ jobs:
           sudo apt-get update -qq
           if [[ "$LOAD_TOOL" == wrk ]]; then
             sudo apt-get install -y wrk time
+            if [[ "$APP_SELECTION" == native-nodelay ]]; then
+              sudo apt-get install -y strace tcpdump
+            fi
             exit
           fi
           sudo apt-get install -y time
@@ -172,6 +176,7 @@ jobs:
           extra=()
           if [[ "$LOAD_TOOL" == k6 ]]; then duration=15; fi
           if [[ "$APP_SELECTION" == native-wakeup ]]; then extra+=(--compare-native-wakeup "/$WAKEUP_WORKLOAD" --warmup 10); fi
+          if [[ "$APP_SELECTION" == native-nodelay ]]; then extra+=(--compare-native-nodelay --trace-native-nodelay --warmup 10); fi
           python3 scripts/benchmark-integrations.py --family "$FAMILY" --executable "$EXECUTABLE" \
             --output "$RESULT_DIR" --load-tool "$LOAD_TOOL" --duration "$duration" "${extra[@]}"
       - name: Record outcome

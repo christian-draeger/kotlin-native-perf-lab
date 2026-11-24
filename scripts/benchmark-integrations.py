@@ -8,6 +8,7 @@ import http.client
 import json
 import os
 import platform
+import re
 import signal
 import socket
 import subprocess
@@ -31,6 +32,7 @@ UPLOAD = b"x" * UPLOAD_SIZE
 DOWNLOAD = b"s" * (16 * 1024) + b"t" * (16 * 1024 + 3)
 USER = {"id": 42, "name": "benchmark-user", "active": True}
 WORKLOADS = ("/json", "/upload", "/download")
+NODELAY_ENGINE = "ktserve-eventfd-nodelay"
 
 
 def request(port, path, upload_size=UPLOAD_SIZE):
@@ -113,27 +115,32 @@ def stop_server(process, port, family):
 
 
 @contextmanager
-def server(args, engine, affinity, log):
+def server(args, engine, affinity, log, trace=()):
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
-    mode = ENGINES[args.family]["ktserve" if engine == "ktserve-eventfd" else engine]
+    eventfd = engine in ("ktserve-eventfd", NODELAY_ENGINE)
+    mode = ENGINES[args.family]["ktserve" if eventfd else engine]
     env = None
     command = [str(args.executable), str(port), mode]
     if args.family == APPLICATION_MIX:
         command = [str(args.executable), mode]
         env = {**os.environ, "PORT": str(port), "BIND_HOST": "127.0.0.1", "BENCHMARK_SUITE": APPLICATION_MIX}
     wakeup = None
-    if args.compare_native_wakeup:
+    tcp_nodelay = None
+    if args.compare_native_wakeup or args.compare_native_nodelay:
         env = {**os.environ, "KTSERVE_EPOLL_TRIGGER": "level"}
         if engine == "cio":
             env.pop("KTSERVE_EPOLL_APPLICATION_WAKEUP", None)
+            env.pop("KTSERVE_EPOLL_TCP_NODELAY", None)
         else:
-            wakeup = "eventfd" if engine == "ktserve-eventfd" else "poll"
+            wakeup = "eventfd" if eventfd else "poll"
+            tcp_nodelay = "on" if engine == NODELAY_ENGINE else "default"
             env["KTSERVE_EPOLL_APPLICATION_WAKEUP"] = wakeup
+            env["KTSERVE_EPOLL_TCP_NODELAY"] = tcp_nodelay
     with log.open("w") as output:
         process = subprocess.Popen(
-            [*affinity, *command],
+            [*affinity, *trace, *command],
             stdout=output,
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -142,8 +149,12 @@ def server(args, engine, affinity, log):
         try:
             expected_engine = mode if args.family == "spring-webflux" else None
             wait_until_ready(process, port, log, expected_engine)
-            if wakeup and f"ktServe epoll application_wakeup={wakeup}\n" not in log.read_text():
-                raise RuntimeError(f"The server did not log {wakeup} application wake-up. See {log}")
+            if wakeup:
+                settings = log.read_text()
+                if f"ktServe epoll application_wakeup={wakeup}\n" not in settings:
+                    raise RuntimeError(f"The server did not log {wakeup} application wake-up. See {log}")
+                if f"ktServe epoll tcp_nodelay={tcp_nodelay}\n" not in settings:
+                    raise RuntimeError(f"The server did not log TCP_NODELAY={tcp_nodelay}. See {log}")
             check_responses(port, args.load_tool == "k6")
             if args.family == APPLICATION_MIX:
                 require_response(port, "/wait", "text/plain", b"ready")
@@ -185,6 +196,10 @@ def write_environment(args, git_sha, server_cpus, load_cpus):
         if args.compare_native_wakeup:
             workload[0] = f"workloads={args.compare_native_wakeup}"
             workload += ["integration_experiment=epoll-application-wakeup", "epoll_peer_trigger=level"]
+        if args.compare_native_nodelay:
+            workload[0] = "workloads=/download"
+            workload += ["integration_experiment=epoll-tcp-nodelay", "epoll_peer_trigger=level",
+                         "ktserve_application_wakeup=eventfd"]
     binaries = [args.executable, *sorted((args.executable.parent.parent / "lib").glob("*.jar"))]
     if args.family == APPLICATION_MIX:
         root = SCRIPTS.parent
@@ -351,6 +366,54 @@ def trial(args, git_sha, engine, endpoint, run, server_affinity, load_affinity):
         ], check=True)
 
 
+def trace_download(args, engine, affinity):
+    stem = args.output / f"{engine}-download-diagnostic"
+    syscalls = stem.with_suffix(".strace.log")
+    trace = ["strace", "-f", "-ttt", "-qq", "-s", "0", "-e",
+             "trace=accept,accept4,setsockopt,sendto,sendmsg", "-o", str(syscalls)]
+    with server(args, engine, affinity, stem.with_suffix(".server.log"), trace) as (_, port):
+        with stem.with_suffix(".tcp.log").open("w") as packets, stem.with_suffix(".tcpdump.log").open("w") as errors:
+            capture = subprocess.Popen(
+                ["sudo", "-n", "tcpdump", "-i", "lo", "-nn", "-l", "-tt", "-S", f"tcp port {port}"],
+                stdout=packets, stderr=errors,
+            )
+            try:
+                deadline = time.monotonic() + 5
+                while True:
+                    if "listening on lo" in Path(errors.name).read_text():
+                        break
+                    if capture.poll() is not None or time.monotonic() >= deadline:
+                        raise RuntimeError(f"Could not start loopback packet capture. See {errors.name}")
+                    time.sleep(0.05)
+                connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+                try:
+                    with stem.with_suffix(".client.log").open("w") as timings:
+                        print("request request_epoch_s first_16KiB_epoch_s response_end_epoch_s", file=timings)
+                        for repetition in range(8):
+                            started = time.time()
+                            connection.request("GET", "/download")
+                            response = connection.getresponse()
+                            first = response.read(16 * 1024)
+                            first_read = time.time()
+                            rest = response.read()
+                            if response.status != 200 or first + rest != DOWNLOAD:
+                                raise RuntimeError("Traced download did not match the response fixture")
+                            print(repetition + 1, f"{started:.6f}", f"{first_read:.6f}",
+                                  f"{time.time():.6f}", file=timings)
+                finally:
+                    connection.close()
+                time.sleep(0.1)
+            finally:
+                if capture.poll() is None:
+                    capture.send_signal(signal.SIGINT)
+                capture.wait(timeout=5)
+
+    enabled = re.search(r"setsockopt\(\d+, (?:SOL_TCP|IPPROTO_TCP), TCP_NODELAY, \[1\], 4\)\s+= 0",
+                        syscalls.read_text())
+    if bool(enabled) != (engine == NODELAY_ENGINE):
+        raise RuntimeError(f"Unexpected TCP_NODELAY socket trace. See {syscalls}")
+
+
 def benchmark(args):
     available_cpus = sorted(os.sched_getaffinity(0))
     if len(available_cpus) < 2 + args.threads:
@@ -375,6 +438,12 @@ def benchmark(args):
     if args.compare_native_wakeup:
         workloads = (args.compare_native_wakeup,)
         engines.append("ktserve-eventfd")
+    if args.compare_native_nodelay:
+        workloads = ("/download",)
+        engines = ["cio", "ktserve-eventfd", NODELAY_ENGINE]
+        if args.trace_native_nodelay:
+            for engine in engines[1:]:
+                trace_download(args, engine, server_affinity)
     for run in range(1, args.repeats + 1):
         for index, workload in enumerate(workloads):
             offset = (run - 1 + index) % len(engines)
@@ -394,8 +463,13 @@ def main():
     parser.add_argument("--output", type=lambda path: Path(path).resolve(), required=True)
     parser.add_argument("--smoke-only", action="store_true")
     parser.add_argument("--load-tool", choices=("k6", "wrk"), default="k6")
-    parser.add_argument("--compare-native-wakeup", nargs="?", const="/upload", choices=("/upload", "/download"),
-                        help="Compare polling, eventfd and CIO on one Native streaming workload")
+    experiments = parser.add_mutually_exclusive_group()
+    experiments.add_argument("--compare-native-wakeup", nargs="?", const="/upload", choices=("/upload", "/download"),
+                             help="Compare polling, eventfd and CIO on one Native streaming workload")
+    experiments.add_argument("--compare-native-nodelay", action="store_true",
+                             help="Compare CIO and ktServe eventfd with default TCP and TCP_NODELAY")
+    parser.add_argument("--trace-native-nodelay", action="store_true",
+                        help="Capture separate loopback diagnostics with strace and sudo tcpdump")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800], help="Mixed requests per second for k6")
     parser.add_argument("--vus", type=int, default=16, help="k6 virtual users per scenario")
     parser.add_argument("--precondition", type=int, default=15, help="k6 cold load before steady-state validation")
@@ -411,8 +485,12 @@ def main():
         parser.error("Expected positive durations, repeats and at least one connection per load thread")
     if args.vus < 1 or any(rate < 20 or rate % 20 for rate in args.rates) or len(set(args.rates)) != len(args.rates):
         parser.error("Expected a positive VU count and distinct k6 arrival rates in multiples of 20")
-    if args.compare_native_wakeup and (args.family != "ktor-native" or args.load_tool != "wrk" or args.smoke_only):
-        parser.error("The native wake-up comparison needs the ktor-native family and the wrk load tool")
+    if (args.compare_native_wakeup or args.compare_native_nodelay) and (
+        args.family != "ktor-native" or args.load_tool != "wrk" or args.smoke_only
+    ):
+        parser.error("Native experiments need the ktor-native family and the wrk load tool")
+    if args.trace_native_nodelay and not args.compare_native_nodelay:
+        parser.error("Packet traces require the native TCP_NODELAY experiment")
     if args.family == APPLICATION_MIX and args.load_tool != "k6":
         parser.error("The application mix needs the k6 load tool")
     args.output.mkdir(parents=True, exist_ok=True)

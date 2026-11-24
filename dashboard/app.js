@@ -32,6 +32,7 @@ const variants = {
   "ktor-native-cio": { label: "Ktor with CIO", detail: "Kotlin/Native", color: "kotlin" },
   "ktor-native-ktserve": { label: "Ktor with ktServe", detail: "Kotlin/Native · epoll", color: "ktserve" },
   "ktor-native-ktserve-eventfd": { label: "Ktor with ktServe eventfd", detail: "Kotlin/Native · epoll", color: "ktserve" },
+  "ktor-native-ktserve-eventfd-nodelay": { label: "Ktor with ktServe eventfd + TCP_NODELAY", detail: "Kotlin/Native · epoll", color: "ktserve" },
   "ktor-jvm-cio": { label: "Ktor with CIO", detail: "JVM", color: "kotlin" },
   "ktor-jvm-netty": { label: "Ktor with Netty", detail: "JVM", color: "kotlin" },
   "ktor-jvm-ktserve": { label: "Ktor with ktServe", detail: "JVM · JDK NIO", color: "ktserve" },
@@ -751,6 +752,7 @@ function startIntegration() {
     familyRuns = runs.filter((entry) => entry.integration === familySelect.value);
     runSelect.replaceChildren(...familyRuns.map((entry) => new Option([
       entry.experiment === "epoll-application-wakeup" ? `wrk · ${entry.groups[0]?.endpoint ?? "streaming"} wake-up pilot`
+        : entry.experiment === "epoll-tcp-nodelay" ? "wrk · /download TCP_NODELAY pilot"
         : entry.load_tool === "k6" ? "k6 · mixed" : "wrk · single endpoint", entry.machine,
       utcDateFormat.format(new Date(entry.date)) + " UTC", entry.incomplete ? "Incomplete" : "",
     ].filter(Boolean).join(" · "), entry.id)));

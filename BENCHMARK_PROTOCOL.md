@@ -88,6 +88,8 @@ Select `wrk` in the workflow to repeat the historical fixed-concurrency runs for
 
 Select `native-wakeup` to compare timed polling, eventfd and CIO in the same Ktor Native release binary. Choose `upload` or `download` as the experiment endpoint. Each mode uses the same connection count, CPU affinity and `wrk` preconditioning. The raw logs record the wake-up mode, and the HTTP preflight checks both the response bytes and the chunked download framing.
 
+Select `native-nodelay` to compare the delayed download on CIO and the two ktServe eventfd modes. Only the accepted-socket `TCP_NODELAY` setting changes between the ktServe modes. The diagnostic records send syscalls, loopback packet and acknowledgement timing, and client receive times separately from the timed trials.
+
 The GitHub-hosted comparison runs each engine in an independent server process and records raw workload logs, the measured revision and host information. The server and load generator share the VM with separate CPU affinity sets. Treat these results as exploratory. Controlled conclusions still require two physical hosts, validated JVM warm-up and at least five valid repetitions per cell.
 
 To check the Ktor JVM fixture locally with JDK 21, build its distribution and run the HTTP smoke checks across its engines.
