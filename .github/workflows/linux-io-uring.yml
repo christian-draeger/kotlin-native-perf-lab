@@ -9,8 +9,17 @@ on:
       - 'components/nativeserve/src/nativeShared/**'
       - 'components/nativeserve/src/nativeStress/**'
       - 'scripts/tests/reactor_*'
+      - 'scripts/benchmark.sh'
+      - 'scripts/benchmark-variants.sh'
+      - 'scripts/run-server.sh'
+      - 'scripts/server-process.sh'
       - '.github/workflows/linux-io-uring.yml'
   workflow_dispatch:
+    inputs:
+      measure:
+        description: Archive exploratory epoll and io_uring performance trials
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -74,6 +83,9 @@ jobs:
           gradle -p "$project" -Pbenchmark.targetArch=x86_64 -Pliburing.shim="$RUNNER_TEMP/uring.o" \
             -Pliburing.archive=/usr/lib/x86_64-linux-gnu/liburing.a linkReleaseExecutableNative linkStressReleaseExecutableNative
           bash "$project/smoke.sh" "$server" "$fixture"
+          mkdir "$RUNNER_TEMP/io-uring-x86"
+          install -m 755 "$server" "$RUNNER_TEMP/io-uring-x86/server"
+          dpkg-query -W -f='${Version}\n' liburing-dev > "$RUNNER_TEMP/io-uring-x86/liburing-version.txt"
           gradle -p "$project" -Pbenchmark.targetArch=aarch64 -Pliburing.shim="$RUNNER_TEMP/arm-sdk/uring.o" \
             -Pliburing.archive="$RUNNER_TEMP/arm-sdk/liburing.a" \
             linkReleaseExecutableNative linkStressReleaseExecutableNative
@@ -83,6 +95,13 @@ jobs:
           install -m 755 "$server" "$RUNNER_TEMP/io-uring-arm/server"
           install -m 755 "$fixture" "$RUNNER_TEMP/io-uring-arm/fixture"
           cp "$RUNNER_TEMP/arm-sdk/LICENSE.liburing" "$RUNNER_TEMP/io-uring-arm/"
+          cp "$RUNNER_TEMP/arm-sdk/liburing-version.txt" "$RUNNER_TEMP/io-uring-arm/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: inputs.measure
+        with:
+          name: io-uring-x86_64
+          path: ${{ runner.temp }}/io-uring-x86
+          if-no-files-found: error
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: io-uring-arm64
@@ -106,3 +125,45 @@ jobs:
           chmod +x "$RUNNER_TEMP/io-uring-arm/"{server,fixture}
           bash components/nativeserve/experiments/linux-io-uring/smoke.sh \
             "$RUNNER_TEMP/io-uring-arm/server" "$RUNNER_TEMP/io-uring-arm/fixture"
+
+  benchmark:
+    name: "Exploratory backend comparison (${{ matrix.arch }})"
+    if: inputs.measure
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: io-uring-${{ matrix.arch }}
+          path: ${{ runner.temp }}/candidate
+      - run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk
+          chmod +x "$RUNNER_TEMP/candidate/server"
+          export LIBURING_VERSION="$(awk 'NR == 1 { print $NF }' "$RUNNER_TEMP/candidate/liburing-version.txt")"
+          bash components/nativeserve/experiments/linux-io-uring/benchmark.sh \
+            "$RUNNER_TEMP/candidate/server" "$RUNNER_TEMP/io-pair"
+          while IFS= read -r -d '' summary; do cat "$summary" >> "$GITHUB_STEP_SUMMARY"; done \
+            < <(find "$RUNNER_TEMP/io-pair" -name summary.md -print0)
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: io-backend-results-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/io-pair
+          if-no-files-found: error
