@@ -5,7 +5,18 @@ on:
     paths:
       - '.github/workflows/cpu-budget.yml'
       - 'scripts/benchmark-cpu-budget.sh'
+      - 'scripts/parse_vegeta.py'
+      - 'scripts/tests/test_vegeta.py'
   workflow_dispatch:
+    inputs:
+      load_mode:
+        description: HTTP/1.1 client connection policy
+        type: choice
+        options: [saturation, persistent, churn]
+        default: saturation
+      offered_rps:
+        description: Fixed requests per second (defaults to 20000 persistent or 2500 churn)
+        type: number
 
 permissions:
   actions: read
@@ -58,7 +69,8 @@ jobs:
           github-token: ${{ github.token }}
           merge-multiple: true
           path: ${{ runner.temp }}/ktserve-arm-build
-      - name: Build the three release servers and install wrk
+      - name: Build the three release servers and install the load tools
+        shell: bash
         run: |
           test "$(uname -m)" = "$EXPECTED_ARCH"
           sudo apt-get update -qq
@@ -78,12 +90,26 @@ jobs:
             grep -Eq '(\[ERROR\]|\[FATAL\]).*https://repo\.maven\.apache\.org/maven2.*(HTTP Status|status code): 429([^0-9]|$)' "$log"
             mvn -B -ntp --settings scripts/ci-maven-central-mirror.xml -f "$pom" package
           fi
+      - name: Install Vegeta for the matched-rate trials
+        if: github.event_name == 'pull_request' || inputs.load_mode != 'saturation'
+        run: |
+          case "$EXPECTED_ARCH" in
+            x86_64) arch=amd64; checksum=e8759ce45c14e18374bdccd3ba6068197bc3a9f9b7e484db3837f701b9d12e61 ;;
+            aarch64) arch=arm64; checksum=950381173a5575e25e8e086f36fc03bf65d61a2433329b48e41e1cb5e4133bba ;;
+          esac
+          asset="vegeta_12.13.0_linux_$arch.tar.gz"
+          curl -fsSL --retry 3 "https://github.com/tsenart/vegeta/releases/download/v12.13.0/$asset" -o "$RUNNER_TEMP/$asset"
+          printf '%s  %s\n' "$checksum" "$RUNNER_TEMP/$asset" | sha256sum --strict -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" vegeta
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
       - name: Verify and measure the worker configurations
         id: measure
         env:
           RUNS: ${{ github.event_name == 'pull_request' && '1' || '3' }}
           WARMUP: ${{ github.event_name == 'pull_request' && '3' || '15' }}
           DURATION: ${{ github.event_name == 'pull_request' && '2' || '5' }}
+          CPU_BUDGET_MODE: ${{ github.event_name == 'pull_request' && 'persistent' || inputs.load_mode || 'saturation' }}
+          OFFERED_RPS: ${{ github.event_name == 'pull_request' && '200' || inputs.offered_rps || (inputs.load_mode == 'churn' && '2500' || '20000') }}
         run: |
           result="$RUNNER_TEMP/cpu-budget"
           mkdir -p "$result"

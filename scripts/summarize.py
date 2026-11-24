@@ -42,7 +42,7 @@ def main():
         cells = [describe(valid, *metric) if valid else "—" for metric in metrics]
         print(f"| {variant} | `{endpoint}` | {len(valid)} / {len(group)} | " + " | ".join(cells) + " |")
     print("\nThe raw logs and CSV include every recorded trial. Trials with zero responses,")
-    print("socket errors, wrk HTTP errors, or unmet warm-up stability are excluded from the medians.")
+    print("load errors, or unmet warm-up or load-delivery criteria are excluded from the medians.")
 
 
 if __name__ == "__main__":
