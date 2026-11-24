@@ -61,6 +61,9 @@ jobs:
 
   arm_native:
     uses: ./.github/workflows/arm-native.yml
+    permissions:
+      contents: read
+      actions: read
     with:
       smoke_fixtures: true
 
