@@ -1,8 +1,8 @@
 # ktServe Maven releases
 
-The first Maven Central candidate is `codes.draeger:ktserve:0.2.0-preview.2`. The Maven group uses the verified `codes.draeger` domain namespace. Kotlin and Java imports use `codes.draeger.ktserve`.
+ktServe is available on Maven Central under the verified `codes.draeger` domain namespace. Kotlin and Java imports use `codes.draeger.ktserve`.
 
-Once the version is live on Central, a Kotlin/JVM application on JDK 21 can use the following dependency. In a Kotlin Multiplatform project, place the dependency in the source set that uses ktServe. Shared routing can live in `commonMain`. Server startup uses the platform source set.
+A Kotlin/JVM application on JDK 21 can use the following dependency. In a Kotlin Multiplatform project, place the dependency in the source set that uses ktServe. Shared routing can live in `commonMain`. Server startup uses the platform source set.
 
 ```kotlin
 repositories { mavenCentral() }
@@ -30,7 +30,9 @@ The repository is under `components/ktserve/build/maven-staging/<version>/`. Wit
 
 ## Publish from GitHub Actions
 
-Publish a GitHub Release from the release commit with a tag such as `v0.2.0-preview.2`. The tag supplies the Maven version. The workflow stages all variants, runs the JVM and Native consumers, signs the exact tested files and waits for Central to report `PUBLISHED`. The Actions summary contains the Central deployment ID. A manual run of **ktServe Maven staging** builds and tests a version for inspection.
+1. Set [`VERSION`](VERSION) to the next Maven version in the release commit. A push to `main` that changes ktServe starts **ktServe Maven staging** and tests the JVM and all three Native variants. A manual run on `main` can also stage a version.
+2. Publish a GitHub Release from that commit with the matching tag, for example `v0.2.0-preview.3`. The tag supplies the Maven version. The release reuses the successful staging archive for the same commit and version, verifies its SHA-256 digest, and signs the tested files. If staging is in progress, the release waits for it. If no matching archive is available, the release builds and tests the artifacts itself.
+3. The workflow submits the signed bundle for automatic publication, waits for Central to report `PUBLISHED`, checks the public variants, and runs an independent JVM consumer against `mavenCentral()`. The Actions summary records the staging run, archive digest, and Central deployment ID.
 
 Configure the GitHub `maven-central` environment for release tags matching `v*`. Use these environment secrets, named as in the [Kotlin library template](https://github.com/christian-draeger/kotlin-library-template/blob/main/INITIAL_SETUP.md).
 
@@ -42,7 +44,7 @@ Configure the GitHub `maven-central` environment for release tags matching `v*`.
 | `SIGNING_IN_MEMORY_KEY_ID` | The primary release key fingerprint. |
 | `SIGNING_IN_MEMORY_KEY_PASSWORD` | The release key passphrase when the key is protected. |
 
-Check the recorded deployment in Central Portal before retrying any run that submitted a bundle and then failed. Central versions are immutable. [Generate a Portal token](https://central.sonatype.org/publish/generate-portal-token/) · [Publisher API](https://central.sonatype.org/publish/publish-portal-api/)
+If only verification fails, rerun the failed jobs to check the same deployment. If the upload step failed without returning an ID, check Central Portal before retrying the upload. Central versions are immutable. [Generate a Portal token](https://central.sonatype.org/publish/generate-portal-token/) · [Publisher API](https://central.sonatype.org/publish/publish-portal-api/)
 
 ## Publish via the Central Portal
 
