@@ -51,6 +51,8 @@ permissions:
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('benchmark-dashboard-pr-{0}', github.event.pull_request.number) || (inputs.suite == 'workers' && format('worker-benchmark-{0}', github.ref)) || 'benchmark-dashboard-publish' }}
+  # Keep queued measurements and archive imports when a main push adds a Pages build.
+  queue: max
 
 jobs:
   arm_native:
