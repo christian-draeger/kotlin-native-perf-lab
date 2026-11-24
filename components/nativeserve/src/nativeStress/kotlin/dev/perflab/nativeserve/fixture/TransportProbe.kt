@@ -1,5 +1,3 @@
-@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
-
 package dev.perflab.nativeserve.fixture
 
 import dev.perflab.nativeserve.transport.ConnectionId
@@ -8,39 +6,18 @@ import dev.perflab.nativeserve.transport.StreamTransport
 import dev.perflab.nativeserve.transport.Submission
 import dev.perflab.nativeserve.transport.TransportCompletions
 import dev.perflab.nativeserve.transport.TransportFailure
-import dev.perflab.nativeserve.transport.ipv4SocketAddress
-import dev.perflab.nativeserve.transport.openPlatformTransport
-import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.MemScope
-import kotlinx.cinterop.convert
-import kotlinx.cinterop.memScoped
-import kotlinx.cinterop.ptr
-import kotlinx.cinterop.reinterpret
-import kotlinx.cinterop.sizeOf
-import kotlinx.cinterop.usePinned
-import platform.posix.AF_INET
-import platform.posix.SOCK_STREAM
-import platform.posix.close
-import platform.posix.connect
-import platform.posix.send
-import platform.posix.sockaddr_in
-import platform.posix.socket
 
-internal fun probeTransport(
-    port: Int,
-    open: MemScope.(String, Int, Int) -> StreamTransport = MemScope::openPlatformTransport,
-): Unit = memScoped {
-    val transport = open("127.0.0.1", port, 2)
+internal interface ProbeSocket : AutoCloseable {
+    fun sendByte(value: Byte)
+}
+
+internal fun probeTransport(transport: StreamTransport, connect: () -> ProbeSocket) {
     val completions = ProbeCompletions()
-    val sockets = mutableListOf<Int>()
+    val sockets = mutableListOf<ProbeSocket>()
 
     fun connectClient(operation: Long): ConnectionId {
         check(transport.accept(OperationId(operation)) == Submission.ACCEPTED)
-        val fd = socket(AF_INET, SOCK_STREAM, 0)
-        check(fd >= 0)
-        sockets += fd
-        val address = ipv4SocketAddress("127.0.0.1", port)
-        check(connect(fd, address.ptr.reinterpret(), sizeOf<sockaddr_in>().convert()) == 0)
+        sockets += connect()
         transport.await(completions) { completions.accepts.containsKey(OperationId(operation)) }
         return completions.accepts.getValue(OperationId(operation))
     }
@@ -63,9 +40,7 @@ internal fun probeTransport(
         check(transport.read(second, secondRead, secondBytes, offset = 1, length = 2) == Submission.ACCEPTED)
         transport.poll(0, completions)
         completions.onRead = { connected -> transport.closeConnection(if (connected == first) second else first) }
-        byteArrayOf(9).usePinned { pinned ->
-            sockets.forEach { fd -> check(send(fd, pinned.addressOf(0), 1.convert(), 0) == 1L) }
-        }
+        sockets.forEach { it.sendByte(9) }
 
         transport.await(completions) { completions.reads.isNotEmpty() && completions.failures.size == 2 }
         val (read, winningConnection, count) = completions.reads.single()
@@ -87,17 +62,14 @@ internal fun probeTransport(
             check(transport.write(connection, OperationId(9), byteArrayOf(10), 0, 1) == Submission.ACCEPTED)
             transport.close()
         }
-        byteArrayOf(10).usePinned { pinned ->
-            val fd = sockets[if (firstWon) 0 else 1]
-            check(send(fd, pinned.addressOf(0), 1.convert(), 0) == 1L)
-        }
+        sockets[if (firstWon) 0 else 1].sendByte(10)
         transport.await(completions) { completions.reads.size == 2 }
         check(completions.reads.last() == Triple(lastRead, winningConnection, 1))
         check(completions.failures.size == 2)
         println("Transport accepted, cancelled and ignored retired stream work")
     } finally {
+        sockets.forEach(ProbeSocket::close)
         transport.close()
-        sockets.forEach { close(it) }
     }
 }
 

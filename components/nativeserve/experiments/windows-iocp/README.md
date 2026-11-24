@@ -1,4 +1,4 @@
-# Windows IOCP feasibility probe
+# Experimental NativeServe IOCP transport
 
 This standalone Kotlin/Native executable checks whether the pinned toolchain can call Winsock and I/O completion ports on Windows. It binds a TCP listener to an ephemeral IPv4 loopback port, associates the accepted socket with a completion port, receives one byte through `WSARecv` and then cancels a second receive. It checks the connection key, operation pointer, byte count and cancellation status returned by the kernel.
 
@@ -10,4 +10,21 @@ Run from the repository root with PowerShell on Windows.
 ./components/nativeserve/gradlew.bat -p components/nativeserve/experiments/windows-iocp runReleaseExecutableMingwX64
 ```
 
-The C interop fixture owns Winsock initialization, sockets and the completion port. It keeps the `OVERLAPPED`, flags and receive storage alive until the matching kernel completion. `CancelIoEx` requests cancellation. The completion packet confirms its outcome before storage is reused. Cleanup closes the socket and drains any outstanding completion before returning. The production backend in [#56](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/56) will additionally need asynchronous accept, partial transfer handling, deadlines and bounded draining across multiple connections. [Winsock overlapped receives](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsarecv) · [I/O completion ports](https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports) · [Windows cancellation](https://learn.microsoft.com/en-us/windows/win32/fileio/canceling-pending-i-o-operations)
+Run the experimental HTTP/1.x server with the same parity routes as the other backends. The optional positional arguments select port and IPv4 address. The executable defaults to IOCP and accepts the standard `NATIVESERVE_BACKEND=iocp` selector. It reports `NativeServe backend=iocp tcp=ipv4` after Winsock, the listener and IOCP are ready. Startup fails with a Windows error if those capabilities are unavailable.
+
+```powershell
+$env:NATIVESERVE_BACKEND = 'iocp'
+./components/nativeserve/gradlew.bat -p components/nativeserve/experiments/windows-iocp runServerReleaseExecutableMingwX64
+```
+
+Check the server from a second terminal with `curl.exe -fsS http://127.0.0.1:8080/health`. Embedded callers retain the same `serve` and `stopRequested` API.
+
+## Ownership and limits
+
+The Windows backend uses Winsock 2.2, IOCP, `AcceptEx` with no initial data, `WSARecv`, `WSASend` and `CancelIoEx`. The shared HTTP state controls connection, request and response limits. The transport owns one pending accept and at most one pending receive and one pending send per connection. Closed connections count against capacity until their terminal operations arrive.
+
+The backend sets a 64 KiB send buffer to bound Winsock's dynamic send buffering and limits each overlapped send to another 64 KiB. The shared server advances its response by the actual completion count. [Winsock send buffer behavior](https://learn.microsoft.com/en-us/windows/win32/winsock/sio-ideal-send-backlog-query)
+
+Every submitted operation owns its native `OVERLAPPED` and payload copy until IOCP returns a terminal packet. Sends copy from the borrowed Kotlin range before submission. Reads copy back only after a successful completion. Kotlin arrays are pinned during those short copies. A cancellation request can race with successful I/O. Closing a connection retires its pending HTTP operations and leaves the native storage live until the kernel finishes. Shutdown closes sockets, drains completions, then closes the port and releases Winsock. [AcceptEx](https://learn.microsoft.com/en-us/windows/win32/api/mswsock/nf-mswsock-acceptex) · [Winsock overlapped receives](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsarecv) · [I/O completion ports](https://learn.microsoft.com/en-us/windows/win32/fileio/i-o-completion-ports) · [Windows cancellation](https://learn.microsoft.com/en-us/windows/win32/fileio/canceling-pending-i-o-operations)
+
+The Windows workflow exercises the common transport fixture and the HTTP suite with real Winsock sockets. It checks partial reads, cancellation and late outcomes, connection and body bounds, response streaming and graceful drain. The retained-heap checks also run on Windows. Descriptor-count checks use the Unix platform APIs. Keep the Windows comparison separate under [#57](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/57).

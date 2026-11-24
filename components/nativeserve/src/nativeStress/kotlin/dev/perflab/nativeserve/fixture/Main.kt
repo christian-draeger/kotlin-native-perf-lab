@@ -17,7 +17,6 @@ import kotlin.native.runtime.NativeRuntimeApi
 private const val BODY_BYTES = 8 * 1024 * 1024
 private const val STREAM_BYTES = BODY_BYTES - 3
 
-@OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
 fun main(args: Array<String>) = runFixture(args, ::probeTransport)
 
 @OptIn(NativeRuntimeApi::class, ExperimentalStdlibApi::class, ExperimentalAtomicApi::class)
