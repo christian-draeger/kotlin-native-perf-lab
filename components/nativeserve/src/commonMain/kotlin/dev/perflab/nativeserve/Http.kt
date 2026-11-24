@@ -7,7 +7,7 @@ class Request internal constructor(
     val path: String,
     val query: String?,
     private val parameters: Map<String, String> = emptyMap(),
-    val bodyLength: Int = 0,
+    val bodyLength: Int? = 0,
 ) {
     fun pathParameter(name: String): String? = parameters[name]
 

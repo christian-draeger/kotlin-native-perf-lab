@@ -197,6 +197,15 @@ def test_request_bodies(port):
         wait_until(lambda: active() == (200, b"1"), "Request sink never opened")
         assert_closed(conn)
         assert active() == (200, b"0")
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as conn:
+        conn.sendall(b"POST /upload HTTP/1.1\r\nHost: localhost\r\nTransfer-Encoding: chunked\r\n\r\n3\r\na")
+        wait_until(lambda: active() == (200, b"1"), "Chunked request sink never opened")
+        conn.sendall(b"bc\r\n2\r\nde\r\n0\r\nX-Meta: ok\r\n\r\n" + request("/health"))
+        with conn.makefile("rb") as stream:
+            assert response(stream)[2] == b"5"
+            assert response(stream)[2] == b"ok"
+        assert active() == (200, b"0")
     print("Request streaming checks passed (pipeline, disconnect, deadline)")
 
 
