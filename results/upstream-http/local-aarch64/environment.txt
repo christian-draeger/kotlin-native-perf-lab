@@ -1,0 +1,62 @@
+scope=local exploratory OrbStack ARM64 Linux, one Mac shared by frontend, origin, and generator
+host_cpu_model=Apple M3 Max
+source_sha=158c3cd5c6c7b06051909f218dcdf55ac458037a
+arch=aarch64
+kernel=7.2.12-orbstack-00394-gbecdd6130068
+server_cpus=[0, 1]
+load_cpus=[2]
+origin_cpus=[3]
+rate=800
+repeats=2
+precondition=15s
+warmup=10s
+measurement=8s
+Kotlin Native=2.4.21
+CIO=3.6.1
+Rust=1.100.0
+Axum=0.8.9
+Architecture:                            aarch64
+CPU op-mode(s):                          64-bit
+Byte Order:                              Little Endian
+CPU(s):                                  16
+On-line CPU(s) list:                     0-15
+Vendor ID:                               Apple
+Model name:                              -
+Model:                                   0
+Thread(s) per core:                      1
+Core(s) per cluster:                     16
+Socket(s):                               -
+Cluster(s):                              1
+Stepping:                                0x0
+CPU(s) scaling MHz:                      100%
+CPU max MHz:                             2000.0000
+CPU min MHz:                             2000.0000
+BogoMIPS:                                48.00
+Flags:                                   fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm sb dcpodp flagm2 frint i8mm bf16 ecv afp rpres
+L1d cache:                               2 MiB (16 instances)
+L1i cache:                               3 MiB (16 instances)
+L2 cache:                                48 MiB (3 instances)
+L3 cache:                                64 MiB (1 instance)
+Vulnerability Gather data sampling:      Not affected
+Vulnerability Ghostwrite:                Not affected
+Vulnerability Indirect target selection: Not affected
+Vulnerability Itlb multihit:             Not affected
+Vulnerability L1tf:                      Not affected
+Vulnerability Mds:                       Not affected
+Vulnerability Meltdown:                  Not affected
+Vulnerability Mmio stale data:           Not affected
+Vulnerability Old microcode:             Not affected
+Vulnerability Reg file data sampling:    Not affected
+Vulnerability Retbleed:                  Not affected
+Vulnerability Spec rstack overflow:      Not affected
+Vulnerability Spec store bypass:         Vulnerable
+Vulnerability Spectre v1:                Mitigation; __user pointer sanitization
+Vulnerability Spectre v2:                Mitigation; CSV2, but not BHB
+Vulnerability Srbds:                     Not affected
+Vulnerability Tsa:                       Not affected
+Vulnerability Tsx async abort:           Not affected
+Vulnerability Vmscape:                   Not affected
+k6 v2.4.0 (commit/dd9395906d, go1.26.11, linux/arm64)
+Python 3.12.3
+cb097c5740123b7f887633a2f8ad55de097fd46364772a3a9abcdaea86226855 /src/components/ktserve/build/bin/native/upstreamProbeReleaseExecutable/ktserve-upstream-probe.kexe
+b7809f1c166df22fccfa3b08d1f6728344d1b0e6a2a7291585629233b36f1a0f /src/competitors/rust-axum/target/release/axum-baseline

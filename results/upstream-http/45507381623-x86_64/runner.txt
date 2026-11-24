@@ -1,0 +1,5 @@
+ci_run_id=45507381623
+ci_run_attempt=1
+ci_event=pull_request
+source_sha=01fb5ca1b37f915ab3ace231dd918aeacf2c8c86
+runner_image=20261116.133.1
