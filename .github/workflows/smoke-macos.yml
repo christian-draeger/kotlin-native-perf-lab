@@ -1,0 +1,86 @@
+name: macOS smoke
+
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - 'components/nativeserve/**'
+      - 'scripts/package-nativeserve.sh'
+      - 'scripts/smoke.sh'
+      - 'scripts/tests/reactor_*.py'
+      - '.github/workflows/smoke-macos.yml'
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: NativeServe (macOS ARM64)
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Build release executables and run portable tests
+        run: |
+          test "$(uname -m)" = arm64
+          sw_vers
+          xcodebuild -version
+          project=components/nativeserve
+          "$project/gradlew" -p "$project" -Pbenchmark.targetOs=macos \
+            jvmTest linkReleaseExecutableNative linkStressReleaseExecutableNative
+          "$project/gradlew" -p "$project/examples/hello" -Pbenchmark.targetOs=macos linkReleaseExecutableNative
+      - name: Test transport and resource contracts
+        run: |
+          fixture=components/nativeserve/build/macos/bin/native/stressReleaseExecutable/reactor-stress-fixture.kexe
+          python3 scripts/tests/reactor_stress.py "$fixture"
+      - name: Verify the packaged release and checkout consumer
+        run: |
+          project=components/nativeserve
+          binary="$project/build/macos/bin/native/releaseExecutable/nativeserve.kexe"
+          version="snapshot-${GITHUB_SHA:0:12}"
+          archive="nativeserve-$version-macos-arm64.tar.gz"
+          package="$RUNNER_TEMP/nativeserve-release"
+          repeat="$RUNNER_TEMP/nativeserve-repack"
+          ./scripts/package-nativeserve.sh "$binary" "$version" "$package"
+          ./scripts/package-nativeserve.sh "$binary" "$version" "$repeat"
+          cmp "$package/$archive" "$repeat/$archive"
+          (cd "$package" && shasum -a 256 -c "$archive.sha256")
+          unpacked="$RUNNER_TEMP/nativeserve-unpacked"
+          mkdir "$unpacked"
+          tar -xzf "$package/$archive" -C "$unpacked"
+          cmp "$binary" "$unpacked/nativeserve"
+
+          export PORT=18081
+          "$unpacked/nativeserve" > "$RUNNER_TEMP/native-startup.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          base="http://127.0.0.1:$PORT"
+          curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health"
+          ./scripts/smoke.sh "$base"
+          python3 scripts/tests/reactor_http_smoke.py "$PORT"
+          python3 scripts/tests/reactor_shutdown_smoke.py "$PORT" "$pid" "$unpacked/nativeserve"
+          wait "$pid"
+          grep -Fx 'NativeServe backend=kqueue tcp=ipv4' "$RUNNER_TEMP/native-startup.log"
+
+          "$project/examples/hello/build/macos/bin/native/releaseExecutable/hello.kexe" "$PORT" &
+          pid=$!
+          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/")" = 'Hello from NativeServe'
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: nativeserve-macos-arm64-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nativeserve-release
+          if-no-files-found: error
