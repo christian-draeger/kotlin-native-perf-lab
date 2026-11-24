@@ -8,6 +8,9 @@ const duration = Number(__ENV.PERFLAB_DURATION);
 const vus = Number(__ENV.PERFLAB_VUS);
 const summary = __ENV.PERFLAB_SUMMARY;
 const standalone = __ENV.PERFLAB_APPLICATION_MIX === "true";
+const profile = __ENV.PERFLAB_APPLICATION_PROFILE ?? "persistent";
+const churn = profile === "churn";
+const overload = profile === "overload";
 if (!target || !summary || !Number.isInteger(rate) || rate < 20 || rate % 20 !== 0
     || !Number.isInteger(duration) || duration < 1 || !Number.isInteger(vus) || vus < 1) {
   throw new Error("Set PERFLAB_TARGET, PERFLAB_RATE (multiple of 20), PERFLAB_DURATION, PERFLAB_VUS and PERFLAB_SUMMARY.");
@@ -29,6 +32,9 @@ if (standalone) {
 const streamBody = "s".repeat(16 * 1024) + "t".repeat(16 * 1024 + 3);
 const successfulLatency = new Trend("perflab_success_duration", true);
 const failure = new Counter("perflab_failed_responses");
+const newConnections = new Counter("perflab_new_connections");
+const timeouts = new Counter("perflab_timeouts");
+const onTime = new Counter("perflab_success_within_100ms");
 const operationLatency = {};
 const operationFailures = {};
 const scenarios = {};
@@ -42,7 +48,7 @@ for (const [name, operation] of Object.entries(operations)) {
 }
 
 export const options = {
-  scenarios, maxRedirects: 0,
+  scenarios, maxRedirects: 0, noConnectionReuse: churn,
   summaryTrendStats: ["p(50)", "p(95)", "p(99)", "count"],
 };
 
@@ -90,9 +96,13 @@ export default function () {
   }
   failure.add(valid ? 0 : 1);
   operationFailures[name].add(valid ? 0 : 1);
+  if (churn) newConnections.add(response.timings.connecting > 0 ? 1 : 0);
+  if (overload) timeouts.add(response.error_code === 1050 || response.error_code === 1211 ? 1 : 0);
   if (valid) {
-    successfulLatency.add(response.timings.duration);
-    operationLatency[name].add(response.timings.duration);
+    const duration = response.timings.duration + (churn ? response.timings.connecting : 0);
+    successfulLatency.add(duration);
+    operationLatency[name].add(duration);
+    if (overload) onTime.add(duration <= 100 ? 1 : 0);
   }
 }
 
