@@ -74,6 +74,23 @@ kotlin {
             baseName = "ktserve-stress-fixture"
             entryPoint = "codes.draeger.ktserve.fixture.main"
         }
+        if (targetOs == "linux") {
+            val jsonProbe = native.compilations.create("jsonProbe") {
+                associateWith(native.compilations.getByName("main"))
+            }
+            native.binaries.executable("jsonProbe", listOf(RELEASE)) {
+                compilation = jsonProbe
+                baseName = "ktserve-json-probe"
+                entryPoint = "codes.draeger.ktserve.example.runJsonProbe"
+            }
+            native.binaries.executable("jsonHeapProbe", listOf(RELEASE)) {
+                compilation = jsonProbe
+                baseName = "ktserve-json-heap-probe"
+                entryPoint = "codes.draeger.ktserve.example.runJsonProbe"
+                binaryOption("gcSchedulerType", "manual")
+                binaryOption("pagedAllocator", "false")
+            }
+        }
         sourceSets {
             getByName("nativeMain") {
                 if (targetOs == "macos") kotlin.setSrcDirs(listOf("src/macosMain/kotlin"))

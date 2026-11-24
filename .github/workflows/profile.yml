@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: Sample the original path route or the dynamic catalog JSON workload
+        description: Sample HTTP CPU stacks or measure the Native JSON stages
         type: choice
-        options: [core, application]
+        options: [core, application, json-phases]
         default: core
 
 permissions:
@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   profiles:
+    if: inputs.suite != 'json-phases'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -57,3 +58,75 @@ jobs:
           name: exploratory-linux-x86_64-profiles
           path: ${{ runner.temp }}/profiles
           if-no-files-found: error
+
+  json-probe-build:
+    if: inputs.suite == 'json-phases'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Link both release probes
+        run: |
+          project=components/ktserve
+          mkdir -p "$RUNNER_TEMP/json-probes"
+          for arch in x86_64 aarch64; do
+            bash scripts/ci-gradle.sh -p "$project" -Pbenchmark.targetArch="$arch" \
+              linkJsonProbeReleaseExecutableNative linkJsonHeapProbeReleaseExecutableNative
+            cp "$project/build/bin/native/jsonProbeReleaseExecutable/ktserve-json-probe.kexe" "$RUNNER_TEMP/json-probes/$arch"
+            cp "$project/build/bin/native/jsonHeapProbeReleaseExecutable/ktserve-json-heap-probe.kexe" "$RUNNER_TEMP/json-probes/$arch-heap"
+          done
+          gradle --version > "$RUNNER_TEMP/json-probes/gradle-version.txt"
+          sed -n 's/.*kotlin("multiplatform") version "\(.*\)".*/kotlin=\1/p' "$project/build.gradle.kts" \
+            > "$RUNNER_TEMP/json-probes/toolchain.txt"
+          sed -n 's/.*kotlinx-serialization-json:\([^"]*\)".*/kotlinx.serialization=\1/p' "$project/build.gradle.kts" \
+            >> "$RUNNER_TEMP/json-probes/toolchain.txt"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: native-json-probes
+          path: ${{ runner.temp }}/json-probes
+          if-no-files-found: error
+
+  json-phases:
+    needs: json-probe-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 12
+    env:
+      JSON_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: native-json-probes
+          path: ${{ runner.temp }}/json-probes
+      - name: Measure the JSON phases on one logical CPU
+        run: |
+          test "$(uname -m)" = "$JSON_ARCH"
+          binary="$RUNNER_TEMP/json-probes/$JSON_ARCH"
+          chmod +x "$binary" "$binary-heap"
+          python3 scripts/profile-json-phases.py "$binary" "$binary-heap" "$RUNNER_TEMP/json-phases"
+          cp "$RUNNER_TEMP/json-probes/"*.txt "$RUNNER_TEMP/json-phases/"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: exploratory-json-phases-${{ matrix.arch }}
+          path: ${{ runner.temp }}/json-phases
+          if-no-files-found: warn
