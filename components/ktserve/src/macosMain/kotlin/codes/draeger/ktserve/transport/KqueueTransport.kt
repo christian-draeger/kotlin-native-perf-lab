@@ -215,7 +215,13 @@ private class KqueueTransport(
             }
             return
         }
-        if (peers.size >= connectionLimit || fcntl(fd, F_SETFL, O_NONBLOCK) < 0 ||
+        if (peers.size >= connectionLimit) {
+            close(fd)
+            completions.admissionRejected()
+            armAccept(operation)
+            return
+        }
+        if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0 ||
             fcntl(fd, F_SETFD, FD_CLOEXEC) < 0 ||
             setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, enabled, sizeOf<IntVar>().convert()) < 0
         ) {

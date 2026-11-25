@@ -140,7 +140,9 @@ For an HTTP/1.1 stream with an unknown length, use `streamResponse(contentType, 
 
 Use `streamSuspending` to generate a response with suspending APIs. Its writer copies at most 16 KiB per chunk and suspends when the transfer queue fills. Acquire resources inside the producer and release them in `finally`. ktServe cancels a producer when the response completes, the connection closes, or the shutdown drain ends. The experimental h2c server returns HTTP 501 for suspending producers.
 
-ktServe accepts origin-form HTTP/1.0 and HTTP/1.1 requests. `get` handles requests with empty bodies. `postStreaming` consumes a POST with a valid `Content-Length` or HTTP/1.1 chunked framing through a `RequestBodySink`. `accept` sees one borrowed slice at a time and must return promptly. `complete` returns the response after the full body arrives. ktServe calls `close` once per opened sink, including on disconnect and timeout. The input buffer bounds each slice, and `requestBodyBytes` and `requestBodyMillis` bound the full body. `headerBytes` also caps total chunk-size lines and trailers. ktServe validates trailers before completing the body, and the handler receives only the body bytes. An `Expect` header returns HTTP 417. The example binds to loopback using a numeric IPv4 address.
+The HTTP/1.x origin accepts origin-form and HTTP(S) absolute-form request targets. Paths and queries preserve percent escapes. An empty path in an absolute target becomes `/`. For absolute targets, `header("host")` and `headers()` expose the validated authority from the target. Host fields accept ASCII registered names, IPv4 addresses and bracketed IPv6 addresses with an optional decimal port. HTTP/1.1 requires one Host field. [HTTP/1.1 request targets](https://www.rfc-editor.org/rfc/rfc9112.html#section-3.2)
+
+The parser validates the wire structure as bytes before decoding application values. Each request owns a compact copy of its fields, and lookup decodes values on demand. `get` handles requests with empty bodies. `postStreaming` consumes a POST with a valid `Content-Length` or HTTP/1.1 chunked framing through a `RequestBodySink`. `accept` sees one borrowed slice at a time and must return promptly. `complete` returns the response after the full body arrives. ktServe calls `close` once per opened sink, including on disconnect and timeout. The input buffer bounds each slice, and `requestBodyBytes` and `requestBodyMillis` bound the full body. `headerBytes` also caps total chunk-size lines and trailers. ktServe validates trailers before completing the body, and the handler receives only the body bytes. An `Expect` header returns HTTP 417. The example binds to loopback using a numeric IPv4 address.
 
 The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
 
@@ -162,6 +164,14 @@ identity at a trusted ingress and restrict direct access to the origin. The sepa
 [REST JVM consumer](examples/rest-jvm/) shows a verified identity assertion and bounded
 JSON handling.
 
+## Observe an HTTP/1.x server
+
+Install a `ServerObserver` with `observe` inside the route configuration. It receives readiness and drain events, the number of active connections, connection admission rejections, and terminal exchange records. A record includes a connection-local request number, status when a response was selected, elapsed time, and the completion or failure reason. The server records request-body, handler, and response deadlines separately. Events omit paths, headers, and bodies.
+
+Callbacks run on the I/O loop. Keep the callback short and offload logging or export to a bounded queue. Use status and outcome for metric labels. Treat request identifiers as log fields. An observer exception leaves the server and its cleanup running.
+
+Run the separate JVM example with `KTSERVE_OBSERVE=1` to exercise its [console observer](examples/hello-jvm/src/main/kotlin/codes/draeger/examples/hello/ConsoleObserver.kt). It exposes `/ready` on the example listener and emits structured exchange logs and cumulative counters. The queue records drops if the logging destination falls behind.
+
 ## Ownership and lifetime
 
 | Resource | Owner and release |
@@ -175,7 +185,7 @@ JSON handling.
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
-Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. Set ingress request size and timeout limits that match the backend's `ServerLimits`. Synchronous route handlers run on the I/O loop and should return promptly.
+Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. The [loopback deployment recipe](deployment/http1/README.md) defines compatible limits, forwarding policy, and an upgrade and rollback procedure. Synchronous route handlers run on the I/O loop and should return promptly.
 
 The native resource suite uses a separate release fixture with short deadlines and large bodies to check slow and disconnected clients, descriptor caps and retained heap. To run it locally from the repository root on Linux x86_64:
 

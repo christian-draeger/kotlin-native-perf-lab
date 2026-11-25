@@ -8,12 +8,16 @@ on:
       - 'components/ktserve/**'
       - '.github/workflows/ktserve-maven.yml'
       - 'scripts/*-ktserve-maven.*'
+      - 'scripts/ktserve-dependency-inventory.gradle'
+      - 'scripts/check-ktserve-maven-dependencies.py'
   pull_request:
     paths:
       - 'LICENSE'
       - 'components/ktserve/**'
       - '.github/workflows/ktserve-maven.yml'
       - 'scripts/*-ktserve-maven.*'
+      - 'scripts/ktserve-dependency-inventory.gradle'
+      - 'scripts/check-ktserve-maven-dependencies.py'
   release:
     types: [published]
   workflow_dispatch:
@@ -23,6 +27,10 @@ on:
         type: string
       verify_published:
         description: Check an existing public release without building or uploading
+        type: boolean
+        default: false
+      rehearse_patch:
+        description: Verify the staged bundle with a temporary signing key without publishing it
         type: boolean
         default: false
 
@@ -95,6 +103,22 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Check resolved release dependencies
+        id: inventory
+        run: |
+          project=components/ktserve
+          evidence="$RUNNER_TEMP/ktserve-dependency-evidence"
+          mkdir -p "$evidence"
+          "$project/gradlew" -p "$project" "-Pktserve.version=$KTSERVE_VERSION" \
+            -I "$PWD/scripts/ktserve-dependency-inventory.gradle" \
+            "-Pktserve.dependencyInventory=$evidence/inventory.json" writeKtServeDependencyInventory
+          python3 scripts/check-ktserve-maven-dependencies.py "$evidence/inventory.json" "$evidence/osv.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() && steps.inventory.outcome != 'skipped' }}
+        with:
+          name: ktserve-dependency-evidence
+          path: ${{ runner.temp }}/ktserve-dependency-evidence/
+          if-no-files-found: warn
       - name: Stage versioned JVM and Native artifacts
         run: |
           test "$(uname -m)" = arm64
@@ -173,6 +197,25 @@ jobs:
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18082/health)" = ok
+
+  rehearse-patch:
+    name: Rehearse patch signing
+    needs: [plan, stage, linux-consumer]
+    if: github.event_name == 'workflow_dispatch' && inputs.rehearse_patch && !inputs.verify_published
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ktserve-maven-${{ env.RELEASE_VERSION }}
+          path: ${{ runner.temp }}/ktserve-rehearsal/staging
+      - name: Sign and verify the tested bundle
+        run: bash scripts/rehearse-ktserve-maven.sh "$RUNNER_TEMP/ktserve-rehearsal" "$RELEASE_VERSION"
 
   publish:
     if: >-

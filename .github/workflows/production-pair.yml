@@ -1,0 +1,121 @@
+name: ktServe paired release qualification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/production-pair.yml'
+      - 'scripts/benchmark-production-pair.py'
+  workflow_dispatch:
+    inputs:
+      reference_sha:
+        description: Full commit SHA of the reference release
+        default: '35d8e938e2590a7c6221af2e7c7c0a8f432978bb'
+        type: string
+      observe:
+        description: Also measure the candidate with the in-memory exchange observer
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ktserve-production-pair-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      REFERENCE_SHA: ${{ inputs.reference_sha || '35d8e938e2590a7c6221af2e7c7c0a8f432978bb' }}
+    steps:
+      - name: Check the reference identity
+        run: '[[ "$REFERENCE_SHA" =~ ^[0-9a-f]{40}$ ]]'
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ env.REFERENCE_SHA }}
+          path: reference
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Build both exact releases for both Linux architectures
+        run: |
+          mkdir -p releases
+          for source in reference candidate; do
+            git -C "$source" rev-parse HEAD > "releases/$source.sha"
+            project="$source/components/ktserve"
+            "$project/gradlew" -p "$project" --version > "releases/$source.toolchain"
+            grep -m 1 'kotlin("multiplatform") version' "$project/build.gradle.kts" >> "releases/$source.toolchain"
+            for arch in x86_64 aarch64; do
+              "$project/gradlew" -p "$project" "-Pbenchmark.targetArch=$arch" linkReleaseExecutableNative
+              install -m 755 "$project/build/bin/native/releaseExecutable/ktserve.kexe" "releases/$source-$arch"
+            done
+          done
+          test "$(cat releases/reference.sha)" = "$REFERENCE_SHA"
+          test "$(cat releases/candidate.sha)" = "$GITHUB_SHA"
+          (cd releases && sha256sum -- candidate-* reference-* > binaries.sha256)
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: production-pair-releases-${{ github.run_attempt }}
+          path: releases/
+          if-no-files-found: error
+
+  paired:
+    name: Paired mixed workload (${{ matrix.arch }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: competitors/go-http/go.mod
+          cache: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: production-pair-releases-${{ github.run_attempt }}
+          path: releases/
+      - name: Measure matched release trials
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+          WITH_OBSERVER: ${{ inputs.observe }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          (cd releases && sha256sum --strict -c binaries.sha256)
+          chmod +x "releases/reference-$EXPECTED_ARCH" "releases/candidate-$EXPECTED_ARCH"
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          export PATH="$RUNNER_TEMP/k6:$PATH"
+          go build -trimpath -o "$RUNNER_TEMP/calibration" ./scripts/fixtures/traffic-calibration.go
+          args=()
+          if [[ "$WITH_OBSERVER" == true ]]; then args+=(--observe); fi
+          python3 scripts/benchmark-production-pair.py \
+            --reference "releases/reference-$EXPECTED_ARCH" --reference-sha "$(cat releases/reference.sha)" \
+            --candidate "releases/candidate-$EXPECTED_ARCH" --candidate-sha "$(cat releases/candidate.sha)" \
+            --calibration-server "$RUNNER_TEMP/calibration" --output "$RUNNER_TEMP/paired-results" "${args[@]}"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: production-pair-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/paired-results/
+            releases/*.toolchain
+            releases/binaries.sha256
+          if-no-files-found: warn

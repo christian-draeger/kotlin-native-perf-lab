@@ -125,11 +125,49 @@ class HttpTest {
     }
 
     @Test
-    fun preservesUnicodeLowercaseMappingForConnectionValues() {
-        for ((value, keepAlive) in listOf("Keep-alive" to true, "keep-alİve" to false)) {
+    fun usesAsciiGrammarForConnectionOptions() {
+        val head = "GET / HTTP/1.0\r\nConnection: invalid option\r\n\r\n"
+        assertEquals(400, rejection(head))
+    }
+
+    @Test
+    fun acceptsHostAuthoritiesWithOptionalPorts() {
+        for (host in listOf("localhost", "example.test:8080", "127.0.0.1", "[::]", "[2001:db8::1]:8443", "[::ffff:192.0.2.1]")) {
             val buffer = RequestBuffer(128)
-            buffer.add("GET / HTTP/1.0\r\nConnection: $value\r\n\r\n")
-            assertEquals(keepAlive, assertIs<ParsedHead.Complete>(buffer.parse()).keepAlive)
+            buffer.add("GET / HTTP/1.1\r\nHost: $host\r\n\r\n")
+            assertEquals(host, assertIs<ParsedHead.Complete>(buffer.parse()).request.header("host"))
+        }
+        for (host in listOf("example.test:", "example.test:65536", "example.test:abc", "[2001:db8]", "[::1", ":8080")) {
+            assertEquals(400, rejection("GET / HTTP/1.1\r\nHost: $host\r\n\r\n"))
+        }
+    }
+
+    @Test
+    fun usesAbsoluteTargetAuthorityAndPreservesRawPathAndQuery() {
+        val buffer = RequestBuffer(512)
+        buffer.add("GET HTTPS://origin.example:8443/team/%2F?view=a?b HTTP/1.1\r\n" +
+            "X-Before: first\r\nHost: alias.example \r\nX-After: last\r\n\r\n")
+        val request = assertIs<ParsedHead.Complete>(buffer.parse()).request
+        assertEquals("/team/%2F", request.path)
+        assertEquals("view=a?b", request.query)
+        assertEquals("origin.example:8443", request.header("host"))
+        assertEquals(
+            listOf(HttpField("X-Before", "first"), HttpField("Host", "origin.example:8443"), HttpField("X-After", "last")),
+            request.headers(),
+        )
+
+        buffer.consume(buffer.size)
+        buffer.add("GET http://origin.example?view=short HTTP/1.0\r\n\r\n")
+        val hostless = assertIs<ParsedHead.Complete>(buffer.parse()).request
+        assertEquals("/", hostless.path)
+        assertEquals("view=short", hostless.query)
+        assertEquals("origin.example", hostless.header("Host"))
+    }
+
+    @Test
+    fun rejectsInvalidRequestTargets() {
+        for (target in listOf("/path/%", "/path/%0G", "/path#part", "relative", "http://")) {
+            assertEquals(400, rejection("GET $target HTTP/1.1\r\nHost: example.test\r\n\r\n"))
         }
     }
 

@@ -44,6 +44,19 @@ def main(port):
         status, headers, _ = response(stream)
         assert status == 431 and headers["connection"] == "close", (status, headers)
 
+    with connect(port) as conn, conn.makefile("rb") as stream:
+        conn.sendall(b"GET http://localhost/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        status, headers, body = response(stream)
+        assert status == 200 and body == b"ok"
+        assert headers["connection"] == "close"
+        assert stream.read(1) == b""
+
+    with connect(port) as conn, conn.makefile("rb") as stream:
+        conn.sendall(b"GET /health HTTP/1.1\r\nHost: localhost:port\r\n\r\n")
+        status, headers, _ = response(stream)
+        assert status == 400 and headers["connection"] == "close", (status, headers)
+        assert stream.read(1) == b""
+
     def check_client(_):
         with connect(port) as conn, conn.makefile("rb") as stream:
             conn.sendall(b"GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")

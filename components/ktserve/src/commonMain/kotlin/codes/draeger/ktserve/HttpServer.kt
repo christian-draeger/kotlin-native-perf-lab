@@ -28,6 +28,7 @@ internal class HttpServer(
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
+    private val observation = routes.observer?.let { ServerObservation(it, timeSource) }
     private val signalApplicationProgress = transport.signalApplicationProgress
     private val handlerScope = lazy { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     private val dispatcher: () -> CoroutineScope = { handlerScope.value }
@@ -56,9 +57,11 @@ internal class HttpServer(
         try {
             runLoop(stopRequested)
         } finally {
-            clients.values.forEach { it.close() }
+            clients.values.forEach { it.close(ExchangeOutcome.SHUTDOWN) }
+            if (clients.isNotEmpty()) observation?.emit(ServerEvent.Connections(0))
             if (handlerScope.isInitialized()) handlerScope.value.cancel()
             blockingScope?.cancel()
+            observation?.emit(ServerEvent.Lifecycle.STOPPED)
         }
     }
 
@@ -66,12 +69,14 @@ internal class HttpServer(
         val sweepMillis = minOf(250L, limits.responseMillis)
         var nextSweep = 0L
         acceptNext()
+        observation?.emit(ServerEvent.Lifecycle.READY)
         while (true) {
             val beforePoll = now()
             if (drainDeadline == null && stopRequested()) {
                 drainDeadline = beforePoll + limits.drainMillis
                 transport.closeListener()
-                closeMatching { !it.beginDrain() }
+                observation?.emit(ServerEvent.Lifecycle.DRAINING)
+                closeMatching { if (it.beginDrain()) null else ExchangeOutcome.SHUTDOWN }
             }
             val deadline = drainDeadline
             if (deadline != null && (clients.isEmpty() || beforePoll >= deadline)) break
@@ -86,7 +91,7 @@ internal class HttpServer(
             transport.poll(timeout, this)
             val afterPoll = completionTime()
             if (afterPoll >= nextSweep) {
-                closeMatching { it.expired(afterPoll) }
+                closeMatching { it.expiry(afterPoll)?.outcome() }
                 nextSweep = afterPoll + sweepMillis
             }
             finishHandlers(afterPoll)
@@ -100,8 +105,10 @@ internal class HttpServer(
         }
         val time = completionTime()
         counters?.let { it.accepted++ }
-        val client = HttpConnection(time, limits, dispatcher, countRequest, signalApplicationProgress)
+        val exchange = observation?.let { ExchangeObservation(it, connection.value) }
+        val client = HttpConnection(time, limits, dispatcher, countRequest, signalApplicationProgress, exchange)
         clients[connection] = client
+        observation?.emit(ServerEvent.Connections(clients.size))
         advance(connection, client, time)
         acceptNext()
     }
@@ -121,15 +128,22 @@ internal class HttpServer(
         val client = clients[connection] ?: return
         client.writePending = false
         val time = completionTime()
-        if (client.wrote(byteCount, time)) advance(connection, client, time) else disconnect(connection)
+        if (client.wrote(byteCount, time)) advance(connection, client, time)
+        else disconnect(connection, ExchangeOutcome.IO_FAILURE)
     }
 
     override fun failed(connection: ConnectionId?, operation: OperationId, failure: TransportFailure) {
         if (connection != null) {
-            disconnect(connection)
+            val outcome = if (failure == TransportFailure.IO_FAILURE) ExchangeOutcome.IO_FAILURE
+            else ExchangeOutcome.DISCONNECTED
+            disconnect(connection, outcome)
         } else if (drainDeadline == null) {
             error("Listener operation failed ($failure)")
         }
+    }
+
+    override fun admissionRejected() {
+        observation?.emit(ServerEvent.AdmissionRejected)
     }
 
     private fun advance(id: ConnectionId, client: HttpConnection, time: Long) {
@@ -155,7 +169,7 @@ internal class HttpServer(
                 transport.read(id, OperationId(nextOperation++), input.bytes, input.size, available)
             }
         }
-        if (result != Submission.ACCEPTED) disconnect(id)
+        if (result != Submission.ACCEPTED) disconnect(id, ExchangeOutcome.IO_FAILURE)
     }
 
     private fun finishHandlers(time: Long) {
@@ -163,7 +177,8 @@ internal class HttpServer(
         for (id in suspended.toList()) {
             val client = clients[id] ?: continue
             if (client.awaitingProducer) {
-                if (!client.resumeProducer(time)) disconnect(id) else if (!client.awaitingProducer) advance(id, client, time)
+                if (!client.resumeProducer(time)) disconnect(id, ExchangeOutcome.IO_FAILURE)
+                else if (!client.awaitingProducer) advance(id, client, time)
             } else if (client.finishHandler(time) || client.bodyBlocked) {
                 advance(id, client, time)
             }
@@ -174,22 +189,25 @@ internal class HttpServer(
         check(transport.accept(OperationId(nextOperation++)) == Submission.ACCEPTED) { "Could not submit accept" }
     }
 
-    private fun closeMatching(shouldClose: (HttpConnection) -> Boolean) {
+    private fun closeMatching(expiry: (HttpConnection) -> ExchangeOutcome?) {
         val iterator = clients.entries.iterator()
         while (iterator.hasNext()) {
             val (id, connection) = iterator.next()
-            if (shouldClose(connection)) {
-                iterator.remove()
-                suspended.remove(id)
-                connection.close()
-                transport.closeConnection(id)
-            }
+            val outcome = expiry(connection) ?: continue
+            iterator.remove()
+            suspended.remove(id)
+            connection.close(outcome)
+            transport.closeConnection(id)
+            observation?.emit(ServerEvent.Connections(clients.size))
         }
     }
 
-    private fun disconnect(id: ConnectionId) {
+    private fun disconnect(id: ConnectionId, outcome: ExchangeOutcome = ExchangeOutcome.DISCONNECTED) {
         suspended.remove(id)
-        clients.remove(id)?.close()
+        clients.remove(id)?.let { client ->
+            client.close(outcome)
+            observation?.emit(ServerEvent.Connections(clients.size))
+        }
         transport.closeConnection(id)
     }
 
@@ -200,4 +218,12 @@ internal class HttpServer(
         if (batchTime < 0) batchTime = now()
         return batchTime
     }
+}
+
+private fun ExchangeExpiry.outcome(): ExchangeOutcome = when (this) {
+    ExchangeExpiry.IDLE -> ExchangeOutcome.IDLE_TIMEOUT
+    ExchangeExpiry.REQUEST_HEAD -> ExchangeOutcome.REQUEST_HEAD_TIMEOUT
+    ExchangeExpiry.REQUEST_BODY -> ExchangeOutcome.REQUEST_BODY_TIMEOUT
+    ExchangeExpiry.HANDLER -> ExchangeOutcome.HANDLER_TIMEOUT
+    ExchangeExpiry.RESPONSE -> ExchangeOutcome.RESPONSE_TIMEOUT
 }
