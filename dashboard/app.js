@@ -14,7 +14,7 @@ const variants = {
   "ktor-jvm": { label: "Ktor/JVM", detail: "CIO · HotSpot", color: "kotlin" },
   "ktor-native": { label: "Ktor/Native", detail: "CIO · Kotlin/Native", color: "kotlin" },
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
-  "ktserve": { label: "ktServe", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
+  "ktserve": { label: "ktServe · 1 worker", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
   "ktserve-workers-2": { label: "ktServe · 2 workers", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
@@ -63,6 +63,8 @@ function variantInfo(name) {
   return variants[name] ?? { label: name, detail: "", color: "other" };
 }
 
+const isKtServe = (name) => variantInfo(name).color === "ktserve";
+
 function fileLink(run, label, path, directory = false) {
   const link = make("a", label);
   const kind = directory ? "tree" : "blob";
@@ -88,7 +90,9 @@ function renderChart(container, groups, metric) {
     const row = make("div", "", "chart-row " + variant.color);
     const heading = make("div", "", "chart-row-heading");
     const name = make("div", "", "variant-name");
-    name.append(make("i", "", "swatch"), make("strong", variant.label), make("span", variant.detail));
+    const workerSetup = group.worker_profile?.setup;
+    const detail = workerSetup ? [variant.detail, workerSetup].filter(Boolean).join(" · ") : variant.detail;
+    name.append(make("i", "", "swatch"), make("strong", variant.label), make("span", detail));
     const reading = make("div", "", "chart-value");
     if (stats) {
       reading.append(make("strong", format(stats.median, metric)), make("span", info.unit));
@@ -117,13 +121,23 @@ function renderChart(container, groups, metric) {
 
 function renderTable(groups, endpoint) {
   element("table-endpoint").textContent = endpoint;
+  const showWorkerProfiles = groups.some((group) => group.worker_profile);
+  element("worker-capability").hidden = !showWorkerProfiles;
+  element("worker-setup").hidden = !showWorkerProfiles;
   const rows = groups.map((group) => {
     const variant = variantInfo(group.variant);
     const row = make("tr", "", variant.color);
     const heading = make("th");
     heading.scope = "row";
     heading.append(make("i", "", "swatch"), make("span", variant.label));
-    row.append(heading, make("td", group.valid + " / " + group.total));
+    row.append(heading);
+    if (showWorkerProfiles) {
+      row.append(
+        make("td", group.worker_profile?.support ?? "—", "worker-details"),
+        make("td", group.worker_profile?.setup ?? "—", "worker-details"),
+      );
+    }
+    row.append(make("td", group.valid + " / " + group.total));
     for (const metric of ["rps", "p50", "p95", "p99", "cpu", "rss"]) {
       row.append(make("td", group.stats ? format(group.stats[metric].median, metric) : "—"));
     }
@@ -144,7 +158,10 @@ function renderMethod(run) {
     return [make("dt", label), make("dd", values.length ? values.join(" / ") + unit : "—")];
   });
   element("parameters").replaceChildren(...parameters);
-  const caveat = run.note.note ?? (run.local ? "wrk and the servers shared one host." : "");
+  const caveat = [
+    run.suite === "expanded" ? "Worker setup follows each launcher. Runtime defaults may use multiple threads." : "",
+    run.note.note ?? (run.local ? "wrk and the servers shared one host." : ""),
+  ].filter(Boolean).join(" ");
   element("caveat").textContent = caveat;
   element("caveat").hidden = !caveat;
   element("source-links").replaceChildren(...runSources(run));
@@ -157,6 +174,9 @@ function runSources(run, csv = "results.csv") {
   ];
   if (run.has_environment) {
     sources.push(fileLink(run, "Environment", run.folder + "/environment.txt"));
+  }
+  if (run.groups?.some((group) => group.worker_profile)) {
+    sources.push(fileLink(run, "Worker profiles", run.folder + "/server-workers.json"));
   }
   sources.push(...(run.note?.links ?? []).map((link) => fileLink(run, link.label, link.path)));
   if (/^[0-9]+$/.test(run.ci_run_id ?? "")) {
@@ -421,7 +441,7 @@ function startHistory(runs) {
 
 function drawFrameworkHistory(canvas, samples, series, metric, selectedRun, highlighted) {
   const datasets = series.map(({ name, color, dash }) => {
-    const own = name === "ktserve";
+    const own = isKtServe(name);
     const visibleColor = highlighted && highlighted !== name ? color + "42" : color;
     return {
       label: variantInfo(name).label,
@@ -513,10 +533,10 @@ function startFrameworkHistory(runs) {
     highlighted = null;
     const latestFirst = [...samples].reverse();
     runSelect.replaceChildren(...latestFirst.map(({ run, groups }) =>
-      new Option(utcDateFormat.format(new Date(run.date)) + " · " + groups.size + " stacks", run.id)));
+      new Option(utcDateFormat.format(new Date(run.date)) + " · " + groups.size + " configurations", run.id)));
     runSelect.value = latestFirst.reduce((best, sample) => sample.groups.size > best.groups.size ? sample : best).run.id;
     const buttons = [...endpoint.names].sort((a, b) =>
-      Number(b === "ktserve") - Number(a === "ktserve") || variantInfo(a).label.localeCompare(variantInfo(b).label));
+      Number(isKtServe(b)) - Number(isKtServe(a)) || variantInfo(a).label.localeCompare(variantInfo(b).label));
     series = buttons.map((name) => {
       const info = variantInfo(name);
       const button = make("button", "", "framework-button " + info.color);
@@ -540,7 +560,7 @@ function startFrameworkHistory(runs) {
     });
     element("framework-series").replaceChildren(...series.map(({ button }) => button));
     for (const entry of series) entry.color = getComputedStyle(entry.button).getPropertyValue("--series").trim();
-    visibility.hidden = !endpoint.names.has("ktserve") || series.length < 2;
+    visibility.hidden = !buttons.some(isKtServe) || buttons.every(isKtServe);
     element("framework-caveat").textContent =
       (samples.some(({ run }) => run.ci_run_id) ? "Exploratory CI on matching runner CPU models. " : "")
       + "Points show measured medians. Each line connects that framework’s measured runs.";
@@ -566,7 +586,7 @@ function startFrameworkHistory(runs) {
   visibility.addEventListener("click", () => {
     const showAll = series.some(({ button }) => button.getAttribute("aria-pressed") === "false");
     for (const { name, button } of series) {
-      button.setAttribute("aria-pressed", String(showAll || name === "ktserve"));
+      button.setAttribute("aria-pressed", String(showAll || isKtServe(name)));
     }
     draw();
   });
@@ -612,8 +632,8 @@ function start() {
   for (const [key, entries] of series) {
     const [latest] = entries;
     const suite = latest.suite in suites ? latest.suite : "other";
-    const stackCount = new Set(entries.flatMap((entry) => entry.groups.map((group) => group.variant))).size;
-    const label = [latest.note.label, stackCount + " stacks", dateFormat.format(new Date(latest.date))]
+    const configurationCount = new Set(entries.flatMap((entry) => entry.groups.map((group) => group.variant))).size;
+    const label = [latest.note.label, configurationCount + " configurations", dateFormat.format(new Date(latest.date))]
       .filter(Boolean).join(" · ");
     options[suite].append(new Option(label, key));
     if (!latestFullComparison && suite === "expanded"

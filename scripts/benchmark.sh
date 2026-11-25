@@ -94,6 +94,9 @@ results_root="${BENCHMARK_RESULTS_DIR:-$ROOT/results}"
 OUT="$results_root/$STAMP"
 mkdir -p "$results_root"
 mkdir "$OUT"
+if [[ "$suite" == expanded ]]; then
+  cp "$ROOT/scripts/expanded-server-workers.json" "$OUT/server-workers.json"
+fi
 echo "Recording runs in $OUT"
 trap 'stop_server; cleanup_load' EXIT
 trap 'exit 130' INT

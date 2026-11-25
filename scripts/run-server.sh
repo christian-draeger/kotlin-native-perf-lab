@@ -37,7 +37,7 @@ case "$variant" in
       if [[ "$variant" == ktserve-workers-2-reuseport ]]; then
         export KTSERVE_WORKER_LISTENER=reuseport
       fi
-    elif [[ "${BENCHMARK_SUITE:-}" == workers ]]; then
+    elif [[ "${BENCHMARK_SUITE:-}" == workers || "${BENCHMARK_SUITE:-}" == expanded ]]; then
       export KTSERVE_WORKERS=1
     fi
     exec "$bin"
