@@ -1,0 +1,114 @@
+name: ktServe adaptive workers pilot
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/adaptive-workers.yml'
+      - 'scripts/benchmark-adaptive-workers.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ktserve-adaptive-workers-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Build the release binaries
+        run: |
+          mkdir binaries
+          project=components/ktserve
+          {
+            git rev-parse HEAD
+            java -version 2>&1
+            gradle --version
+            grep -m 1 'kotlin("multiplatform") version' "$project/build.gradle.kts"
+          } > binaries/build-environment.txt
+          for arch in x86_64 aarch64; do
+            bash scripts/ci-gradle.sh -p "$project" "-Pbenchmark.targetArch=$arch" linkReleaseExecutableNative
+            install -m 755 "$project/build/bin/native/releaseExecutable/ktserve.kexe" "binaries/ktserve-$arch"
+            readelf -h "binaries/ktserve-$arch" > "binaries/$arch.elf.txt"
+          done
+          (cd binaries && sha256sum -- ktserve-* > binaries.sha256)
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: adaptive-workers-build-${{ github.run_attempt }}
+          path: binaries/
+          if-no-files-found: error
+
+  measure:
+    name: ${{ matrix.platform.arch }} ${{ matrix.profile }} HTTP/1.1
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+        profile: [persistent, churn]
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: adaptive-workers-build-${{ github.run_attempt }}
+          path: binaries/
+      - name: Install the load tools
+        env:
+          EXPECTED_ARCH: ${{ matrix.platform.arch }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          (cd binaries && sha256sum --strict -c binaries.sha256)
+          chmod +x "binaries/ktserve-$EXPECTED_ARCH"
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk time
+          case "$EXPECTED_ARCH" in
+            x86_64) arch=amd64; checksum=e8759ce45c14e18374bdccd3ba6068197bc3a9f9b7e484db3837f701b9d12e61 ;;
+            aarch64) arch=arm64; checksum=950381173a5575e25e8e086f36fc03bf65d61a2433329b48e41e1cb5e4133bba ;;
+          esac
+          asset="vegeta_12.13.0_linux_$arch.tar.gz"
+          curl -fsSL --retry 3 "https://github.com/tsenart/vegeta/releases/download/v12.13.0/$asset" -o "$RUNNER_TEMP/$asset"
+          printf '%s  %s\n' "$checksum" "$RUNNER_TEMP/$asset" | sha256sum --strict -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" vegeta
+          printf '%s\n' "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Measure quiet, burst and recovered traffic
+        env:
+          LC_ALL: C
+          ARCH: ${{ matrix.platform.arch }}
+          PROFILE: ${{ matrix.profile }}
+          REPETITIONS: ${{ github.event_name == 'pull_request' && 3 || 5 }}
+        run: |
+          output="$RUNNER_TEMP/adaptive-workers"
+          python3 scripts/benchmark-adaptive-workers.py "binaries/ktserve-$ARCH" "$output" \
+            --profile "$PROFILE" --repetitions "$REPETITIONS"
+          cat "$output/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: adaptive-workers-${{ matrix.platform.arch }}-${{ matrix.profile }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/adaptive-workers/
+            binaries/build-environment.txt
+            binaries/binaries.sha256
+            binaries/*.elf.txt
+          if-no-files-found: error

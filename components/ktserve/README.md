@@ -40,6 +40,14 @@ Kotlin handlers and observers shared across workers can be called concurrently. 
 
 Use two workers when short handlers on persistent connections exhaust one I/O loop and additional CPU is available. The matched Linux benchmark measured 73–92% higher small-JSON saturation throughput on two loops. At the same offered mixed load, the second loop consumed 7–17% more CPU per request and more memory. One ARM64 trial at 2,400 requests/s missed multiple per-operation p99 targets. The supported production profile uses one worker. [Worker measurements](https://github.com/christian-draeger/kotlin-native-perf-lab/tree/38abc298aa17e04e6d892c72e31b28d407473a7a/results/throughput-20261125/workers) · [Production qualification](deployment/PRODUCTION.md)
 
+### Adaptive workers experiment
+
+Set `KTSERVE_ADAPTIVE_WORKERS=1` on the Linux benchmark executable to try automatic scaling between one and two epoll workers. The pilot checks the calling thread's CPU affinity and the visible cgroup v2 CPU quota at startup. It stays at one worker when that budget cannot be verified or allows fewer than two CPUs.
+
+Three consecutive sampling windows at 75% or more primary loop thread CPU start a second worker. After five windows below 30% on both loops, the second worker stops accepting and releases its resources after its connections close. The windows are at least one second each. Existing keep-alive and streaming connections stay on their original loop, so burst traffic on those connections can keep one loop saturated even after scaling. The library's public API continues to use explicit worker counts.
+
+The [adaptive workers workflow](../../.github/workflows/adaptive-workers.yml) compares all three modes and archives activation and retirement timings alongside goodput, latency, CPU time and RSS. It uses a shared Linux host with separate CPU masks for the generator and server.
+
 ## Develop on Apple Silicon
 
 With JDK 21 and a configured full Xcode installation, run the separate consumer directly on macOS from the repository root.

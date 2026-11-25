@@ -96,6 +96,10 @@ jobs:
         run: |
           python3 scripts/tests/ktserve_listener_recovery_smoke.py \
             components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
+      - name: Verify adaptive epoll worker lifecycle
+        run: |
+          python3 scripts/tests/ktserve_adaptive_workers_smoke.py \
+            components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
       - name: Exercise ktServe resource bounds
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}

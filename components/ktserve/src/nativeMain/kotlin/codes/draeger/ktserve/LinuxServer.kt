@@ -47,12 +47,25 @@ internal fun serveEpoll(
     stopRequested: () -> Boolean,
     onListening: () -> Unit = {},
     configure: Routes.() -> Unit,
+    adaptiveWorkers: Boolean = false,
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     require(workers in 1..limits.connections) { "Worker count must be between 1 and the connection limit" }
+    require(!adaptiveWorkers || workers == 1) { "Adaptive workers start with one worker" }
     val backend = getenv("KTSERVE_BACKEND")?.toKString() ?: "epoll"
     require(backend == "epoll") { "Unsupported ktServe backend: $backend" }
     val routes = configuredRoutes(configure)
+    if (adaptiveWorkers) {
+        require(getenv("KTSERVE_WORKER_LISTENER")?.toKString().let { it == null || it == "shared" }) {
+            "Adaptive workers require the shared listener"
+        }
+        if (limits.connections >= 2 && canRunTwoEpollWorkers()) {
+            runAdaptiveEpollWorkers(host, port, limits, routes, stopRequested, onListening)
+            return@memScoped
+        }
+        println("ktServe adaptive max_workers=1 reason=budget")
+        println("ktServe adaptive active_workers=1 elapsed_ms=0")
+    }
     if (workers > 1) {
         runEpollWorkers(host, port, workers, limits, routes, stopRequested, onListening)
         return@memScoped
