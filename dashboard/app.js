@@ -16,6 +16,7 @@ const variants = {
   "rust-axum": { label: "Rust/Axum", detail: "Axum · Tokio", color: "rust" },
   "ktserve": { label: "ktServe · 1 worker", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
   "ktserve-workers-2": { label: "ktServe · 2 workers", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
+  "ktserve-eager": { label: "ktServe · Eager default", detail: "Kotlin/Native · HTTP server", color: "ktserve" },
   "go-http": { label: "Go", detail: "net/http", color: "go" },
   "hono-node": { label: "Hono", detail: "Node.js · node-server", color: "hono" },
   "elysia-bun": { label: "Elysia", detail: "Bun", color: "elysia" },

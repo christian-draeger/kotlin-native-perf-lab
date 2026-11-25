@@ -4,11 +4,11 @@
 
 How do **Ktor CIO/JVM**, **Ktor CIO/Kotlin Native**, **Axum/Tokio**, and **ktServe** compare on equivalent HTTP handlers?
 
-The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, Flask/Waitress, Django/Uvicorn, Spring Boot MVC/Tomcat, Spring Boot WebFlux/Reactor Netty, ASP.NET Core/Kestrel, Quarkus REST, Vert.x Web, Micronaut, http4k and Javalin. The two ktServe rows use the same release binary with one and two epoll workers. The other stacks use their documented launch configurations, so server worker counts can vary. The same HTTP smoke contract applies to every runtime. CPU and RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
+The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/Bun, FastAPI/Uvicorn, Flask/Waitress, Django/Uvicorn, Spring Boot MVC/Tomcat, Spring Boot WebFlux/Reactor Netty, ASP.NET Core/Kestrel, Quarkus REST, Vert.x Web, Micronaut, http4k and Javalin. The ktServe rows use the same release binary with one fixed worker, two fixed workers, and the Eager startup default. Eager selects one or two epoll workers based on the available Linux CPU budget. The other stacks use their documented launch configurations, so server worker counts can vary. The same HTTP smoke contract applies to every runtime. CPU and RSS are sampled on the server process. Hosted trials use a fixed warm-up. Confirm steady state for managed runtimes on the controlled hosts before interpreting fine differences.
 
 Hosted measurements use a separate VM for each architecture and endpoint. The frameworks for one endpoint run sequentially on that VM, and its results keep their own environment and raw logs. Compare frameworks within that endpoint and architecture. The VM's load generator and server still share resources, and hosted CPU models can vary across endpoints and runs. Run controlled measurements on the dedicated hosts below.
 
-Expanded runs archive a worker profile for each launcher. The profile describes supported concurrency and the configured worker, event-loop or process setup. Runtime-selected thread counts remain unspecified when the run does not record their actual values. The dashboard shows these profiles alongside the results.
+Expanded runs archive a worker profile for each launcher. The profile describes supported concurrency and the configured worker, event-loop or process setup. The Eager launcher leaves worker overrides unset and records the effective worker count from each trial's startup log. It has a separate ranking and history series from the fixed-worker configurations. The dashboard displays the recorded worker count alongside the result.
 
 ## Measurements
 
@@ -35,7 +35,7 @@ Expanded runs archive a worker profile for each launcher. The profile describes 
 
 Use two Linux machines on a private network and synchronize their clocks. Install `wrk` on the load machine and configure an OpenSSH host alias with a verified host key and noninteractive authentication. The load host must reach the server's chosen interface and TCP range. Use a distinct physical load machine for controlled results.
 
-Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. Per repetition, the core suite uses 12 ports, the expanded suite 57, and the additional competitors alone 42. With `BENCHMARK_ENDPOINT` set to one of `/health`, `/json` or `/users/123`, reserve one port per configuration per repetition.
+Build on the server, check that the commit is clean and keep load and benchmark unrelated processes off the pinned cores. Run the harness on the server and choose its interface explicitly. The example uses 60 consecutive ports starting at 20080. Allow one port per trial. Per repetition, the core suite uses 12 ports, the expanded suite 60, and the additional competitors alone 42. With `BENCHMARK_ENDPOINT` set to one of `/health`, `/json` or `/users/123`, reserve one port per configuration per repetition.
 
 ```bash
 ./scripts/build-all.sh

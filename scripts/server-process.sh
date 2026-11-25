@@ -30,6 +30,13 @@ start_server() {
             grep -qFx 'ktServe backend=epoll tcp=ipv4' "$log" || return 1
           fi
           ;;
+        ktserve-eager)
+          grep -qxE 'ktServe worker_policy=eager workers=[12]' "$log" || {
+            echo 'ktServe did not report its Eager worker count.' >&2
+            cat "$log" >&2
+            return 1
+          }
+          ;;
         ktserve-workers-2) grep -qFx 'ktServe worker_listener=shared' "$log" || return 1 ;;
         ktserve-workers-2-reuseport) grep -qFx 'ktServe worker_listener=reuseport' "$log" || return 1 ;;
         ktserve-epoll) grep -qFx 'ktServe backend=epoll tcp=ipv4' "$log" || return 1 ;;

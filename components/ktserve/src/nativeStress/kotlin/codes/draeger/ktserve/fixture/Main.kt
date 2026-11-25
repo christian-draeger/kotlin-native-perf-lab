@@ -13,6 +13,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.concurrent.atomics.AtomicLong
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.native.runtime.GC
 import kotlin.native.runtime.NativeRuntimeApi
@@ -44,15 +45,15 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
         requestBodyMillis = 1_000,
     )
     val largeBody = "x".repeat(BODY_BYTES)
-    var largeRequests = 0
-    var openStreams = 0
-    var producedStreamBytes = 0L
-    var openRequests = 0
-    var stop = false
+    val largeRequests = AtomicInt(0)
+    val openStreams = AtomicInt(0)
+    val producedStreamBytes = AtomicLong(0)
+    val openRequests = AtomicInt(0)
+    val stop = AtomicBoolean(false)
     val openHandlers = AtomicInt(0)
     val ready = CompletableDeferred<Unit>()
     fun source(bytes: Int): ResponseSource {
-        openStreams++
+        openStreams.addAndFetch(1)
         return object : ResponseSource {
             var remaining = bytes
 
@@ -61,16 +62,16 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
                 val count = minOf(remaining, limit)
                 buffer.fill('s'.code.toByte(), toIndex = count)
                 remaining -= count
-                producedStreamBytes += count
+                producedStreamBytes.addAndFetch(count.toLong())
                 return count
             }
 
             override fun close() {
-                openStreams--
+                openStreams.addAndFetch(-1)
             }
         }
     }
-    serve(port = args.single().toInt(), limits = limits, stopRequested = { stop }) {
+    serve(port = args.single().toInt(), limits = limits, stopRequested = stop::load) {
         get("/health") { text("ok") }
         get("/open-handlers") { text(openHandlers.load().toString()) }
         get("/complete-handler") {
@@ -88,19 +89,19 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
             }
         }
         get("/large") {
-            largeRequests++
+            largeRequests.addAndFetch(1)
             text(largeBody)
         }
-        get("/large-count") { text(largeRequests.toString()) }
+        get("/large-count") { text(largeRequests.load().toString()) }
         get("/too-large") { text(largeBody + "x") }
         get("/stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(STREAM_BYTES)) }
         get("/chunks") { streamResponse("application/octet-stream", source(32 * 1024 + 3)) }
         get("/truncated-stream") { streamResponse(STREAM_BYTES, "application/octet-stream", source(1)) }
-        get("/open-streams") { text(openStreams.toString()) }
-        get("/stream-progress") { text("$openStreams $producedStreamBytes") }
-        get("/open-requests") { text(openRequests.toString()) }
+        get("/open-streams") { text(openStreams.load().toString()) }
+        get("/stream-progress") { text("${openStreams.load()} ${producedStreamBytes.load()}") }
+        get("/open-requests") { text(openRequests.load().toString()) }
         postStreaming("/upload") {
-            openRequests++
+            openRequests.addAndFetch(1)
             object : RequestBodySink {
                 var bytes = 0
 
@@ -111,27 +112,28 @@ internal fun runFixture(args: Array<String>, transportProbe: (Int) -> Unit) {
                 override fun complete(): Response = text(bytes.toString())
 
                 override fun close() {
-                    openRequests--
+                    openRequests.addAndFetch(-1)
                 }
             }
         }
         get("/stop") {
-            stop = true
+            stop.store(true)
             text("ok")
         }
         get("/heap") { text(retainedHeapBytes().toString()) }
     }
-    check(openStreams == 0) { "Shutdown left $openStreams response sources open" }
-    check(openRequests == 0) { "Shutdown left $openRequests request sinks open" }
+    check(openStreams.load() == 0) { "Shutdown left ${openStreams.load()} response sources open" }
+    check(openRequests.load() == 0) { "Shutdown left ${openRequests.load()} request sinks open" }
 }
 
+@OptIn(ExperimentalAtomicApi::class)
 private fun measureConnectionRetention(port: Int) {
-    var stop = false
-    serve(port = port, stopRequested = { stop }) {
+    val stop = AtomicBoolean(false)
+    serve(port = port, stopRequested = stop::load) {
         get("/health") { text("ok") }
         get("/heap") { text(retainedHeapBytes().toString()) }
         get("/stop") {
-            stop = true
+            stop.store(true)
             text("ok")
         }
     }

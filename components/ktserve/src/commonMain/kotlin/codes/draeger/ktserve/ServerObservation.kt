@@ -2,7 +2,10 @@ package codes.draeger.ktserve
 
 import kotlin.time.TimeSource
 
-/** Receives HTTP/1.x events on the owning I/O loop. Return promptly and offload any logging I/O. */
+/**
+ * Receives HTTP/1.x events on the owning I/O loop. Several loops can invoke the observer concurrently.
+ * Return promptly and offload any logging I/O.
+ */
 fun interface ServerObserver {
     fun onEvent(event: ServerEvent)
 }

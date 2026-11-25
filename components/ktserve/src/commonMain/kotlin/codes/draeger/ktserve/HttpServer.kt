@@ -27,6 +27,7 @@ internal class HttpServer(
     private val counters: HttpServerCounters? = null,
     timeSource: TimeSource = TimeSource.Monotonic,
     private val clock: TimeMark = timeSource.markNow(),
+    blockingPermits: Semaphore? = null,
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
@@ -41,7 +42,7 @@ internal class HttpServer(
         } else null
     private val blockingScope = if (routes.hasBlockingGets) CoroutineScope(SupervisorJob() + Dispatchers.IO) else null
     private val launchBlockingHandler: ((() -> Response) -> SuspendedGet?)? = blockingScope?.let { scope ->
-        val permits = Semaphore(limits.blockingHandlers)
+        val permits = blockingPermits ?: Semaphore(limits.blockingHandlers)
         return@let { run ->
             if (permits.tryAcquire()) {
                 SuspendedGet(scope, signalApplicationProgress, run).also { it.releaseWhenDone(permits::release) }

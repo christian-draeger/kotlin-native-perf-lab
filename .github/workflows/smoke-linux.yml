@@ -128,13 +128,7 @@ jobs:
             ./components/ktserve/gradlew -p "$example" linkReleaseExecutableNative
             binary="$example/build/bin/native/releaseExecutable/hello.kexe"
           fi
-          "$binary" 18080 &
-          pid=$!
-          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
-          base=http://127.0.0.1:18080
-          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health")" = ok
-          test "$(curl -fsS "$base/")" = 'Hello from ktServe'
-          kill -0 "$pid"
+          python3 scripts/tests/ktserve_public_workers_smoke.py "$binary"
       - name: Verify and run the ktServe release archive
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}

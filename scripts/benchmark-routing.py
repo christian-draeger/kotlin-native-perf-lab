@@ -99,7 +99,9 @@ def http_trial(args, label, command, resources, run, server_affinity, load_affin
     server_log = base.with_suffix(".server.log")
     with server_log.open("w") as stream:
         process = subprocess.Popen([*server_affinity, *command, "http", str(resources), str(port)],
-                                   stdout=stream, stderr=subprocess.STDOUT, start_new_session=True)
+                                   stdout=stream, stderr=subprocess.STDOUT, start_new_session=True,
+                                   env={**os.environ, "KTSERVE_WORKERS": "1", "KTSERVE_ADAPTIVE_WORKERS": "0",
+                                        "KTSERVE_ADAPTIVE_HANDOFF": "0"})
         try:
             mix.wait_until_ready(process, port, server_log, None)
             check_routes(port, resources)
@@ -162,7 +164,8 @@ def main():
     server, client = mix.cpu_prefix(cpus[:2]), mix.cpu_prefix(cpus[2:4])
     args.output.mkdir(parents=True)
     document = {"architecture": platform.machine(), "kernel": platform.release(), "cpu": mix.run_output("lscpu"),
-                "server_affinity": server, "load_affinity": client, "options": vars(args), "variants": variants}
+                "server_affinity": server, "load_affinity": client, "ktserve_workers": 1,
+                "options": vars(args), "variants": variants}
     document["os"] = Path("/etc/os-release").read_text()
     with (args.output / "environment.json").open("w") as metadata:
         json.dump(document, metadata, indent=2, default=str)

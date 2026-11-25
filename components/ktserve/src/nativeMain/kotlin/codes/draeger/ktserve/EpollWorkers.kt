@@ -17,6 +17,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
 import platform.posix.getenv
 
 internal fun MemScope.runEpollWorkers(
@@ -27,20 +28,23 @@ internal fun MemScope.runEpollWorkers(
     routes: Routes,
     stopRequested: () -> Boolean,
     onListening: () -> Unit,
-    awaitWorkers: Boolean = false,
+    eager: Boolean = false,
 ) {
     val stopping = AtomicBoolean(false)
     val failure = AtomicReference<Throwable?>(null)
-    val listener = getenv("KTSERVE_WORKER_LISTENER")?.toKString() ?: "shared"
+    val listener = if (eager) "shared" else getenv("KTSERVE_WORKER_LISTENER")?.toKString() ?: "shared"
     require(listener == "shared" || listener == "reuseport") { "Unsupported worker listener: $listener" }
     val transports = openWorkerEpollTransports(host, port, workers, limits.connections, listener == "reuseport")
     val counters = if (getenv("KTSERVE_WORKER_DIAGNOSTICS")?.toKString() == "1") {
         List(workers) { HttpServerCounters() }
     } else null
+    val blockingPermits = if (eager && routes.hasBlockingGets) Semaphore(limits.blockingHandlers) else null
 
     fun runWorker(index: Int, shouldStop: () -> Boolean) {
         try {
-            HttpServer(transports[index], routes, limits, counters?.get(index)).run(shouldStop)
+            HttpServer(
+                transports[index], routes, limits, counters?.get(index), blockingPermits = blockingPermits,
+            ).run(shouldStop)
         } catch (cause: Throwable) {
             failure.compareAndSet(null, cause)
             stopping.store(true)
@@ -51,24 +55,30 @@ internal fun MemScope.runEpollWorkers(
         newFixedThreadPoolContext(workers - 1, "ktserve-epoll").use { dispatcher ->
             println("ktServe backend=epoll tcp=ipv4 workers=$workers")
             println("ktServe worker_listener=$listener")
-            if (!awaitWorkers) onListening()
+            if (!eager) onListening()
             runBlocking {
+                val startAccepting = if (eager) CompletableDeferred<Unit>() else null
                 try {
-                    val ready = if (awaitWorkers) List(workers - 1) { CompletableDeferred<Unit>() } else emptyList()
+                    val ready = if (eager) List(workers - 1) { CompletableDeferred<Unit>() } else emptyList()
                     for (index in 1 until workers) {
                         launch(dispatcher) {
                             ready.getOrNull(index - 1)?.complete(Unit)
+                            startAccepting?.await()
                             runWorker(index) { stopping.load() }
                         }
                     }
-                    ready.forEach { it.await() }
-                    if (awaitWorkers) onListening()
+                    if (startAccepting != null) {
+                        ready.forEach { it.await() }
+                        onListening()
+                        startAccepting.complete(Unit)
+                    }
                     runWorker(0) {
                         if (stopRequested()) stopping.store(true)
                         stopping.load()
                     }
                 } finally {
                     stopping.store(true)
+                    startAccepting?.cancel()
                 }
             }
         }

@@ -28,9 +28,10 @@ kotlin {
     }
     native.binaries.executable {
         baseName = "hello"
-        entryPoint = "codes.draeger.examples.hello.main"
+        entryPoint = if (targetOs == "linux") "codes.draeger.examples.hello.linuxMain" else "codes.draeger.examples.hello.main"
     }
     sourceSets.named("nativeMain") {
+        if (targetOs == "linux") kotlin.srcDir("src/linuxMain/kotlin")
         dependencies {
             implementation(if (stagedVersion == null) "codes.draeger:ktserve" else "codes.draeger:ktserve:$stagedVersion")
         }

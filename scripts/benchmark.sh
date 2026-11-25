@@ -253,6 +253,7 @@ for ((run = 1; run <= RUNS; run++)); do
       if [[ "$variant" == ktserve-reference ]]; then variant_sha="$KTSERVE_REFERENCE_SHA"; fi
       python3 "$ROOT/scripts/parse_wrk.py" \
         --log "$prefix.wrk.txt" --warmup-log "$prefix.warmup.wrk.txt" --csv "$OUT/results.csv" \
+        --server-log "$prefix.server.txt" \
         --variant "$variant" --endpoint "$endpoint" --run "$run" --connections "$CONNECTIONS" \
         --threads "$THREADS" --duration "$DURATION" --warmup "$warmup_seconds" \
         --warmup-stability "$warmup_status" --cpu-start "$cpu_start" \

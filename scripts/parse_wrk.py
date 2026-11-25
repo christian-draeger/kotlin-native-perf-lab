@@ -2,6 +2,7 @@
 """Append one measured run from wrk's end-of-run Lua output."""
 import argparse
 import csv
+import re
 from pathlib import Path
 
 
@@ -14,6 +15,13 @@ def read_stats(path):
 
 def error_count(stats):
     return sum(int(stats[key]) for key in ("connect", "read", "write", "timeout", "http_errors"))
+
+
+def read_eager_worker_count(path):
+    records = [line for line in path.read_text().splitlines() if line.startswith("ktServe worker_policy=eager")]
+    if len(records) != 1 or not (match := re.fullmatch(r"ktServe worker_policy=eager workers=([12])", records[0])):
+        raise ValueError(f"Expected one Eager startup record with its effective worker count in {path}")
+    return int(match.group(1))
 
 
 def read_load_timing(path):
@@ -43,7 +51,13 @@ def main():
     for key in ("cpu-start", "cpu-end"):
         parser.add_argument("--" + key, type=float, required=True)
     parser.add_argument("--warmup-stability", choices=("unchecked", "stable", "unstable"), default="unchecked")
+    parser.add_argument("--server-log", type=Path)
     args = parser.parse_args()
+    eager_workers = ""
+    if args.variant == "ktserve-eager":
+        if not args.server_log:
+            parser.error("ktserve-eager requires its server startup log")
+        eager_workers = read_eager_worker_count(args.server_log)
 
     stats = read_stats(args.log)
     warmup = read_stats(args.warmup_log)
@@ -60,6 +74,7 @@ def main():
     )
     row = {
         "variant": args.variant,
+        "effective_workers": eager_workers,
         "endpoint": args.endpoint,
         "run": args.run,
         "valid": int(valid),

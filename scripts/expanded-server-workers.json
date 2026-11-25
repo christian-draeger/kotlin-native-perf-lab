@@ -4,6 +4,7 @@
   "rust-axum": {"support": "Multiple Tokio worker threads", "setup": "Tokio multi-thread runtime defaults"},
   "ktserve": {"support": "Multiple epoll loops in one process", "setup": "1 epoll worker"},
   "ktserve-workers-2": {"support": "Multiple epoll loops in one process", "setup": "2 epoll workers · shared listener"},
+  "ktserve-eager": {"support": "Multiple epoll loops in one process", "setup": "Eager default · worker count from startup logs"},
   "go-http": {"support": "Goroutines scheduled on multiple OS threads", "setup": "net/http goroutines · Go runtime defaults"},
   "hono-node": {"support": "Multiple Node.js processes via cluster", "setup": "1 Node.js process · 1 JS event loop"},
   "elysia-bun": {"support": "Multiple Bun processes can share a listener", "setup": "1 Bun server process"},

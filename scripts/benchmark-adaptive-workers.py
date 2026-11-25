@@ -254,13 +254,15 @@ def trial(options, variant, repetition):
     base = f"http://127.0.0.1:{port}"
     env = {key: value for key, value in os.environ.items() if not key.startswith("KTSERVE_")}
     env.pop("BENCHMARK_SUITE", None)
-    env.update(BIND_HOST="127.0.0.1", PORT=str(port), KTSERVE_WORKERS=str(VARIANTS.get(variant, 1)),
+    env.update(BIND_HOST="127.0.0.1", PORT=str(port),
                KTSERVE_BACKEND="epoll", KTSERVE_WORKER_LISTENER="shared", no_proxy="127.0.0.1", NO_PROXY="127.0.0.1")
+    if variant != EAGER:
+        env["KTSERVE_WORKERS"] = str(VARIANTS.get(variant, 1))
     if options.profile == "preopened":
         env["KTSERVE_EPOLL_APPLICATION_WAKEUP"] = "eventfd"
     if variant in ("adaptive", HANDOFF):
         env["KTSERVE_ADAPTIVE_WORKERS"] = "1"
-    if variant in (EAGER, STANDBY):
+    if variant == STANDBY:
         env["KTSERVE_ADAPTIVE_WORKERS"] = variant
     if variant == HANDOFF:
         env["KTSERVE_ADAPTIVE_HANDOFF"] = "1"
@@ -301,8 +303,10 @@ def trial(options, variant, repetition):
         expected = "ktServe backend=epoll tcp=ipv4"
         if variant in ("fixed-2", EAGER):
             expected += " workers=2"
-        if variant in (EAGER, STANDBY) and f"ktServe adaptive worker_policy={variant}" not in log_text.splitlines():
-            raise RuntimeError(f"Missing {variant} worker-policy announcement in {log}")
+        if variant == EAGER and "ktServe worker_policy=eager workers=2" not in log_text.splitlines():
+            raise RuntimeError(f"The default did not select two eager workers in {log}")
+        if variant == STANDBY and "ktServe adaptive worker_policy=standby" not in log_text.splitlines():
+            raise RuntimeError(f"Missing standby worker-policy announcement in {log}")
         if variant in ("adaptive", HANDOFF, STANDBY):
             if ACTIVE_WORKERS.findall(log_text)[:1] != ["1"]:
                 raise RuntimeError(f"Missing initial adaptive worker announcement in {log}")
