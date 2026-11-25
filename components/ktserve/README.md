@@ -144,6 +144,14 @@ ktServe accepts origin-form HTTP/1.0 and HTTP/1.1 requests. `get` handles reques
 
 The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
 
+## Observe an HTTP/1.x server
+
+Install a `ServerObserver` with `observe` inside the route configuration. It receives readiness and drain events, the number of active connections, connection admission rejections, and terminal exchange records. A record includes a connection-local request number, status when a response was selected, elapsed time, and the completion or failure reason. The server records request-body, handler, and response deadlines separately. Events omit paths, headers, and bodies.
+
+Callbacks run on the I/O loop. Keep the callback short and offload logging or export to a bounded queue. Use status and outcome for metric labels. Treat request identifiers as log fields. An observer exception leaves the server and its cleanup running.
+
+Run the separate JVM example with `KTSERVE_OBSERVE=1` to exercise its [console observer](examples/hello-jvm/src/main/kotlin/codes/draeger/examples/hello/ConsoleObserver.kt). It exposes `/ready` on the example listener and emits structured exchange logs and cumulative counters. The queue records drops if the logging destination falls behind.
+
 ## Ownership and lifetime
 
 | Resource | Owner and release |

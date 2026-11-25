@@ -14,6 +14,8 @@ internal enum class TransportFailure { CANCELLED, CONNECTION_LOST, IO_FAILURE }
 
 internal interface TransportCompletions {
     fun accepted(operation: OperationId, connection: ConnectionId)
+    /** A socket was closed because the listener's connection budget was exhausted. */
+    fun admissionRejected() {}
     fun read(connection: ConnectionId, operation: OperationId, byteCount: Int)
     fun wrote(connection: ConnectionId, operation: OperationId, byteCount: Int)
     fun failed(connection: ConnectionId?, operation: OperationId, failure: TransportFailure)

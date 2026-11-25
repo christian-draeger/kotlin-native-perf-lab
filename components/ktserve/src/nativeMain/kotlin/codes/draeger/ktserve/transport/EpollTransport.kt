@@ -397,15 +397,16 @@ private class EpollTransport(
                     }
                 }
             }
-            val id = adopt(fd) ?: return@repeat
+            val id = adopt(fd, completions) ?: return@repeat
             acceptOperation = null
             completions.accepted(operation, id)
         }
     }
 
-    private fun adopt(fd: Int): ConnectionId? {
+    private fun adopt(fd: Int, completions: TransportCompletions): ConnectionId? {
         if (!(sharedBudget?.tryAcquire() ?: (peers.size < connectionLimit))) {
             close(fd)
+            completions.admissionRejected()
             return null
         }
         var adopted = false
