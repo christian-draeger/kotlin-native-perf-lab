@@ -177,7 +177,7 @@ def main(args):
                     await_health(edge)
                     if phase == "candidate":
                         verify_origin(edge)
-                print(f"{phase} origin served requests and drained", flush=True)
+                print(f"{phase} origin served requests and stopped cleanly", flush=True)
             verify_forwarding(port, edge)
     print("TLS, private origin, HTTP/1.1 reuse, ingress policy, recovery and graceful shutdown passed")
 
