@@ -28,6 +28,12 @@ version=0.2.0-preview.2
 
 The repository is under `components/ktserve/build/maven-staging/<version>/`. With the version property set, the examples resolve from that repository and disable their composite build. Check the running JVM example with `curl -fsS http://127.0.0.1:8080/health`. CI also tests the packaged Native library by linking independent consumers and running their executables on all three Native targets.
 
+## Rehearse a security patch
+
+Run **ktServe Maven staging** on the patch branch with the intended version and **Rehearse patch signing** selected. It checks the resolved JVM, Native, and build dependency graph against OSV, runs the independent consumers, and signs and verifies the staged files with a disposable key. Download the dependency evidence and review any advisory before promotion. The rehearsal produces no Central deployment.
+
+To publish a confirmed fix, follow the normal tag workflow with the agreed version. Verify the upgrade against Maven Central and publish the coordinated advisory with affected versions and migration instructions. See the [security policy](../../SECURITY.md).
+
 ## Publish from GitHub Actions
 
 1. Set [`VERSION`](VERSION) to the next Maven version in the release commit. A push to `main` that changes ktServe starts **ktServe Maven staging** and tests the JVM and all three Native variants. A manual run on `main` can also stage a version.
