@@ -17,13 +17,29 @@ import (
 )
 
 const expectedBody = `{"id":42,"name":"benchmark-user","active":true}`
+const latencyWindow = 250 * time.Millisecond
+
+type histogram struct {
+	buckets [64 * 16]uint64
+	count   uint64
+	max     uint64
+}
+
+type windowResult struct {
+	StartUS    int64  `json:"start_us"`
+	DurationUS int64  `json:"duration_us"`
+	Requests   uint64 `json:"requests"`
+	P99        uint64 `json:"p99_us"`
+	P999       uint64 `json:"p999_us"`
+	Max        uint64 `json:"max_us"`
+}
 
 type connectionResult struct {
 	Peer      string `json:"peer"`
+	Hot       bool   `json:"hot"`
 	Completed uint64 `json:"completed"`
 	Error     string `json:"error,omitempty"`
-	histogram [64 * 16]uint64
-	perSecond []uint64
+	windows   []histogram
 }
 
 type openedPeer struct {
@@ -38,7 +54,9 @@ type result struct {
 	P50         uint64             `json:"p50_us"`
 	P95         uint64             `json:"p95_us"`
 	P99         uint64             `json:"p99_us"`
+	P999        uint64             `json:"p999_us"`
 	PerSecond   []uint64           `json:"per_second_requests"`
+	Windows     []windowResult     `json:"latency_windows"`
 	Duration    int64              `json:"duration_us"`
 	Setup       int64              `json:"setup_us"`
 }
@@ -110,47 +128,63 @@ func bucket(us uint64) int {
 	return shift*16 + int(us>>shift)
 }
 
-func percentile(histogram []uint64, requests, percent uint64) uint64 {
-	if requests == 0 {
+func (h *histogram) record(us uint64) {
+	h.buckets[bucket(us)]++
+	h.count++
+	h.max = max(h.max, us)
+}
+
+func (h *histogram) merge(other *histogram) {
+	for index, count := range other.buckets {
+		h.buckets[index] += count
+	}
+	h.count += other.count
+	h.max = max(h.max, other.max)
+}
+
+func (h *histogram) percentile(perMille uint64) uint64 {
+	if h.count == 0 {
 		return 0
 	}
-	rank := (requests*percent + 99) / 100
-	for index, count := range histogram {
+	rank := (h.count*perMille + 999) / 1000
+	for index, count := range h.buckets {
 		if rank <= count {
 			if index < 32 {
 				return uint64(index)
 			}
 			shift := index/16 - 1
-			return uint64((index%16+17)<<shift) - 1
+			return min(uint64((index%16+17)<<shift)-1, h.max)
 		}
 		rank -= count
 	}
 	panic("latency histogram does not match request count")
 }
 
-func load(conn net.Conn, request, expected []byte, countSeconds int, start time.Time) connectionResult {
-	sample := connectionResult{
-		Peer:      conn.LocalAddr().String(),
-		perSecond: make([]uint64, countSeconds),
-	}
+func load(conn net.Conn, request, expected []byte, duration time.Duration, start time.Time, hot bool) connectionResult {
+	sample := connectionResult{Peer: conn.LocalAddr().String(), Hot: hot}
 	reply := make([]byte, len(expected))
-	if err := conn.SetDeadline(start.Add(time.Duration(countSeconds+2) * time.Second)); err != nil {
+	end := start.Add(duration)
+	if err := conn.SetDeadline(end.Add(2 * time.Second)); err != nil {
 		sample.Error = err.Error()
 		return sample
 	}
-	for started := time.Now(); int(started.Sub(start)/time.Second) < countSeconds; {
-		if err := exchange(conn, request, reply, expected); err != nil {
-			sample.Error = err.Error()
-			break
+	if hot {
+		sample.windows = make([]histogram, (duration-1)/latencyWindow+1)
+		for started := time.Now(); started.Before(end); {
+			if err := exchange(conn, request, reply, expected); err != nil {
+				sample.Error = err.Error()
+				break
+			}
+			finished := time.Now()
+			if finished.Before(end) {
+				sample.Completed++
+				window := finished.Sub(start) / latencyWindow
+				sample.windows[window].record(uint64(finished.Sub(started).Microseconds()))
+			}
+			started = finished
 		}
-		finished := time.Now()
-		second := int(finished.Sub(start) / time.Second)
-		if second < countSeconds {
-			sample.Completed++
-			sample.perSecond[second]++
-			sample.histogram[bucket(uint64(finished.Sub(started).Microseconds()))]++
-		}
-		started = finished
+	} else {
+		time.Sleep(time.Until(end))
 	}
 	if sample.Error == "" {
 		if err := exchange(conn, request, reply, expected); err != nil {
@@ -164,9 +198,17 @@ func main() {
 	startup := time.Now()
 	address := flag.String("address", "", "server host and port")
 	connections := flag.Int("connections", 64, "number of pre-opened TCP connections")
+	hot := flag.Int("hot-connections", 0, "number of pre-opened connections to load; zero means all")
 	seconds := flag.Int("seconds", 12, "seconds of closed-loop load")
+	duration := flag.Duration("duration", 0, "closed-loop duration such as 500ms; overrides -seconds")
 	flag.Parse()
-	if *address == "" || *connections < 1 || *seconds < 1 {
+	if *duration == 0 {
+		*duration = time.Duration(*seconds) * time.Second
+	}
+	if *hot == 0 {
+		*hot = *connections
+	}
+	if *address == "" || *connections < 1 || *hot < 1 || *hot > *connections || duration.Microseconds() < 1 {
 		log.Fatal("use a server address and positive connections and seconds")
 	}
 
@@ -190,32 +232,41 @@ func main() {
 
 	start := time.Now()
 	results := make(chan connectionResult, *connections)
-	for _, peer := range peers {
-		go func(peer net.Conn, expected []byte) {
-			results <- load(peer, request, expected, *seconds, start)
-		}(peer.conn, peer.response)
+	for index, peer := range peers {
+		go func() {
+			results <- load(peer.conn, request, peer.response, *duration, start, index < *hot)
+		}()
 	}
 	summary := result{
 		Connections: make([]connectionResult, 0, *connections),
-		PerSecond:   make([]uint64, *seconds),
-		Duration:    (time.Duration(*seconds) * time.Second).Microseconds(),
+		PerSecond:   make([]uint64, (*duration-1)/time.Second+1),
+		Duration:    duration.Microseconds(),
 		Setup:       start.Sub(startup).Microseconds(),
 	}
-	var histogram [64 * 16]uint64
+	windows := make([]histogram, (*duration-1)/latencyWindow+1)
 	for range peers {
 		sample := <-results
 		summary.Connections = append(summary.Connections, sample)
 		summary.Requests += sample.Completed
-		for index, count := range sample.histogram {
-			histogram[index] += count
-		}
-		for index, count := range sample.perSecond {
-			summary.PerSecond[index] += count
+		for index := range sample.windows {
+			windows[index].merge(&sample.windows[index])
 		}
 	}
-	summary.P50 = percentile(histogram[:], summary.Requests, 50)
-	summary.P95 = percentile(histogram[:], summary.Requests, 95)
-	summary.P99 = percentile(histogram[:], summary.Requests, 99)
+	var full histogram
+	for index := range windows {
+		window := &windows[index]
+		full.merge(window)
+		offset := time.Duration(index) * latencyWindow
+		summary.PerSecond[offset/time.Second] += window.count
+		summary.Windows = append(summary.Windows, windowResult{
+			StartUS: offset.Microseconds(), DurationUS: min(latencyWindow, *duration-offset).Microseconds(),
+			Requests: window.count, P99: window.percentile(990), P999: window.percentile(999), Max: window.max,
+		})
+	}
+	summary.P50 = full.percentile(500)
+	summary.P95 = full.percentile(950)
+	summary.P99 = full.percentile(990)
+	summary.P999 = full.percentile(999)
 	if err := json.NewEncoder(os.Stdout).Encode(summary); err != nil {
 		log.Fatal(err)
 	}

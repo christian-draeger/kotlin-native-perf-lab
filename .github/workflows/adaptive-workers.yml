@@ -5,7 +5,10 @@ on:
     paths:
       - '.github/workflows/adaptive-workers.yml'
       - 'scripts/benchmark-adaptive-workers.py'
+      - 'scripts/benchmark-worker-mix.py'
       - 'scripts/fixtures/keepalive-burst.go'
+      - 'components/ktserve/src/nativeMain/kotlin/codes/draeger/ktserve/AdaptiveEpollWorkers.kt'
+      - 'components/ktserve/src/nativeMain/kotlin/codes/draeger/ktserve/EpollKeepAliveHandoff.kt'
   workflow_dispatch:
     inputs:
       profile:
@@ -58,6 +61,50 @@ jobs:
           path: binaries/
           if-no-files-found: error
 
+  application-mix:
+    name: ${{ matrix.platform.arch }} mixed 800 req/s
+    if: github.event_name == 'pull_request' || inputs.profile == 'preopened'
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 15
+    env:
+      ARCH: ${{ matrix.platform.arch }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: adaptive-workers-build-${{ github.run_attempt }}
+          path: binaries/
+      - name: Compare the existing mixed application workload
+        run: |
+          test "$(uname -m)" = "$ARCH"
+          (cd binaries && sha256sum --strict -c binaries.sha256)
+          chmod +x "binaries/ktserve-$ARCH"
+          sudo apt-get update -qq
+          sudo apt-get install -y time
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          export PATH="$RUNNER_TEMP/k6:$PATH"
+          python3 scripts/benchmark-worker-mix.py "binaries/ktserve-$ARCH" "$RUNNER_TEMP/worker-mix"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: adaptive-workers-${{ matrix.platform.arch }}-application-mix-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/worker-mix/
+            binaries/build-environment.txt
+            binaries/binaries.sha256
+          if-no-files-found: error
+
   measure:
     name: ${{ matrix.platform.arch }} ${{ inputs.profile || 'preopened' }} HTTP/1.1
     needs: build
@@ -70,7 +117,7 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.platform.runner }}
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
       PROFILE: ${{ inputs.profile || 'preopened' }}
     steps:
@@ -118,9 +165,13 @@ jobs:
             go version -m "$client" > binaries/keepalive-client-environment.txt
             args+=(--keepalive-client "$client")
           fi
+          result=0
           python3 scripts/benchmark-adaptive-workers.py "binaries/ktserve-$ARCH" "$output" \
-            --profile "$PROFILE" --repetitions "$REPETITIONS" "${args[@]}"
-          cat "$output/summary.md" >> "$GITHUB_STEP_SUMMARY"
+            --profile "$PROFILE" --repetitions "$REPETITIONS" "${args[@]}" || result=$?
+          if [[ -f "$output/summary.md" ]]; then
+            cat "$output/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit "$result"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ !cancelled() }}
         with:

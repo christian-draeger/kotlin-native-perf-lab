@@ -50,6 +50,8 @@ Set `KTSERVE_ADAPTIVE_HANDOFF=1` alongside `KTSERVE_ADAPTIVE_WORKERS=1` to try t
 
 The [adaptive workers workflow](../../.github/workflows/adaptive-workers.yml) compares fixed one, fixed two, adaptive and adaptive with handoff. It opens the burst connections before sending burst traffic and archives per-socket results, activation and handoff times, goodput, latency, CPU time and RSS. It uses a shared Linux host with separate CPU masks for the generator and server.
 
+The benchmark executable also accepts two throughput-first policies. `KTSERVE_ADAPTIVE_WORKERS=eager` starts two workers when the startup CPU budget permits. `KTSERVE_ADAPTIVE_WORKERS=standby` opens the second worker's transport at startup and parks it with accepts paused. Two samples of at least 100 ms at 75% or more primary thread CPU, plus recent traffic on multiple connections, wake it and enable a fresh keep-alive handoff. After at least five seconds of quiet and once the second worker's peers close, its loop parks for the next burst. The [CI pilot](../../.github/workflows/adaptive-workers.yml) measures both policies alongside both fixed counts and the original adaptive policy.
+
 ## Develop on Apple Silicon
 
 With JDK 21 and a configured full Xcode installation, run the separate consumer directly on macOS from the repository root.

@@ -13,6 +13,7 @@ import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicReference
 import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.toKString
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.runBlocking
@@ -26,6 +27,7 @@ internal fun MemScope.runEpollWorkers(
     routes: Routes,
     stopRequested: () -> Boolean,
     onListening: () -> Unit,
+    awaitWorkers: Boolean = false,
 ) {
     val stopping = AtomicBoolean(false)
     val failure = AtomicReference<Throwable?>(null)
@@ -49,12 +51,18 @@ internal fun MemScope.runEpollWorkers(
         newFixedThreadPoolContext(workers - 1, "ktserve-epoll").use { dispatcher ->
             println("ktServe backend=epoll tcp=ipv4 workers=$workers")
             println("ktServe worker_listener=$listener")
-            onListening()
+            if (!awaitWorkers) onListening()
             runBlocking {
                 try {
+                    val ready = if (awaitWorkers) List(workers - 1) { CompletableDeferred<Unit>() } else emptyList()
                     for (index in 1 until workers) {
-                        launch(dispatcher) { runWorker(index) { stopping.load() } }
+                        launch(dispatcher) {
+                            ready.getOrNull(index - 1)?.complete(Unit)
+                            runWorker(index) { stopping.load() }
+                        }
                     }
+                    ready.forEach { it.await() }
+                    if (awaitWorkers) onListening()
                     runWorker(0) {
                         if (stopRequested()) stopping.store(true)
                         stopping.load()

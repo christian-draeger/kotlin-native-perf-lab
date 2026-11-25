@@ -63,6 +63,8 @@ internal class HttpConnection(
     private var headStarted: Long? = null
     private var responseDeadline = Long.MAX_VALUE
 
+    fun activeSince(since: Long): Boolean = lastActivity >= since
+
     fun idleSnapshot(since: Long): IdleHttpConnection? {
         if (lastActivity < since || input.size != 0 || headStarted != null || output != null ||
             incoming != null || stream != null || handler != null || writePending || monitorPending ||

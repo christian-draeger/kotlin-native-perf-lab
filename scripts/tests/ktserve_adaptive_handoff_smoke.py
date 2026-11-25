@@ -107,8 +107,8 @@ def check_migrated_slot(server_pid, port, peers, moved_peer):
         assert_health(*connect(capacity, port))
 
 
-def check_handoff(binary):
-    with fixture(binary, handoff=True) as (server, port, logs), ExitStack() as clients:
+def check_handoff(binary, policy):
+    with fixture(binary, handoff=True, policy=policy) as (server, port, logs), ExitStack() as clients:
         wait_until(lambda: "active_workers=1" in logs.read_text(), "Adaptive fixture did not start")
         hot = [connect(clients, port) for _ in range(6)]
         partial_head, partial_body, stream_peer = [connect(clients, port) for _ in range(3)]
@@ -185,11 +185,13 @@ def check_handoff(binary):
         assert server.wait(timeout=5) == 0, "Adaptive fixture failed to shut down after handoff"
         for _, stream in all_peers:
             assert stream.read(1) == b"", "A peer survived server shutdown"
-    print("Adaptive epoll handed off existing TCP sockets while pipelined and streaming exchanges stayed intact")
+    print(f"Adaptive policy {policy} handed off existing TCP sockets while pipelined and streaming exchanges stayed intact")
 
 
 if __name__ == "__main__":
     if has_two_cpus():
-        check_handoff(str(Path(sys.argv[1]).resolve()))
+        binary = str(Path(sys.argv[1]).resolve())
+        for policy in ("1", "standby"):
+            check_handoff(binary, policy)
     else:
         print("Skipping adaptive worker handoff smoke: two effective CPUs are required")

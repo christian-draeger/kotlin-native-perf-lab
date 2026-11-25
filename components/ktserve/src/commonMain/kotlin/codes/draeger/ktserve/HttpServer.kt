@@ -66,6 +66,15 @@ internal class HttpServer(
         }
     }
 
+    fun hasMultipleActiveConnections(withinMillis: Long): Boolean {
+        val since = now() - withinMillis
+        var count = 0
+        for (client in clients.values) {
+            if (client.activeSince(since) && ++count == 2) return true
+        }
+        return false
+    }
+
     /** Run on the current owner between polls. An accepted move releases its idle read lease. */
     fun splitIdleConnections(maxIdleMillis: Long, move: (ConnectionId, IdleHttpConnection) -> Boolean) {
         check(observation == null && drainDeadline == null)
