@@ -59,7 +59,8 @@ def load(args, affinity, port, resources, seconds, prefix):
         report = prefix.with_suffix(".k6.json")
         env = {key: value for key, value in os.environ.items() if not key.startswith("K6_")}
         env.update(GOMAXPROCS="2", ROUTING_RATE=str(args.rate), ROUTING_SECONDS=str(seconds),
-                   ROUTING_URL=url, ROUTING_RESOURCES=str(resources), ROUTING_OUTPUT=str(report))
+                   ROUTING_URL=url, ROUTING_RESOURCES=str(resources), ROUTING_OUTPUT=str(report),
+                   ROUTING_VUS=str(args.vus))
         client = ["k6", "run", "--quiet", "--no-color", "--no-usage-report", str(SCRIPTS / "k6-routing.js")]
     else:
         lua = args.output / f"routes-{resources}.lua"
@@ -144,6 +145,7 @@ def main():
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--connections", type=int, default=16)
     parser.add_argument("--rate", type=int, default=0, help="Fixed offered rate for k6. Zero selects wrk saturation.")
+    parser.add_argument("--vus", type=int, default=192, help="k6 preallocated virtual users")
     parser.add_argument("--only", choices=("match", "http"))
     args = parser.parse_args()
     variants = [variant.split("=", 1) for variant in args.variant]
@@ -152,7 +154,7 @@ def main():
     variants = [(label, shlex.split(command)) for label, command in variants]
     if len(set(label for label, _ in variants)) != len(variants):
         parser.error("Variant names must be unique")
-    if min(*args.resources, args.repeats, args.iterations, args.duration, args.warmup) < 1 or args.rate < 0:
+    if min(*args.resources, args.repeats, args.iterations, args.duration, args.warmup, args.vus) < 1 or args.rate < 0:
         parser.error("Expected positive resources, repeats, iterations, and durations")
     cpus = sorted(os.sched_getaffinity(0))
     if len(cpus) < 4:

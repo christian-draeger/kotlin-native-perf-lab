@@ -6,13 +6,14 @@ const base = __ENV.ROUTING_URL;
 const resources = Number(__ENV.ROUTING_RESOURCES);
 const rate = Number(__ENV.ROUTING_RATE);
 const seconds = Number(__ENV.ROUTING_SECONDS);
+const vus = Number(__ENV.ROUTING_VUS);
 const failures = new Counter("routing_failures");
 const latency = new Trend("routing_latency", true);
 
 export const options = {
   scenarios: {
     routes: {
-      executor: "constant-arrival-rate", rate, duration: `${seconds}s`, preAllocatedVUs: 64, gracefulStop: "2s",
+      executor: "constant-arrival-rate", rate, duration: `${seconds}s`, preAllocatedVUs: vus, gracefulStop: "2s",
     },
   },
   maxRedirects: 0,
