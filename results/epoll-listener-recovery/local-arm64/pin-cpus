@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+os.sched_setaffinity(0, [int(cpu) for cpu in sys.argv[1].split(",")])
+os.execvp(sys.argv[2], sys.argv[2:])

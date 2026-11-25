@@ -1,0 +1,9 @@
+/tmp/ktserve-183.Nq945s/traffic-calibration: go1.27.1
+	path	command-line-arguments
+	build	-buildmode=exe
+	build	-compiler=gc
+	build	-trimpath=true
+	build	CGO_ENABLED=0
+	build	GOARCH=arm64
+	build	GOOS=linux
+	build	GOARM64=v8.0

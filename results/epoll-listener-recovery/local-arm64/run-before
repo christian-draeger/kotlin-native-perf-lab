@@ -1,0 +1,3 @@
+#!/bin/sh
+test "$1" = ktserve || exit 2
+exec /validation/old/ktserve.kexe

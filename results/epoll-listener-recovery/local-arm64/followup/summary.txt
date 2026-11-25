@@ -1,0 +1,9 @@
+3200 offered req/s, calibration 1, 3/3 valid pairs
+  old: 0 failed, 0 dropped, 3/3 met all per-operation targets
+  candidate: 0 failed, 0 dropped, 3/3 met all per-operation targets
+  successful req/s: 3200.400 → 3200.467; paired range -0.0% to +0.0%
+  p50 ms: 0.279 → 0.309; paired range -4.6% to +20.5%
+  p95 ms: 51.756 → 51.751; paired range -0.2% to -0.0%
+  p99 ms: 54.101 → 54.204; paired range -0.3% to +0.2%
+  CPU-s/M: 52.486 → 56.663; paired range +4.0% to +9.0%
+  peak RSS MiB: 42.617 → 47.465; paired range +1.7% to +26.5%

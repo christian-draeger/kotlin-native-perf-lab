@@ -1,0 +1,13 @@
+Calibration at 3200 offered req/s qualified: True
+old before
+ktserve 3200 offered req/s trial 1: 3200.9 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 3200 offered req/s trial 1: 3200.2 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 3200 offered req/s trial 2: 3200.6 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 3200 offered req/s trial 2: 3200.3 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 3200 offered req/s trial 3: 3200.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 3200 offered req/s trial 3: 3200.5 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True

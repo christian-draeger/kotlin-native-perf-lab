@@ -1,0 +1,28 @@
+1 epoll worker(s): recovered and drained, 0.000 CPU-s during 0.609s pressure
+2 epoll worker(s): recovered and drained, 0.000 CPU-s during 0.608s pressure
+Calibration at 800 offered req/s qualified: True
+Calibration at 3200 offered req/s qualified: True
+old before
+ktserve 800 offered req/s trial 1: 800.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 800 offered req/s trial 1: 800.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 3200 offered req/s trial 1: 3200.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 3200 offered req/s trial 1: 3200.6 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 800 offered req/s trial 2: 800.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 800 offered req/s trial 2: 800.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 3200 offered req/s trial 2: 3200.7 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 3200 offered req/s trial 2: 3199.9 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 800 offered req/s trial 3: 800.3 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 800 offered req/s trial 3: 800.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve 3200 offered req/s trial 3: 3200.3 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve 3200 offered req/s trial 3: 3200.1 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
