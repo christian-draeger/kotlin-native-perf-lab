@@ -25,6 +25,20 @@ fun serve(
     configure: Routes.() -> Unit,
 ): Unit = serveEpoll(port, host, limits, 1, stopRequested, onListening, configure)
 
+/**
+ * Serve with an explicit number of Linux epoll loops in one process.
+ * Handlers and observers shared by the loops can be invoked concurrently.
+ */
+fun serve(
+    port: Int = 8080,
+    host: String = "127.0.0.1",
+    limits: ServerLimits = ServerLimits(),
+    workers: Int,
+    stopRequested: () -> Boolean = { false },
+    onListening: () -> Unit = {},
+    configure: Routes.() -> Unit,
+): Unit = serveEpoll(port, host, limits, workers, stopRequested, onListening, configure)
+
 internal fun serveEpoll(
     port: Int,
     host: String,
@@ -40,7 +54,7 @@ internal fun serveEpoll(
     require(backend == "epoll") { "Unsupported ktServe backend: $backend" }
     val routes = Routes().apply(configure)
     if (workers > 1) {
-        runEpollWorkers(host, port, workers, limits, routes, stopRequested)
+        runEpollWorkers(host, port, workers, limits, routes, stopRequested, onListening)
         return@memScoped
     }
     val transport = openPlatformTransport(host, port, limits.connections)

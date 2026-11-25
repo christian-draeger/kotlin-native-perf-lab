@@ -43,12 +43,13 @@ def main(options):
         raise SystemExit("Use at least four logical CPUs for separate server and load affinity")
     server_cpus, load_cpus = cpus[:2], cpus[2:4]
     server_affinity, load_affinity = mix.cpu_prefix(server_cpus), mix.cpu_prefix(load_cpus)
+    candidate_engine = "ktserve-workers-2" if options.candidate_workers == 2 else "ktserve"
     variants = [
-        ("reference", options.reference, options.reference_sha, "0"),
-        ("candidate", options.candidate, options.candidate_sha, "0"),
+        ("reference", options.reference, options.reference_sha, "0", "ktserve"),
+        ("candidate", options.candidate, options.candidate_sha, "0", candidate_engine),
     ]
     if options.observe:
-        variants.append(("candidate-observed", options.candidate, options.candidate_sha, "1"))
+        variants.append(("candidate-observed", options.candidate, options.candidate_sha, "1", "ktserve"))
     output = options.output
     output.mkdir(parents=True, exist_ok=False)
     for name, *_ in variants:
@@ -69,6 +70,7 @@ def main(options):
         "k6": subprocess.check_output(["k6", "version"], text=True).strip(),
         "reference_commit": options.reference_sha, "candidate_commit": options.candidate_sha,
         "server_cpus": server_cpus, "load_cpus": load_cpus, "workers": 1,
+        "candidate_workers": options.candidate_workers, "fresh_connections": options.fresh_connections,
         "rates": options.rates, "required_rate": options.required_rate, "repetitions": options.repeats,
         "precondition_s": 10, "warmup_s": 10, "duration_s": options.duration, "vus_per_operation": 96,
     }
@@ -76,6 +78,7 @@ def main(options):
     args = SimpleNamespace(
         family="application-mix", application_profile="capacity", load_tool="k6",
         compare_native_wakeup=False, compare_native_nodelay=False,
+        fresh_connections=options.fresh_connections,
         rates=options.rates, vus=96, threads=2, warmup=10, precondition=10, duration=options.duration,
         executable=options.reference, output=calibration_dir, calibration_server=options.calibration_server,
     )
@@ -83,11 +86,11 @@ def main(options):
     for run in range(1, options.repeats + 1):
         for index, rate in enumerate(options.rates):
             rotation = (run + index - 1) % len(variants)
-            for name, binary, commit, observe in variants[rotation:] + variants[:rotation]:
+            for name, binary, commit, observe, engine in variants[rotation:] + variants[:rotation]:
                 args.output, args.executable = output / name, binary
                 os.environ["KTSERVE_BENCHMARK_OBSERVE"] = observe
                 print(f"{name} {rate} req/s trial {run}", flush=True)
-                mix.trial_k6(args, commit, "ktserve", rate, run, server_affinity, load_affinity, calibration[rate])
+                mix.trial_k6(args, commit, engine, rate, run, server_affinity, load_affinity, calibration[rate])
                 if observe == "1":
                     log = args.output / f"ktserve-mixed-{rate}-{run}.server.log"
                     if not re.search(r"^ktServe observed_exchanges=[1-9][0-9]*$", log.read_text(), re.MULTILINE):
@@ -122,11 +125,15 @@ if __name__ == "__main__":
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--duration", type=int, default=10)
     parser.add_argument("--observe", action="store_true")
+    parser.add_argument("--candidate-workers", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--fresh-connections", action="store_true")
     options = parser.parse_args()
     if any(rate < 20 or rate % 20 for rate in options.rates) or len(set(options.rates)) != len(options.rates):
         parser.error("Use distinct positive offered rates in multiples of 20")
     if options.required_rate not in options.rates or min(options.repeats, options.duration) < 1:
         parser.error("Include the required rate and use positive trial counts and durations")
+    if options.observe and options.candidate_workers != 1:
+        parser.error("The observation benchmark uses a one-worker candidate")
     if not all(re.fullmatch(r"[0-9a-f]{40}", ref) for ref in (options.reference_sha, options.candidate_sha)):
         parser.error("Use full source commit SHAs")
     for field in ("reference", "candidate", "calibration_server"):

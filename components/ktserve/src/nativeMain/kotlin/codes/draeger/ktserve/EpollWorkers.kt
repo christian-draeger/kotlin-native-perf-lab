@@ -25,6 +25,7 @@ internal fun MemScope.runEpollWorkers(
     limits: ServerLimits,
     routes: Routes,
     stopRequested: () -> Boolean,
+    onListening: () -> Unit,
 ) {
     val stopping = AtomicBoolean(false)
     val failure = AtomicReference<Throwable?>(null)
@@ -48,6 +49,7 @@ internal fun MemScope.runEpollWorkers(
         newFixedThreadPoolContext(workers - 1, "ktserve-epoll").use { dispatcher ->
             println("ktServe backend=epoll tcp=ipv4 workers=$workers")
             println("ktServe worker_listener=$listener")
+            onListening()
             runBlocking {
                 try {
                     for (index in 1 until workers) {

@@ -161,6 +161,7 @@ def server(args, engine, affinity, log, trace=()):
                 env["GOMAXPROCS"] = "2"
             else:
                 env["KTSERVE_WORKERS"] = "2" if mode == "ktserve-workers-2" else "1"
+                env["KTSERVE_WORKER_LISTENER"] = "shared"
                 env["KTSERVE_BACKEND"] = "epoll"
                 env["KTSERVE_EPOLL_TRIGGER"] = "level"
                 env["KTSERVE_EPOLL_APPLICATION_WAKEUP"] = "poll"
@@ -326,7 +327,7 @@ def load(args, affinity, port, endpoint, duration, log):
         ], stdout=output, stderr=subprocess.STDOUT, timeout=duration + 15, check=True)
 
 
-def read_k6_summary(path, offered, duration, profile="persistent"):
+def read_k6_summary(path, offered, duration, profile="persistent", fresh_connections=False):
     summary = json.loads(path.read_text())
     metrics = summary["metrics"]
 
@@ -362,11 +363,10 @@ def read_k6_summary(path, offered, duration, profile="persistent"):
         **{f"p{quantile}_us": round(latency[f"p({quantile})"] * 1000, 3) if successful else ""
            for quantile in (50, 95, 99)},
     }
-    if profile == "churn":
+    if profile in ("churn", TRAFFIC_CAPACITY):
         row["new_connections"] = count("perflab_new_connections")
-        row["valid"] = int(valid and row["new_connections"] == requests)
-    if profile == TRAFFIC_CAPACITY:
-        row["new_connections"] = count("perflab_new_connections")
+        if profile == "churn" or fresh_connections:
+            row["valid"] = int(valid and row["new_connections"] == requests)
     if profile in ("overload", TRAFFIC_CAPACITY):
         on_time = count("perflab_success_within_operation_budget" if profile == TRAFFIC_CAPACITY
                         else "perflab_success_within_100ms")
@@ -390,12 +390,14 @@ def load_k6(args, affinity, port, rate, duration, prefix):
     summary = prefix.with_suffix(".k6.json")
     log = prefix.with_suffix(".k6.log")
     env = {key: value for key, value in os.environ.items() if not key.startswith("K6_")}
+    fresh_connections = getattr(args, "fresh_connections", False)
     env.update({
         "GOMAXPROCS": str(args.threads), "PERFLAB_TARGET": f"http://127.0.0.1:{port}",
         "PERFLAB_RATE": str(rate), "PERFLAB_DURATION": str(duration),
         "PERFLAB_VUS": str(args.vus), "PERFLAB_SUMMARY": str(summary),
         "PERFLAB_APPLICATION_MIX": "true" if args.family == APPLICATION_MIX else "false",
         "PERFLAB_APPLICATION_PROFILE": args.application_profile,
+        "PERFLAB_FRESH_CONNECTIONS": str(fresh_connections).lower(),
     })
     if args.application_profile == TRAFFIC_CAPACITY:
         env["PERFLAB_TRAFFIC_BUDGETS"] = json.dumps(TRAFFIC_BUDGETS_MS)
@@ -406,7 +408,7 @@ def load_k6(args, affinity, port, rate, duration, prefix):
             "k6", "run", "--no-usage-report", "--quiet", "--no-color", str(SCRIPTS / "k6-integration.js"),
         ], env=env, stdout=output, stderr=subprocess.STDOUT, timeout=duration + 20, check=True)
     return {
-        **read_k6_summary(summary, rate * duration, duration, args.application_profile),
+        **read_k6_summary(summary, rate * duration, duration, args.application_profile, fresh_connections),
         **read_load_timing(log),
     }
 

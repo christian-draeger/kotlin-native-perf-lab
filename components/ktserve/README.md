@@ -26,6 +26,20 @@ Set `PORT` to change the example port. CI cross-compiles the ARM64 executable on
 
 The Ubuntu smoke workflow publishes verified snapshot archives for Linux x86_64 and ARM64. In the directory containing the downloaded archive and its checksum, run `sha256sum -c <archive>.sha256`, extract the archive, and start `./ktserve`. The included compatibility file describes the target and executable interpreter.
 
+## Use two Linux I/O workers
+
+On Linux, pass `workers = 2` to opt into two epoll loops in one process. Both loops share the route table and the process connection budget. The default overload uses one worker.
+
+```kotlin
+serve(port = 8080, workers = 2) {
+    get("/health") { text("ok") }
+}
+```
+
+Kotlin handlers and observers shared across workers can be called concurrently. Observer lifecycle events, active connection counts and exchange identifiers are local to each loop. The configured blocking-handler budget also applies per loop.
+
+Use two workers when short handlers on persistent connections exhaust one I/O loop and additional CPU is available. The matched Linux benchmark measured 73–92% higher small-JSON saturation throughput on two loops. At the same offered mixed load, the second loop consumed 7–17% more CPU per request and more memory. One ARM64 trial at 2,400 requests/s missed multiple per-operation p99 targets. The supported production profile uses one worker. [Worker measurements](https://github.com/christian-draeger/kotlin-native-perf-lab/tree/38abc298aa17e04e6d892c72e31b28d407473a7a/results/throughput-20261125/workers) · [Production qualification](deployment/PRODUCTION.md)
+
 ## Develop on Apple Silicon
 
 With JDK 21 and a configured full Xcode installation, run the separate consumer directly on macOS from the repository root.
