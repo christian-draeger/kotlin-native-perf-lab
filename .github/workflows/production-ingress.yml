@@ -1,0 +1,89 @@
+name: ktServe HTTP/1.1 ingress
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'components/ktserve/**'
+      - 'scripts/install-caddy.sh'
+      - 'scripts/tests/ktserve_ingress_smoke.py'
+      - '.github/workflows/production-ingress.yml'
+  pull_request:
+    paths:
+      - 'components/ktserve/**'
+      - 'scripts/install-caddy.sh'
+      - 'scripts/tests/ktserve_ingress_smoke.py'
+      - '.github/workflows/production-ingress.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ktserve-http1-ingress-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  arm_native:
+    uses: ./.github/workflows/arm-native.yml
+    with:
+      reuse_smoke: true
+
+  release-ingress:
+    name: Verify private TLS ingress (${{ matrix.arch }})
+    needs: arm_native
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        if: matrix.arch == 'x86_64'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        if: matrix.arch == 'x86_64'
+      - if: matrix.arch == 'x86_64'
+        run: ./components/ktserve/gradlew -p components/ktserve linkReleaseExecutableNative
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.arch == 'aarch64'
+        with:
+          artifact-ids: ${{ needs.arm_native.outputs.artifact_id }}
+          run-id: ${{ needs.arm_native.outputs.artifact_run_id }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: components/ktserve/build/bin/native/releaseExecutable/
+      - name: Check the release origin and ingress
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$EXPECTED_ARCH"
+          evidence="$RUNNER_TEMP/ktserve-ingress"
+          install_dir="$RUNNER_TEMP/caddy"
+          origin=components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
+          config=components/ktserve/deployment/http1/Caddyfile
+          mkdir -p "$evidence"
+          chmod +x "$origin"
+          bash scripts/install-caddy.sh "$install_dir"
+          "$install_dir/caddy" version > "$evidence/caddy-version.txt"
+          uname -a > "$evidence/kernel.txt"
+          git rev-parse HEAD > "$evidence/git-sha.txt"
+          sha256sum "$origin" "$config" "$install_dir/caddy" > "$evidence/inputs.sha256"
+          python3 scripts/tests/ktserve_ingress_smoke.py "$origin" "$install_dir/caddy" "$config" "$evidence"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: ktserve-ingress-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ktserve-ingress/
+          if-no-files-found: warn

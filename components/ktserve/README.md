@@ -157,7 +157,7 @@ The example handles Ctrl+C and SIGTERM by closing the listener and draining queu
 
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
-Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. Set ingress request size and timeout limits that match the backend's `ServerLimits`. Synchronous route handlers run on the I/O loop and should return promptly.
+Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. The [loopback deployment recipe](deployment/http1/README.md) defines compatible limits, forwarding policy, and an upgrade and rollback procedure. Synchronous route handlers run on the I/O loop and should return promptly.
 
 The native resource suite uses a separate release fixture with short deadlines and large bodies to check slow and disconnected clients, descriptor caps and retained heap. To run it locally from the repository root on Linux x86_64:
 
