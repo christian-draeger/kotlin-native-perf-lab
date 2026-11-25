@@ -40,6 +40,7 @@ private fun measureMatching(resources: Int, iterations: Int) {
                 add("$prefix/current", resource)
                 add("$prefix/{id}", resource)
             }
+            prepare()
         }
     }
     val requestCount = 1024

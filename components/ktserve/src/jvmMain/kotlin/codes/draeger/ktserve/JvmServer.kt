@@ -22,7 +22,7 @@ fun serve(
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     val backend = System.getenv("KTSERVE_BACKEND") ?: "nio"
     require(backend == "nio") { "Unsupported ktServe backend: $backend" }
-    val routes = Routes().apply(configure)
+    val routes = configuredRoutes(configure)
     val transport = openNioTransport(host, port, limits.connections)
     try {
         println("ktServe backend=$backend tcp=ipv4")

@@ -38,7 +38,7 @@ internal fun serveEpoll(
     require(workers in 1..limits.connections) { "Worker count must be between 1 and the connection limit" }
     val backend = getenv("KTSERVE_BACKEND")?.toKString() ?: "epoll"
     require(backend == "epoll") { "Unsupported ktServe backend: $backend" }
-    val routes = Routes().apply(configure)
+    val routes = configuredRoutes(configure)
     if (workers > 1) {
         runEpollWorkers(host, port, workers, limits, routes, stopRequested)
         return@memScoped

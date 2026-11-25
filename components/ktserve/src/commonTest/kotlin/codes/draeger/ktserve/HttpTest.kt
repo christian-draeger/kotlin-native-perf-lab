@@ -207,6 +207,40 @@ class HttpTest {
     }
 
     @Test
+    fun indexedRoutesPreserveLiteralPriorityAndDeclarationOrder() {
+        val routes = configuredRoutes {
+            repeat(10) { resource ->
+                get("/api/v1/r$resource/{id}") { text("resource-$resource") }
+            }
+            get("/{tenant}/v1/priority/{id}") { text("first:${it.pathParameter("id")}") }
+            get("/api/v1/priority/{key}") { text("second:${it.pathParameter("key")}") }
+            get("/api/v1/priority/current") { text("literal") }
+            route("POST", "/api/v1/priority/{id}") { _, _ -> text("updated") }
+        }
+        assertEquals("resource-9", routes.respond(Request("GET", "/api/v1/r9/q", null)).body.decodeToString())
+        assertEquals("first:7", routes.respond(Request("GET", "/api/v1/priority/7", null)).body.decodeToString())
+        assertEquals("literal", routes.respond(Request("GET", "/api/v1/priority/current", null)).body.decodeToString())
+        assertEquals(404, routes.respond(Request("GET", "/api/v1/missing/7", null)).status)
+        assertEquals(404, routes.respond(Request("GET", "/api/v1/r9/", null)).status)
+        assertEquals(404, routes.respond(Request("GET", "/api/v1/r9/q/extra", null)).status)
+        val options = routes.http1MethodError(Request("OPTIONS", "/api/v1/priority/7", null))
+        assertEquals(204, options.status)
+        assertEquals(listOf(HttpField("Allow", "GET, POST, HEAD, OPTIONS")), options.fields)
+    }
+
+    @Test
+    fun indexedRoutesFallBackWhenEverySegmentCanBeParameterized() {
+        val routes = configuredRoutes {
+            repeat(8) { resource -> get("/r$resource/{id}") { text("literal-$resource") } }
+            get("/{value}/current") { text(requireNotNull(it.pathParameter("value"))) }
+        }
+        assertEquals("literal-7", routes.respond(Request("GET", "/r7/current", null)).body.decodeToString())
+        assertEquals("other", routes.respond(Request("GET", "/other/current", null)).body.decodeToString())
+        routes.get("/late/{name}") { text(requireNotNull(it.pathParameter("name"))) }
+        assertEquals("new", routes.respond(Request("GET", "/late/new", null)).body.decodeToString())
+    }
+
+    @Test
     fun jsonWireBytesStayIdenticalAcrossRepeatedResponses() {
         val payload = "{\"id\":123,\"name\":\"Grüße\",\"active\":true}"
         val bodyLength = payload.encodeToByteArray().size

@@ -11,6 +11,7 @@ import codes.draeger.ktserve.ResponseSource
 import codes.draeger.ktserve.ResponseStream
 import codes.draeger.ktserve.Routes
 import codes.draeger.ktserve.ServerLimits
+import codes.draeger.ktserve.configuredRoutes
 import codes.draeger.ktserve.emptyResponse
 import codes.draeger.ktserve.example.parityRoutes
 import codes.draeger.ktserve.signals.KTSERVE_INSTALL_SIGNALS
@@ -71,7 +72,7 @@ private fun serveH2cWithSocketOptions(
     configure: Routes.() -> Unit,
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
-    val routes = Routes().apply(configure)
+    val routes = configuredRoutes(configure)
     require(routes.applicationHandler == null && !routes.hasRequestExtensions) {
         "The h2c experiment supports legacy routes without HTTP/1.x request policies"
     }

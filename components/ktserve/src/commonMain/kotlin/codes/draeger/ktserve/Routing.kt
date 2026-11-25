@@ -1,5 +1,8 @@
 package codes.draeger.ktserve
 
+internal fun configuredRoutes(configure: Routes.() -> Unit): Routes =
+    Routes().apply(configure).also(Routes::prepare)
+
 class Routes {
     private val gets = MethodRoutes<GetHandler>()
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
@@ -17,6 +20,12 @@ class Routes {
         private set
     internal var observer: ServerObserver? = null
         private set
+
+    internal fun prepare() {
+        gets.prepare()
+        posts.prepare()
+        requestRoutes?.values?.forEach { it.prepare() }
+    }
 
     /** Install the event sink for this HTTP/1.x listener. */
     fun observe(observer: ServerObserver) {
@@ -176,6 +185,7 @@ internal sealed interface PostBody {
 internal class MethodRoutes<Handler> {
     private val exact = mutableMapOf<String, Handler>()
     private val patterns = mutableListOf<RoutePattern<Handler>>()
+    private var patternsBySize: Map<Int, PatternGroup<Handler>>? = null
 
     fun add(path: String, handler: Handler) {
         require(path.startsWith('/') && '?' !in path && '#' !in path) { "Expected an absolute route path" }
@@ -201,6 +211,12 @@ internal class MethodRoutes<Handler> {
         val shape = parts.mapIndexed { index, part -> part.takeIf { names[index] == null } }
         require(patterns.none { it.shape == shape }) { "Duplicate route pattern $path" }
         patterns.add(RoutePattern(shape, names, handler))
+        patternsBySize = null
+    }
+
+    fun prepare() {
+        if (patterns.size < 8) return
+        patternsBySize = patterns.groupBy { it.shape.size }.mapValues { (_, routes) -> PatternGroup(routes) }
     }
 
     fun isEmpty(): Boolean = exact.isEmpty() && patterns.isEmpty()
@@ -211,7 +227,9 @@ internal class MethodRoutes<Handler> {
         exact[request.path]?.let { return action(it, request) }
         if (patterns.isEmpty()) return null
         val parts = request.path.removePrefix("/").split('/')
-        routeSearch@ for (route in patterns) {
+        val groups = patternsBySize
+        val candidates = if (groups == null) patterns else groups[parts.size]?.candidates(parts) ?: return null
+        routeSearch@ for (route in candidates) {
             if (parts.size != route.shape.size) continue
             for (index in parts.indices) {
                 val literal = route.shape[index]
@@ -229,6 +247,18 @@ internal class MethodRoutes<Handler> {
         return null
     }
 
+}
+
+internal class PatternGroup<Handler>(private val routes: List<RoutePattern<Handler>>) {
+    // A fixed segment shared by every route as a literal partitions the list
+    // without changing the declaration order of routes that can match.
+    private val position = routes.first().shape.indices
+        .filter { index -> routes.all { it.shape[index] != null } }
+        .maxByOrNull { index -> routes.map { it.shape[index] }.toSet().size }
+    private val literals = position?.let { index -> routes.groupBy { it.shape[index] } }
+
+    fun candidates(parts: List<String>): List<RoutePattern<Handler>> =
+        if (position == null || literals == null) routes else literals[parts[position]].orEmpty()
 }
 
 internal data class RoutePattern<Handler>(
