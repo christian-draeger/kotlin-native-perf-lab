@@ -13,6 +13,14 @@ class Routes {
         private set
     internal var applicationHandler: (suspend (Request, RequestContent) -> Response)? = null
         private set
+    internal var observer: ServerObserver? = null
+        private set
+
+    /** Install the event sink for this HTTP/1.x listener. */
+    fun observe(observer: ServerObserver) {
+        check(this.observer == null) { "An observer is already configured" }
+        this.observer = observer
+    }
 
     fun get(path: String, handler: (Request) -> Response) {
         require(applicationHandler == null) { "A standalone application owns all routes" }

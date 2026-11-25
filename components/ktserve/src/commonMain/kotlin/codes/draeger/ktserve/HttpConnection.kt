@@ -35,6 +35,7 @@ internal class HttpConnection(
     private val dispatcher: (() -> CoroutineScope)? = null,
     private val countRequest: (() -> Unit)? = null,
     private val signalApplicationProgress: (() -> Unit)? = null,
+    private val observation: ExchangeObservation? = null,
 ) {
     val input = RequestBuffer(limits.headerBytes)
     var output: ByteArray? = null
@@ -86,7 +87,10 @@ internal class HttpConnection(
             monitorPending = false
             checkNotNull(monitor).copyInto(input.bytes, input.size, endIndex = count)
         }
-        if (input.size == 0 && incoming == null && !awaitingHandler && output == null) headStarted = now
+        if (input.size == 0 && incoming == null && !awaitingHandler && output == null) {
+            headStarted = now
+            observation?.begin()
+        }
         input.append(count)
     }
 
@@ -123,14 +127,19 @@ internal class HttpConnection(
         when (val head = input.parse(allowAnyRequestBody = application != null || hasRequestRoutes)) {
             ParsedHead.Incomplete -> {
                 // Pipelined bytes start their deadline when the previous response lets us parse them.
-                if (input.size > 0 && headStarted == null) headStarted = now
+                if (input.size > 0 && headStarted == null) {
+                    headStarted = now
+                    observation?.begin()
+                }
                 return false
             }
             is ParsedHead.Rejected -> {
+                observation?.begin()
                 headStarted = null
                 queue(emptyResponse(head.status), "HTTP/1.1", keepAlive = false, now)
             }
             is ParsedHead.Complete -> {
+                observation?.identify(head.request.method)
                 countRequest?.invoke()
                 input.consume(head.consumed)
                 headStarted = null
@@ -264,7 +273,10 @@ internal class HttpConnection(
 
     fun wrote(count: Int, now: Long): Boolean {
         checkNotNull(output)
-        if (responseExpired(now)) return false
+        if (responseExpired(now)) {
+            observation?.end(ExchangeOutcome.RESPONSE_TIMEOUT)
+            return false
+        }
         lastActivity = now
         outputOffset += count
         if (outputOffset < outputLength) return true
@@ -272,12 +284,14 @@ internal class HttpConnection(
         val pending = stream
         if (pending == null) {
             responseDeadline = Long.MAX_VALUE
+            observation?.end(ExchangeOutcome.COMPLETED)
             return !closeAfterWrite
         }
         if (pending.phase == ChunkPhase.END ||
             !pending.chunked && pending.remaining == 0 && pending.source !is AsyncResponseSource
         ) {
             closeResponse()
+            observation?.end(ExchangeOutcome.COMPLETED)
             return !closeAfterWrite
         }
         if (pending.phase == ChunkPhase.PAYLOAD) {
@@ -305,6 +319,7 @@ internal class HttpConnection(
         }
         if (read == -1 && pending.remaining == 0) {
             closeResponse()
+            observation?.end(ExchangeOutcome.COMPLETED)
             return !closeAfterWrite
         }
         if (read !in 1..limit || read > pending.remaining) {
@@ -324,7 +339,13 @@ internal class HttpConnection(
         return true
     }
 
-    fun resumeProducer(now: Long): Boolean = !responseExpired(now) && pull(checkNotNull(stream))
+    fun resumeProducer(now: Long): Boolean {
+        if (responseExpired(now)) {
+            observation?.end(ExchangeOutcome.RESPONSE_TIMEOUT)
+            return false
+        }
+        return pull(checkNotNull(stream))
+    }
 
     fun closeResponse() {
         responseDeadline = Long.MAX_VALUE
@@ -333,10 +354,11 @@ internal class HttpConnection(
         pending.source.release()
     }
 
-    fun close() {
+    fun close(outcome: ExchangeOutcome = ExchangeOutcome.DISCONNECTED) {
         cancelHandler()
         closeRequest()
         closeResponse()
+        observation?.end(outcome)
     }
 
     private fun closeRequest() {
@@ -362,11 +384,13 @@ internal class HttpConnection(
         ) {
             stream?.discard()
             closeAfterWrite = true
+            observation?.response(500)
             setOutput(emptyResponse(500).encode(version, keepAlive = false))
             return
         }
         val persistent = keepAlive && !draining
         closeAfterWrite = !persistent
+        observation?.response(response.status)
         if (headOnly || stream is ResponseStream.Produce && stream.length == 0) {
             stream?.discard()
             val length = if (chunked) OMIT_RESPONSE_LENGTH else stream?.length ?: response.body.size

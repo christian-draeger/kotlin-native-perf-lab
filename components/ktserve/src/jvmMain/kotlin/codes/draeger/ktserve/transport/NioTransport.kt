@@ -158,6 +158,7 @@ private class NioTransport(
         }
         if (peers.size >= connectionLimit) {
             socket.closeSocket()
+            completions.admissionRejected()
             return
         }
         val key = try {

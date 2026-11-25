@@ -400,6 +400,43 @@ class JvmServerTest {
     }
 
     @Test
+    fun observesRequestsAdmissionAndDrainWithoutAffectingResponses() {
+        val events = java.util.concurrent.ConcurrentLinkedQueue<ServerEvent>()
+        withServer(ServerLimits(connections = 1, requestHeadMillis = 300), routes = {
+            observe { event ->
+                events.add(event)
+                if (event is ServerEvent.Exchange) error("The example observer failed")
+            }
+            get("/private-marker") { text("ok") }
+        }) { port, _ ->
+            client(port).use { active ->
+                active.send("GET /private-marker?secret=sample HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                val input = active.getInputStream().buffered()
+                assertEquals("ok", input.response())
+                client(port).use { overflow -> assertEquals(-1, overflow.getInputStream().read()) }
+                active.send("GET /health")
+                assertEquals(-1, input.read())
+            }
+            client(port).use { next ->
+                next.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                assertEquals("ok", next.getInputStream().buffered().response())
+            }
+        }
+        assertEquals(ServerEvent.Lifecycle.entries, events.filterIsInstance<ServerEvent.Lifecycle>())
+        assertEquals(1, events.count { it == ServerEvent.AdmissionRejected })
+        val exchanges = events.filterIsInstance<ServerEvent.Exchange>()
+        val timedOut = exchanges.single { it.outcome == ExchangeOutcome.REQUEST_HEAD_TIMEOUT }
+        val preceding = exchanges.single { it.connection == timedOut.connection && it.request == timedOut.request - 1 }
+        assertEquals(200, preceding.status)
+        assertEquals("GET", preceding.method)
+        assertEquals(ExchangeOutcome.COMPLETED, preceding.outcome)
+        assertEquals(null, timedOut.status)
+        assertTrue(timedOut.durationNanos > 0)
+        assertTrue(events.filterIsInstance<ServerEvent.Connections>().any { it.active == 0 })
+        assertTrue(exchanges.none { it.toString().contains("private-marker") || it.toString().contains("secret") })
+    }
+
+    @Test
     fun enforcesConnectionCapAndDeadlinesAndReleasesTheListener() {
         val stoppedPort = withServer(ServerLimits(connections = 1, requestHeadMillis = 400, idleMillis = 2_000)) { port, stop ->
             assertFailsWith<BindException> { serve(port = port) {} }
