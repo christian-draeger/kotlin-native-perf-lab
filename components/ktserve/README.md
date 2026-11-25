@@ -44,9 +44,11 @@ Use two workers when short handlers on persistent connections exhaust one I/O lo
 
 Set `KTSERVE_ADAPTIVE_WORKERS=1` on the Linux benchmark executable to try automatic scaling between one and two epoll workers. The pilot checks the calling thread's CPU affinity and the visible cgroup v2 CPU quota at startup. It stays at one worker when that budget cannot be verified or allows fewer than two CPUs.
 
-Three consecutive sampling windows at 75% or more primary loop thread CPU start a second worker. After five windows below 30% on both loops, the second worker stops accepting and releases its resources after its connections close. The windows are at least one second each. Existing keep-alive and streaming connections stay on their original loop, so burst traffic on those connections can keep one loop saturated even after scaling. The library's public API continues to use explicit worker counts.
+Three consecutive sampling windows at 75% or more primary loop thread CPU start a second worker. After five windows below 30% on both loops, the second worker stops accepting and releases its resources after its connections close. The windows are at least one second each.
 
-The [adaptive workers workflow](../../.github/workflows/adaptive-workers.yml) compares all three modes and archives activation and retirement timings alongside goodput, latency, CPU time and RSS. It uses a shared Linux host with separate CPU masks for the generator and server.
+Set `KTSERVE_ADAPTIVE_HANDOFF=1` alongside `KTSERVE_ADAPTIVE_WORKERS=1` to try the keep-alive handoff. When the second worker starts, it takes one batch of half the recently active connections that are between exchanges. The socket stays open and both workers continue serving their own connections. Connections busy with parsers, handlers, or streams stay with their current owner. The experiment uses eventfd to wake the receiving loop and keeps the established retirement behavior. The library API offers fixed worker counts.
+
+The [adaptive workers workflow](../../.github/workflows/adaptive-workers.yml) compares fixed one, fixed two, adaptive and adaptive with handoff. It opens the burst connections before sending burst traffic and archives per-socket results, activation and handoff times, goodput, latency, CPU time and RSS. It uses a shared Linux host with separate CPU masks for the generator and server.
 
 ## Develop on Apple Silicon
 

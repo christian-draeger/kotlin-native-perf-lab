@@ -74,7 +74,7 @@ def transport_descriptors(pid):
 
 
 @contextmanager
-def fixture(binary, cpu=None):
+def fixture(binary, cpu=None, handoff=False):
     with socket.socket() as probe:
         probe.bind((HOST, 0))
         port = probe.getsockname()[1]
@@ -88,6 +88,9 @@ def fixture(binary, cpu=None):
         "KTSERVE_WORKER_LISTENER": "shared",
         "KTSERVE_ADAPTIVE_WORKERS": "1",
     }
+    environment.pop("KTSERVE_ADAPTIVE_HANDOFF", None)
+    if handoff:
+        environment["KTSERVE_ADAPTIVE_HANDOFF"] = "1"
     with TemporaryDirectory() as temporary:
         logs = Path(temporary) / "ktserve.log"
         with logs.open("wb") as output:
@@ -203,12 +206,16 @@ def check_lifecycle(binary):
     print("Adaptive epoll workers passed activation, retirement, reactivation, and shutdown with persistent connections")
 
 
+def has_two_cpus():
+    quota_file = Path("/sys/fs/cgroup/cpu.max")
+    quota, period = quota_file.read_text().split() if quota_file.is_file() else ("max", "0")
+    return len(os.sched_getaffinity(0)) >= 2 and (quota == "max" or int(quota) >= 2 * int(period))
+
+
 if __name__ == "__main__":
     binary = str(Path(sys.argv[1]).resolve())
     check_single_cpu_fallback(binary)
-    quota_file = Path("/sys/fs/cgroup/cpu.max")
-    quota, period = quota_file.read_text().split() if quota_file.is_file() else ("max", "0")
-    if len(os.sched_getaffinity(0)) < 2 or quota != "max" and int(quota) < 2 * int(period):
-        print("Skipping adaptive worker lifecycle smoke: two effective CPUs are required")
-    else:
+    if has_two_cpus():
         check_lifecycle(binary)
+    else:
+        print("Skipping adaptive worker lifecycle smoke: two effective CPUs are required")

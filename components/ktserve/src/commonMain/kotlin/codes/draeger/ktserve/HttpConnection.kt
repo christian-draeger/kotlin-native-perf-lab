@@ -29,6 +29,8 @@ class ServerLimits(
 
 internal enum class ExchangeExpiry { IDLE, REQUEST_HEAD, REQUEST_BODY, HANDLER, RESPONSE }
 
+internal data class IdleHttpConnection(val lastActivity: Long, val input: RequestBuffer)
+
 internal class HttpConnection(
     connectedAt: Long,
     private val limits: ServerLimits,
@@ -36,8 +38,8 @@ internal class HttpConnection(
     private val countRequest: (() -> Unit)? = null,
     private val signalApplicationProgress: (() -> Unit)? = null,
     private val observation: ExchangeObservation? = null,
+    val input: RequestBuffer = RequestBuffer(limits.headerBytes),
 ) {
-    val input = RequestBuffer(limits.headerBytes)
     var output: ByteArray? = null
         private set
     var outputOffset = 0
@@ -60,6 +62,14 @@ internal class HttpConnection(
     private var lastActivity = connectedAt
     private var headStarted: Long? = null
     private var responseDeadline = Long.MAX_VALUE
+
+    fun idleSnapshot(since: Long): IdleHttpConnection? {
+        if (lastActivity < since || input.size != 0 || headStarted != null || output != null ||
+            incoming != null || stream != null || handler != null || writePending || monitorPending ||
+            bodyBlocked || draining || closeAfterWrite
+        ) return null
+        return IdleHttpConnection(lastActivity, input)
+    }
 
     fun expired(now: Long): Boolean = expiry(now) != null
 

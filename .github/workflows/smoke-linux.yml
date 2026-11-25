@@ -100,6 +100,10 @@ jobs:
         run: |
           python3 scripts/tests/ktserve_adaptive_workers_smoke.py \
             components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
+      - name: Verify adaptive epoll keep-alive handoff
+        run: |
+          python3 scripts/tests/ktserve_adaptive_handoff_smoke.py \
+            components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
       - name: Exercise ktServe resource bounds
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}

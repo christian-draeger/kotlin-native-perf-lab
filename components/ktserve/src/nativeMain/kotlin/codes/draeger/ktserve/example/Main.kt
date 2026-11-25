@@ -17,6 +17,7 @@ fun main() {
     val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
     val workers = getenv("KTSERVE_WORKERS")?.toKString()?.toInt() ?: 1
     val adaptiveWorkers = getenv("KTSERVE_ADAPTIVE_WORKERS")?.toKString() == "1"
+    val adaptiveHandoff = getenv("KTSERVE_ADAPTIVE_HANDOFF")?.toKString() == "1"
     val suite = getenv("BENCHMARK_SUITE")?.toKString()
     val observeExchanges = getenv("KTSERVE_BENCHMARK_OBSERVE")?.toKString() == "1"
     require(!observeExchanges || workers == 1 && !adaptiveWorkers) { "The observation benchmark uses one fixed worker" }
@@ -29,6 +30,7 @@ fun main() {
             host = host,
             workers = workers,
             adaptiveWorkers = adaptiveWorkers,
+            adaptiveHandoff = adaptiveHandoff,
             stopRequested = { ktserve_signals(KTSERVE_READ_STOP) != 0 },
             onListening = {
                 check(!listening) { "The listener notified readiness twice" }

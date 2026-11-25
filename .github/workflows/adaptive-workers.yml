@@ -5,7 +5,14 @@ on:
     paths:
       - '.github/workflows/adaptive-workers.yml'
       - 'scripts/benchmark-adaptive-workers.py'
+      - 'scripts/fixtures/keepalive-burst.go'
   workflow_dispatch:
+    inputs:
+      profile:
+        description: HTTP/1.1 connection profile
+        type: choice
+        default: preopened
+        options: [preopened, persistent, churn]
 
 permissions:
   contents: read
@@ -52,7 +59,7 @@ jobs:
           if-no-files-found: error
 
   measure:
-    name: ${{ matrix.platform.arch }} ${{ matrix.profile }} HTTP/1.1
+    name: ${{ matrix.platform.arch }} ${{ inputs.profile || 'preopened' }} HTTP/1.1
     needs: build
     strategy:
       fail-fast: false
@@ -62,9 +69,10 @@ jobs:
             runner: ubuntu-24.04
           - arch: aarch64
             runner: ubuntu-24.04-arm
-        profile: [persistent, churn]
     runs-on: ${{ matrix.platform.runner }}
     timeout-minutes: 25
+    env:
+      PROFILE: ${{ inputs.profile || 'preopened' }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -73,6 +81,11 @@ jobs:
         with:
           name: adaptive-workers-build-${{ github.run_attempt }}
           path: binaries/
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        if: env.PROFILE == 'preopened'
+        with:
+          go-version-file: competitors/go-http/go.mod
+          cache: false
       - name: Install the load tools
         env:
           EXPECTED_ARCH: ${{ matrix.platform.arch }}
@@ -95,20 +108,27 @@ jobs:
         env:
           LC_ALL: C
           ARCH: ${{ matrix.platform.arch }}
-          PROFILE: ${{ matrix.profile }}
           REPETITIONS: ${{ github.event_name == 'pull_request' && 3 || 5 }}
         run: |
           output="$RUNNER_TEMP/adaptive-workers"
+          args=()
+          if [[ "$PROFILE" == preopened ]]; then
+            client="$RUNNER_TEMP/keepalive-burst"
+            go build -trimpath -o "$client" scripts/fixtures/keepalive-burst.go
+            go version -m "$client" > binaries/keepalive-client-environment.txt
+            args+=(--keepalive-client "$client")
+          fi
           python3 scripts/benchmark-adaptive-workers.py "binaries/ktserve-$ARCH" "$output" \
-            --profile "$PROFILE" --repetitions "$REPETITIONS"
+            --profile "$PROFILE" --repetitions "$REPETITIONS" "${args[@]}"
           cat "$output/summary.md" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ !cancelled() }}
         with:
-          name: adaptive-workers-${{ matrix.platform.arch }}-${{ matrix.profile }}-${{ github.run_attempt }}
+          name: adaptive-workers-${{ matrix.platform.arch }}-${{ env.PROFILE }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/adaptive-workers/
             binaries/build-environment.txt
+            binaries/*-client-environment.txt
             binaries/binaries.sha256
             binaries/*.elf.txt
           if-no-files-found: error

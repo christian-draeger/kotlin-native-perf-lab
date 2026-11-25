@@ -11,6 +11,7 @@ import codes.draeger.ktserve.transport.AdaptiveEpollTransport
 import codes.draeger.ktserve.transport.withAdaptiveEpollListener
 import kotlin.concurrent.atomics.AtomicBoolean
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.alloc
@@ -40,7 +41,8 @@ internal fun MemScope.runAdaptiveEpollWorkers(
     routes: Routes,
     stopRequested: () -> Boolean,
     onListening: () -> Unit,
-) = withAdaptiveEpollListener(host, port, limits.connections) { openWorker, stopAccepts ->
+    handoffEnabled: Boolean,
+) = withAdaptiveEpollListener(host, port, limits.connections, requireWakeup = handoffEnabled) { openWorker, stopAccepts ->
     val primary = openWorker()
     val stopping = AtomicBoolean(false)
     val startedAt = TimeSource.Monotonic.markNow()
@@ -58,17 +60,20 @@ internal fun MemScope.runAdaptiveEpollWorkers(
             var scaleUpFailed = false
             try {
                 println("ktServe backend=epoll tcp=ipv4 workers=adaptive")
+                if (handoffEnabled) println("ktServe adaptive handoff=enabled")
                 report("active_workers=1")
                 onListening()
-                HttpServer(primary, routes, limits).run shouldStop@ {
+                val server = HttpServer(primary, routes, limits, clock = startedAt)
+                server.run shouldStop@ {
                     if (stopRequested()) {
                         stopping.store(true)
                         stopAccepts()
                         return@shouldStop true
                     }
+                    secondary?.split(primary, server)
                     load.sample()?.let { percent ->
                         val worker = secondary
-                        if (worker != null && worker.job.isCompleted) {
+                        if (worker != null && worker.job.isCompleted && worker.recover(primary, server)) {
                             worker.close()
                             secondary = null
                             hot = 0
@@ -81,7 +86,11 @@ internal fun MemScope.runAdaptiveEpollWorkers(
                         if (current == null) {
                             if (hot == BUSY_WINDOWS && !scaleUpFailed) {
                                 try {
-                                    secondary = SecondaryEpollWorker(this, openWorker, routes, limits, stopping, ::report)
+                                    secondary = SecondaryEpollWorker(
+                                        this, openWorker, routes, limits, stopping, startedAt,
+                                        if (handoffEnabled) EpollKeepAliveHandoff(startedAt, limits, ::report) else null,
+                                        ::report,
+                                    )
                                 } catch (cause: Exception) {
                                     scaleUpFailed = true
                                     report("worker_failed=2 error=${cause.message}")
@@ -116,6 +125,8 @@ private class SecondaryEpollWorker(
     routes: Routes,
     limits: ServerLimits,
     stopping: AtomicBoolean,
+    clock: TimeMark,
+    private val handoff: EpollKeepAliveHandoff?,
     report: (String) -> Unit,
 ) {
     private val dispatcher = newFixedThreadPoolContext(1, "ktserve-adaptive-epoll")
@@ -130,10 +141,13 @@ private class SecondaryEpollWorker(
                 try {
                     val usage = EpollWorkerLoad()
                     var retiring = false
+                    val server = HttpServer(transport, routes, limits, clock = clock)
                     started.store(true)
                     report("active_workers=2")
-                    HttpServer(transport, routes, limits).run shouldStop@ {
+                    handoff?.targetReady(transport)
+                    server.run shouldStop@ {
                         if (stopping.load()) return@shouldStop true
+                        val receivedPending = handoff?.receive(transport, server) ?: true
                         usage.sample()?.let(load::store)
                         val shouldRetire = !wanted.load()
                         if (retiring != shouldRetire) {
@@ -141,7 +155,7 @@ private class SecondaryEpollWorker(
                             transport.pauseAccepts(retiring)
                             report(if (retiring) "retiring_worker=2" else "resumed_worker=2")
                         }
-                        retiring && !transport.hasConnections
+                        retiring && receivedPending && !transport.hasConnections
                     }
                 } finally {
                     transport.close()
@@ -153,7 +167,17 @@ private class SecondaryEpollWorker(
         }
     }
 
-    fun close() = dispatcher.close()
+    fun split(transport: AdaptiveEpollTransport, server: HttpServer) {
+        if (handoff != null && !handoff.sent && wanted.load() && !job.isCompleted) handoff.split(transport, server)
+    }
+
+    fun recover(transport: AdaptiveEpollTransport, server: HttpServer): Boolean =
+        handoff?.receive(transport, server, "handoff_restored") ?: true
+
+    fun close() {
+        handoff?.close()
+        dispatcher.close()
+    }
 }
 
 private class EpollWorkerLoad {
