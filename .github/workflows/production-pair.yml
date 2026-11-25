@@ -110,12 +110,25 @@ jobs:
             --reference "releases/reference-$EXPECTED_ARCH" --reference-sha "$(cat releases/reference.sha)" \
             --candidate "releases/candidate-$EXPECTED_ARCH" --candidate-sha "$(cat releases/candidate.sha)" \
             --calibration-server "$RUNNER_TEMP/calibration" --output "$RUNNER_TEMP/paired-results" "${args[@]}"
+      - name: Rehearse TLS ingress upgrade and rollback
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' }}
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          install_dir="$RUNNER_TEMP/caddy"
+          chmod +x "releases/reference-$EXPECTED_ARCH" "releases/candidate-$EXPECTED_ARCH"
+          bash scripts/install-caddy.sh "$install_dir"
+          python3 scripts/tests/ktserve_ingress_smoke.py \
+            "releases/candidate-$EXPECTED_ARCH" "$install_dir/caddy" \
+            components/ktserve/deployment/http1/Caddyfile "$RUNNER_TEMP/rollout" \
+            --previous "releases/reference-$EXPECTED_ARCH"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ !cancelled() }}
         with:
           name: production-pair-${{ matrix.arch }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/paired-results/
+            ${{ runner.temp }}/rollout/
             releases/*.toolchain
             releases/binaries.sha256
           if-no-files-found: warn

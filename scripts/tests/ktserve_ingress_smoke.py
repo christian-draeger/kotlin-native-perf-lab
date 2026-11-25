@@ -166,22 +166,18 @@ def main(args):
             **environment, "BIND_HOST": "127.0.0.1", "PORT": str(port),
             "KTSERVE_WORKERS": "1", "BENCHMARK_SUITE": "application-mix",
         }
-        with start([args.origin], origin_env, args.output / "origin.log"):
-            await_health(lambda: HTTPConnection("127.0.0.1", port, timeout=2))
-            assert_private_listener(port)
-            with start(caddy, environment, args.output / "ingress.log"):
-                await_health(edge)
-                verify_origin(edge)
-        with start(caddy, environment, args.output / "forwarding.log"):
-            deadline = time.monotonic() + 10
-            while True:
-                try:
-                    with socket.create_connection(("127.0.0.1", edge_port), timeout=1):
-                        break
-                except OSError:
-                    if time.monotonic() >= deadline:
-                        raise
-                    time.sleep(0.1)
+        phases = [("candidate", args.origin)]
+        if args.previous is not None:
+            phases = [("reference", args.previous), *phases, ("rollback", args.previous)]
+        with start(caddy, environment, args.output / "ingress.log"):
+            for phase, binary in phases:
+                with start([binary], origin_env, args.output / f"{phase}.log"):
+                    await_health(lambda: HTTPConnection("127.0.0.1", port, timeout=2))
+                    assert_private_listener(port)
+                    await_health(edge)
+                    if phase == "candidate":
+                        verify_origin(edge)
+                print(f"{phase} origin served requests and stopped cleanly", flush=True)
             verify_forwarding(port, edge)
     print("TLS, private origin, HTTP/1.1 reuse, ingress policy, recovery and graceful shutdown passed")
 
@@ -192,4 +188,5 @@ if __name__ == "__main__":
     parser.add_argument("caddy", type=Path)
     parser.add_argument("config", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--previous", type=Path, help="Rehearse replacement and rollback using this release")
     main(parser.parse_args())

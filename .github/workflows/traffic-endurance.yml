@@ -13,6 +13,11 @@ on:
         type: choice
         options: [endurance, smoke]
         default: endurance
+      variants:
+        description: Run both servers or only ktServe for release qualification
+        type: choice
+        options: [both, ktserve]
+        default: both
 
 permissions:
   contents: read
@@ -25,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [ktserve, rust-axum]
+        variant: ${{ inputs.variants == 'ktserve' && fromJSON('["ktserve"]') || fromJSON('["ktserve","rust-axum"]') }}
     env:
       RUSTUP_TOOLCHAIN: '1.100.0'
       LC_ALL: C
