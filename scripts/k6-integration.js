@@ -9,7 +9,7 @@ const vus = Number(__ENV.PERFLAB_VUS);
 const summary = __ENV.PERFLAB_SUMMARY;
 const standalone = __ENV.PERFLAB_APPLICATION_MIX === "true";
 const profile = __ENV.PERFLAB_APPLICATION_PROFILE ?? "persistent";
-const churn = profile === "churn";
+const churn = profile === "churn" || __ENV.PERFLAB_FRESH_CONNECTIONS === "true";
 const overload = profile === "overload";
 const capacity = profile === "capacity";
 const budgets = capacity ? JSON.parse(__ENV.PERFLAB_TRAFFIC_BUDGETS) : {};
