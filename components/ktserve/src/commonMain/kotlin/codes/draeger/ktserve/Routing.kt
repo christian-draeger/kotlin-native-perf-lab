@@ -59,7 +59,7 @@ class Routes {
     }
 
     /**
-     * Run an early header policy before routing or reading the request body.
+     * Run an early HTTP/1.x header policy before routing or reading the request body.
      * Return null to continue, or a response to end this exchange.
      */
     fun beforeEach(policy: (Request) -> Response?) {
@@ -87,15 +87,16 @@ class Routes {
         applicationHandler = handler
     }
 
-    internal fun respond(request: Request): Response = checkNotNull(respond(request, null))
+    internal fun respond(request: Request): Response = checkNotNull(respond(request, null, http1Methods = false))
 
     internal fun respond(
         request: Request,
         start: ((suspend () -> Response) -> Unit)?,
         startBlocking: ((() -> Response) -> Boolean)? = null,
+        http1Methods: Boolean = true,
     ): Response? {
         return try {
-            if (request.method == "GET" || request.method == "HEAD") {
+            if (request.method == "GET" || http1Methods && request.method == "HEAD") {
                 gets.resolve(request) { handler, matched ->
                     when (handler) {
                         is GetHandler.Immediate -> return handler.run(matched)
@@ -112,6 +113,7 @@ class Routes {
                     }
                 }
             }
+            if (!http1Methods) return legacyMethodError(request)
             val allowed = allowedMethods(request)
             when {
                 allowed == null -> emptyResponse(404)
@@ -123,12 +125,27 @@ class Routes {
         }
     }
 
-    internal fun openPost(request: Request): PostBody = try {
+    internal fun openPost(request: Request, http1Methods: Boolean = false): PostBody = try {
         val sink = posts.resolve(request) { handler, matched -> handler(matched) }
-        if (sink != null) PostBody.Open(sink)
-        else PostBody.Rejected(allowedMethods(request)?.let(::methodNotAllowed) ?: emptyResponse(404))
+        if (sink != null) {
+            PostBody.Open(sink)
+        } else if (http1Methods) {
+            PostBody.Rejected(allowedMethods(request)?.let(::methodNotAllowed) ?: emptyResponse(404))
+        } else {
+            PostBody.Rejected(emptyResponse(if (gets.matches(request) || posts.isEmpty()) 405 else 404))
+        }
     } catch (_: Exception) {
         PostBody.Rejected(emptyResponse(500))
+    }
+
+    private fun legacyMethodError(request: Request): Response {
+        val post = posts.matches(request)
+        if (request.method == "GET") return if (post) methodNotAllowed("POST") else emptyResponse(404)
+        return when {
+            post && gets.matches(request) -> methodNotAllowed("GET, POST")
+            post -> methodNotAllowed("POST")
+            else -> emptyResponse(405)
+        }
     }
 
     private fun allowedMethods(request: Request): String? {

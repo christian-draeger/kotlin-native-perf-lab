@@ -152,12 +152,12 @@ internal class HttpConnection(
                     routes.dispatchRequestRoute(request) { handler, matched ->
                         prepareApplication(head, now, checkNotNull(start), handler, matched)
                     }?.let { return it }
+                    if (request.method != "POST" && request.bodyLength != 0) {
+                        queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
+                        return true
+                    }
                 }
                 if (request.method == "POST") return preparePost(routes, head, now)
-                if (request.bodyLength != 0) {
-                    queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
-                    return true
-                }
                 val launch: ((suspend () -> Response) -> Unit)? = start?.let {
                     { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now, headOnly) }
                 }
@@ -211,7 +211,7 @@ internal class HttpConnection(
             queue(emptyResponse(413), head.version, keepAlive = false, now)
             return true
         }
-        return when (val post = routes.openPost(head.request)) {
+        return when (val post = routes.openPost(head.request, http1Methods = true)) {
             is PostBody.Rejected -> {
                 queue(post.response, head.version, head.keepAlive && length == 0, now)
                 true

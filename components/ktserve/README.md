@@ -152,7 +152,7 @@ with `get` and `postStreaming`. A matching general route takes precedence for it
 path. A HEAD request uses an explicit HEAD route if present, then falls back to GET with the
 response body suppressed. On a known path, automatic origin-form OPTIONS returns 204 and
 `Allow`, and a method mismatch returns 405 with the same method list. Other paths return 404.
-HTTP/2 experiments use their existing routing features.
+The experimental h2c listener requires legacy GET and streaming POST routes. It rejects configuration with general routes or early request policies.
 
 Register short synchronous `beforeEach` checks for headers or other request metadata.
 Checks run in registration order before routing and body consumption. Return `null` to
