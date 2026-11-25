@@ -1,0 +1,40 @@
+{
+	admin off
+	auto_https disable_redirects
+	grace_period 5s
+	servers {
+		protocols h1
+		max_header_size 16KiB
+		strict_sni_host on
+		timeouts {
+			read_header 5s
+			read_body 30s
+			write 35s
+			idle 30s
+		}
+	}
+}
+
+https://{$KTSERVE_INGRESS_HOST}:{$KTSERVE_INGRESS_PORT:8443} {
+	bind {$KTSERVE_INGRESS_BIND:127.0.0.1}
+	tls {$KTSERVE_INGRESS_CERT} {$KTSERVE_INGRESS_KEY}
+
+	request_body {
+		max_size 64KiB
+	}
+
+	reverse_proxy 127.0.0.1:{$KTSERVE_ORIGIN_PORT:8080} {
+		header_up -Forwarded
+		header_up -X-Real-IP
+		header_up -X-Forwarded-Port
+		header_up Host {$KTSERVE_INGRESS_HOST}
+		transport http {
+			versions 1.1
+			dial_timeout 2s
+			response_header_timeout 30s
+			read_timeout 30s
+			write_timeout 30s
+			max_conns_per_host {$KTSERVE_ORIGIN_CONNECTIONS:256}
+		}
+	}
+}
