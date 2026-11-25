@@ -28,31 +28,16 @@ internal fun MemScope.runEpollWorkers(
 ) {
     val stopping = AtomicBoolean(false)
     val failure = AtomicReference<Throwable?>(null)
-    val partitions = List(workers) { index ->
-        val connections = limits.connections / workers + if (index < limits.connections % workers) 1 else 0
-        ServerLimits(
-            connections = connections,
-            headerBytes = limits.headerBytes,
-            responseBodyBytes = limits.responseBodyBytes,
-            idleMillis = limits.idleMillis,
-            requestHeadMillis = limits.requestHeadMillis,
-            drainMillis = limits.drainMillis,
-            requestBodyBytes = limits.requestBodyBytes,
-            requestBodyMillis = limits.requestBodyMillis,
-            handlerMillis = limits.handlerMillis,
-            responseHeaderBytes = limits.responseHeaderBytes,
-        )
-    }
     val listener = getenv("KTSERVE_WORKER_LISTENER")?.toKString() ?: "shared"
     require(listener == "shared" || listener == "reuseport") { "Unsupported worker listener: $listener" }
-    val transports = openWorkerEpollTransports(host, port, partitions.map { it.connections }, listener == "reuseport")
+    val transports = openWorkerEpollTransports(host, port, workers, limits.connections, listener == "reuseport")
     val counters = if (getenv("KTSERVE_WORKER_DIAGNOSTICS")?.toKString() == "1") {
         List(workers) { HttpServerCounters() }
     } else null
 
     fun runWorker(index: Int, shouldStop: () -> Boolean) {
         try {
-            HttpServer(transports[index], routes, partitions[index], counters?.get(index)).run(shouldStop)
+            HttpServer(transports[index], routes, limits, counters?.get(index)).run(shouldStop)
         } catch (cause: Throwable) {
             failure.compareAndSet(null, cause)
             stopping.store(true)

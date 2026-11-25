@@ -1,7 +1,8 @@
-@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+@file:OptIn(kotlin.concurrent.atomics.ExperimentalAtomicApi::class, kotlinx.cinterop.ExperimentalForeignApi::class)
 
 package codes.draeger.ktserve.transport
 
+import kotlin.concurrent.atomics.AtomicInt
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.MemScope
@@ -92,20 +93,25 @@ internal fun MemScope.openEpollTransport(
 internal fun MemScope.openWorkerEpollTransports(
     host: String,
     port: Int,
-    connectionLimits: List<Int>,
+    workers: Int,
+    connectionLimit: Int,
     reusePort: Boolean,
 ): List<StreamTransport> {
     val tcpNoDelay = configuredTcpNoDelay()
     val edgeTriggered = configuredEdgeTrigger()
     val wakeOnApplicationProgress = configuredApplicationWakeup()
-    val transports = ArrayList<StreamTransport>(connectionLimits.size)
+    val transports = ArrayList<StreamTransport>(workers)
+    val sharedBudget = if (reusePort) null else SharedConnectionBudget(connectionLimit)
     val sharedListener = if (reusePort) -1 else openListener(host, port)
     try {
-        for (limit in connectionLimits) {
+        repeat(workers) { index ->
             val events = if (reusePort) EPOLLIN else EPOLLIN or EPOLL_EXCLUSIVE
+            val limit = if (reusePort) {
+                connectionLimit / workers + if (index < connectionLimit % workers) 1 else 0
+            } else connectionLimit
             transports += openEpollTransport(
                 limit, events, tcpNoDelay = tcpNoDelay, edgeTriggered = edgeTriggered,
-                wakeOnApplicationProgress = wakeOnApplicationProgress,
+                wakeOnApplicationProgress = wakeOnApplicationProgress, sharedBudget = sharedBudget,
             ) {
                 if (reusePort) openListener(host, port, reusePort = true)
                 else checked(fcntl(sharedListener, F_DUPFD_CLOEXEC, 0), "duplicate listener")
@@ -147,6 +153,7 @@ private fun MemScope.openEpollTransport(
     tcpNoDelay: Boolean = false,
     edgeTriggered: Boolean = false,
     wakeOnApplicationProgress: Boolean = false,
+    sharedBudget: SharedConnectionBudget? = null,
     open: () -> Int,
 ): StreamTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
@@ -172,7 +179,7 @@ private fun MemScope.openEpollTransport(
         }
         return EpollTransport(
             listener, poller, events, change.ptr, connectionLimit, listenerEvents, noDelayValue, edgeTriggered,
-            applicationSignal, applicationCount,
+            applicationSignal, applicationCount, sharedBudget,
         )
     } catch (cause: Throwable) {
         applicationSignal?.close()
@@ -228,6 +235,22 @@ private fun checked(result: Int, operation: String): Int {
     return result
 }
 
+private class SharedConnectionBudget(limit: Int) {
+    private val available = AtomicInt(limit)
+
+    fun tryAcquire(): Boolean {
+        while (true) {
+            val slots = available.load()
+            if (slots == 0) return false
+            if (available.compareAndSet(slots, slots - 1)) return true
+        }
+    }
+
+    fun release(count: Int = 1) {
+        available.fetchAndAdd(count)
+    }
+}
+
 private class EpollTransport(
     private var listener: Int,
     private var poller: Int,
@@ -239,6 +262,7 @@ private class EpollTransport(
     private val edgeTriggered: Boolean,
     private val applicationSignal: EpollApplicationSignal?,
     private val applicationCount: CPointer<ULongVar>?,
+    private val sharedBudget: SharedConnectionBudget?,
 ) : StreamTransport {
     override val signalApplicationProgress: (() -> Unit)? = applicationSignal?.let { it::signal }
 
@@ -314,7 +338,7 @@ private class EpollTransport(
         val peer = peers[connection] ?: return
         stop(peer, TransportFailure.CANCELLED)
         if (peer.pending) queue(peer)
-        else if (!peer.queued && peer !== processing) peers.remove(connection)
+        else if (!peer.queued && peer !== processing) retire(connection)
     }
 
     override fun poll(timeoutMillis: Int, completions: TransportCompletions) {
@@ -373,25 +397,34 @@ private class EpollTransport(
                     }
                 }
             }
-            if (peers.size >= connectionLimit || fcntl(fd, F_SETFL, O_NONBLOCK) < 0 ||
-                fcntl(fd, F_SETFD, FD_CLOEXEC) < 0
-            ) {
-                close(fd)
-                return@repeat
-            }
+            val id = adopt(fd) ?: return@repeat
+            acceptOperation = null
+            completions.accepted(operation, id)
+        }
+    }
 
+    private fun adopt(fd: Int): ConnectionId? {
+        if (!(sharedBudget?.tryAcquire() ?: (peers.size < connectionLimit))) {
+            close(fd)
+            return null
+        }
+        var adopted = false
+        try {
+            if (fcntl(fd, F_SETFL, O_NONBLOCK) < 0 || fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) return null
             if (noDelayValue != null &&
                 setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, noDelayValue, sizeOf<IntVar>().convert()) < 0
             ) {
-                val cause = errno
-                close(fd)
-                error("Accepted socket TCP_NODELAY failed (errno $cause)")
+                error("Accepted socket TCP_NODELAY failed (errno $errno)")
             }
-
             val id = ConnectionId(nextConnection++)
             peers[id] = Peer(id, fd)
-            acceptOperation = null
-            completions.accepted(operation, id)
+            adopted = true
+            return id
+        } finally {
+            if (!adopted) {
+                close(fd)
+                sharedBudget?.release()
+            }
         }
     }
 
@@ -415,7 +448,7 @@ private class EpollTransport(
 
         if (peer.fd >= 0) updateInterest(peer)
         if (peer.fd < 0 && !peer.pending) {
-            peers.remove(peer.id)
+            retire(peer.id)
         } else if (peer.read.failure != null || peer.write.failure != null || peer.write.firstAttempt ||
             edgeTriggered && peer.interest and peer.edgeReadiness != 0U
         ) {
@@ -514,6 +547,10 @@ private class EpollTransport(
         if (peer.write.buffer != null && peer.write.failure == null) peer.write.failure = failure
     }
 
+    private fun retire(connection: ConnectionId) {
+        if (peers.remove(connection) != null) sharedBudget?.release()
+    }
+
     override fun close() {
         if (poller < 0) return
         closeListener()
@@ -523,7 +560,9 @@ private class EpollTransport(
             peer.read.buffer = null
             peer.write.buffer = null
         }
+        val retired = peers.size
         peers.clear()
+        if (retired != 0) sharedBudget?.release(retired)
         work.clear()
         acceptOperation = null
         acceptCancelled = false

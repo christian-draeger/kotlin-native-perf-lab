@@ -4,7 +4,7 @@ HTTP framework for Kotlin/Native and the JVM.
 
 ktServe provides a Kotlin routing API on Linux x86_64 and ARM64 and on Apple Silicon macOS. Its event loop uses nonblocking sockets with epoll on Linux and kqueue on macOS. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
 
-Set `KTSERVE_WORKERS=2` on the benchmark executable to try the experimental worker configuration. The process-wide connection limit is divided among workers. Each worker runs its own epoll loop on a shared listener. This option is available for evaluating the benchmark application.
+Set `KTSERVE_WORKERS=2` on the benchmark executable to try the experimental worker configuration. Each worker runs its own epoll loop on a shared listener and can accept connections up to the remaining process-wide limit.
 
 ## Run the example
 
