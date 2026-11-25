@@ -1,0 +1,32 @@
+{
+  "800": {
+    "calibration_qualified": true,
+    "reference": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 56.127,
+      "median_cpu_seconds_per_million": 183.066,
+      "median_peak_rss_mib": 38.844
+    },
+    "candidate": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 55.724,
+      "median_cpu_seconds_per_million": 180.948,
+      "median_peak_rss_mib": 37.121
+    },
+    "candidate-observed": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 56.034,
+      "median_cpu_seconds_per_million": 183.143,
+      "median_peak_rss_mib": 36.941
+    }
+  }
+}

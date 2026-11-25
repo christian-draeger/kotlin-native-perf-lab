@@ -1,0 +1,19 @@
+{"level":"info","ts":1795593139.4426656,"msg":"maxprocs: Leaving GOMAXPROCS=4: CPU quota undefined"}
+{"level":"info","ts":1795593139.4426892,"msg":"GOMEMLIMIT is updated","GOMEMLIMIT":14817871872,"previous":9223372036854775807}
+{"level":"info","ts":1795593139.4426918,"msg":"using config from file","file":"components/ktserve/deployment/http1/Caddyfile"}
+{"level":"info","ts":1795593139.4426935,"msg":"adapted config to JSON","adapter":"caddyfile"}
+{"level":"warn","ts":1795593139.4426956,"logger":"admin","msg":"admin endpoint disabled"}
+{"level":"warn","ts":1795593139.442825,"logger":"tls","msg":"unmanaged certificate expires within 1 day","not_after":1795679539,"sans":["localhost"]}
+{"level":"info","ts":1795593139.4428365,"logger":"tls.cache.maintenance","msg":"started background certificate maintenance","cache":"0x3bae0e0a3080"}
+{"level":"info","ts":1795593139.4428806,"logger":"http.auto_https","msg":"skipping automatic certificate management because one or more matching certificates are already loaded","domain":"localhost","server_name":"srv0"}
+{"level":"info","ts":1795593139.4428825,"logger":"http.auto_https","msg":"automatic HTTP->HTTPS redirects are disabled","server_name":"srv0"}
+{"level":"info","ts":1795593139.4431453,"logger":"http.log","msg":"server running","name":"srv0","protocols":["h1"]}
+{"level":"info","ts":1795593139.4432127,"msg":"autosaved config (load with --resume flag)","file":"/tmp/ktserve-ingress-vqq6k8ep/config/caddy/autosave.json"}
+{"level":"info","ts":1795593139.4432154,"msg":"serving initial configuration"}
+{"level":"info","ts":1795593139.444332,"logger":"tls","msg":"cleaning storage unit","storage":"FileStorage:/tmp/ktserve-ingress-vqq6k8ep/data/caddy"}
+{"level":"info","ts":1795593139.445281,"logger":"tls","msg":"finished cleaning storage units"}
+{"level":"info","ts":1795593140.0562727,"msg":"shutting down apps, then terminating","signal":"SIGTERM"}
+{"level":"warn","ts":1795593140.0563266,"msg":"exiting; byeee!! 👋","signal":"SIGTERM"}
+{"level":"info","ts":1795593140.0563402,"logger":"http","msg":"servers shutting down; grace period initiated","duration":5}
+{"level":"info","ts":1795593140.0564458,"logger":"tls.cache.maintenance","msg":"stopped background certificate maintenance","cache":"0x3bae0e0a3080"}
+{"level":"info","ts":1795593140.056538,"msg":"shutdown complete","signal":"SIGTERM","exit_code":0}
