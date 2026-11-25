@@ -1,0 +1,4 @@
+openjdk version "22.0.2" 2024-07-16
+OpenJDK Runtime Environment (build 22.0.2+11)
+OpenJDK 64-Bit Server VM (build 22.0.2+11, mixed mode, sharing)
+Apple M3 Max

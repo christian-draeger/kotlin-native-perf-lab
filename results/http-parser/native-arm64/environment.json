@@ -1,0 +1,42 @@
+{
+  "scope": "Exploratory matched Linux ARM64 loopback on one OrbStack VM",
+  "host_cpu": "Apple M3 Max",
+  "host_os": "27.2.1",
+  "container_image": "sha256:e7e54a9babbf25d742b5ce7afac14d0d155647b6cd525d2ad275599b5696724d",
+  "kernel": "7.2.12-orbstack-00394-gbecdd6130068",
+  "architecture": "aarch64",
+  "container_os": "PRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+  "cpu_max": "max 100000",
+  "server_cpus": [
+    0,
+    1
+  ],
+  "load_cpus": [
+    2,
+    3
+  ],
+  "kotlin_native": "2.4.21",
+  "toolchains": "python3\t3.12.3-0ubuntu2.1\ntime\t1.9-0.2build1\nwrk\t4.1.0-4build2",
+  "connections": 64,
+  "load_threads": 2,
+  "server_configuration": "one epoll worker, HTTP/1.1, level-triggered sockets",
+  "warmup_seconds": 5,
+  "measurement_seconds": 8,
+  "repetitions": 5,
+  "identities": {
+    "old": {
+      "git_sha": "35d8e938e2590a7c6221af2e7c7c0a8f432978bb",
+      "binary_sha256": "a156d577ce112bec02311cc016b4d514389d6b0bfb1464ce73e9527013867f98"
+    },
+    "candidate": {
+      "git_sha": "a9491738ddb4591f881e00ed8006e651f52b56dd",
+      "binary_sha256": "ade7bd7072d694410905897daa2ea0d48deea031a943edac0aecf9db90713f9c"
+    }
+  },
+  "measurement_scripts": {
+    "pair-parser.py": "5f832908f6a91f8beab70de111aeec10944ce624c3b106310900e33a3b373773",
+    "wrk-stats.lua": "0de409d2af5857b611b7ae756fbf4845590d72598291b7938774358a9d960243",
+    "proc_metrics.py": "0a8312c504fc659344ac7e18e9b4c50a5a1b3f487368323a71606278fbca4bcb",
+    "parse_wrk.py": "ea7511ecddcbe0e689f3bd0d6bde6cdbd4e435694b6796381cef1efb5eecf59f"
+  }
+}

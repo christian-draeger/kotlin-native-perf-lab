@@ -1,0 +1,10 @@
+allocation read_header=false round=1 iterations=200000 total_bytes=44800000 bytes_per_request=224.0
+allocation read_header=false round=2 iterations=200000 total_bytes=44800000 bytes_per_request=224.0
+allocation read_header=false round=3 iterations=200000 total_bytes=44800000 bytes_per_request=224.0
+allocation read_header=false round=4 iterations=200000 total_bytes=44800000 bytes_per_request=224.0
+allocation read_header=false round=5 iterations=200000 total_bytes=44800000 bytes_per_request=224.0
+allocation read_header=true round=1 iterations=200000 total_bytes=56000000 bytes_per_request=280.0
+allocation read_header=true round=2 iterations=200000 total_bytes=56000000 bytes_per_request=280.0
+allocation read_header=true round=3 iterations=200000 total_bytes=56000000 bytes_per_request=280.0
+allocation read_header=true round=4 iterations=200000 total_bytes=56000000 bytes_per_request=280.0
+allocation read_header=true round=5 iterations=200000 total_bytes=56000000 bytes_per_request=280.0
