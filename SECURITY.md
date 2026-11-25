@@ -1,6 +1,6 @@
 # Security policy
 
-The latest ktServe preview on Maven Central receives security fixes. Upgrade to the newest patch in that release line. The release notes and advisories identify any affected versions and the first version containing a fix. The supported deployment scope accompanies each release. System libraries, the JDK, and the ingress need their own security updates.
+Security fixes target the latest supported production minor line, or the newest preview while production qualification is in progress. Upgrade to the newest patch in your supported line. The release notes and advisories identify any affected versions and the first version containing a fix. The supported deployment scope accompanies each release. System libraries, the JDK, and the ingress need their own security updates.
 
 ## Report a vulnerability
 
