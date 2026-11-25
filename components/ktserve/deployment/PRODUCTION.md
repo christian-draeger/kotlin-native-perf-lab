@@ -1,6 +1,6 @@
 # Production qualification
 
-The supported production profile is a standalone ktServe HTTP/1.1 origin on Linux x86_64 or ARM64, using the default single-worker epoll transport and a loopback connection from the [TLS ingress recipe](http1/README.md). The qualification environment is Ubuntu 24.04. The release notes link the exact build and deployment evidence.
+The supported production profile is a standalone ktServe HTTP/1.1 origin on Linux x86_64 or ARM64, using one epoll worker and a loopback connection from the [TLS ingress recipe](http1/README.md). Select this topology explicitly with `serve(workers = 1)` in a Kotlin application or `KTSERVE_WORKERS=1` in the bundled executable. The qualification environment is Ubuntu 24.04. The release notes link the exact build and deployment evidence.
 
 Use an explicit release dependency or a verified native archive. The JVM and macOS builds serve development and portability use cases. Framework adapters, additional Linux listeners, and the HTTP/2 transport have their own compatibility scopes.
 

@@ -4,8 +4,6 @@ HTTP framework for Kotlin/Native and the JVM.
 
 ktServe provides a Kotlin routing API on Linux x86_64 and ARM64 and on Apple Silicon macOS. Its event loop uses nonblocking sockets with epoll on Linux and kqueue on macOS. The benchmark application uses the public API for the Ktor and Axum parity endpoints.
 
-Set `KTSERVE_WORKERS=2` on the benchmark executable to try the experimental worker configuration. Each worker runs its own epoll loop on a shared listener and can accept connections up to the remaining process-wide limit.
-
 ## Run the example
 
 On Linux x86_64 with JDK 21:
@@ -26,31 +24,23 @@ Set `PORT` to change the example port. CI cross-compiles the ARM64 executable on
 
 The Ubuntu smoke workflow publishes verified snapshot archives for Linux x86_64 and ARM64. In the directory containing the downloaded archive and its checksum, run `sha256sum -c <archive>.sha256`, extract the archive, and start `./ktserve`. The included compatibility file describes the target and executable interpreter.
 
-## Use two Linux I/O workers
+## Choose a Linux worker mode
 
-On Linux, pass `workers = 2` to opt into two epoll loops in one process. Both loops share the route table and the process connection budget. The default overload uses one worker.
+By default, Linux `serve { … }` starts two epoll loops when the calling thread's affinity, the visible cgroup v2 CPU quota and the connection limit allow it. It starts one loop when the budget is smaller or cannot be verified. The eager count is chosen at startup and logged as `ktServe worker_policy=eager workers=<count>`.
 
-```kotlin
-serve(port = 8080, workers = 2) {
-    get("/health") { text("ok") }
-}
-```
+| Mode | Kotlin API | Environment override for implicit `serve` |
+| --- | --- | --- |
+| Eager | `serve { … }` or `serve(workerPolicy = LinuxWorkerPolicy.EAGER) { … }` | `KTSERVE_ADAPTIVE_WORKERS=eager` |
+| Fixed | `serve(workers = 1) { … }`, or another positive count within the connection limit | `KTSERVE_WORKERS=1`, or another count |
+| Warm standby | `serve(workerPolicy = LinuxWorkerPolicy.STANDBY) { … }` | `KTSERVE_ADAPTIVE_WORKERS=standby` |
 
-Kotlin handlers and observers shared across workers can be called concurrently. Observer lifecycle events, active connection counts and exchange identifiers are local to each loop. The configured blocking-handler budget also applies per loop.
+Explicit Kotlin arguments select the mode for that server. Eager and standby share one listener, one process connection limit and one blocking-handler budget. Fixed worker counts retain their per-loop blocking-handler limits.
 
-Use two workers when short handlers on persistent connections exhaust one I/O loop and additional CPU is available. The matched Linux benchmark measured 73–92% higher small-JSON saturation throughput on two loops. At the same offered mixed load, the second loop consumed 7–17% more CPU per request and more memory. One ARM64 trial at 2,400 requests/s missed multiple per-operation p99 targets. The supported production profile uses one worker. [Worker measurements](https://github.com/christian-draeger/kotlin-native-perf-lab/tree/38abc298aa17e04e6d892c72e31b28d407473a7a/results/throughput-20261125/workers) · [Production qualification](deployment/PRODUCTION.md)
+**Concurrency on upgrade.** With two loops, shared handlers and observers can be invoked concurrently. Observer lifecycle events, connection counts and exchange identifiers are local to a loop. Keep application state thread-safe or select `workers = 1` for serialized inline handlers. The [qualified ingress profile](deployment/PRODUCTION.md) explicitly selects one worker.
 
-### Adaptive workers experiment
+Standby opens the second worker's transport at startup with accepts paused. Two samples of at least 100 ms at 75% or more primary thread CPU, plus recent traffic on multiple connections, wake it. Without exchange observation it can transfer recently active connections between complete exchanges. With an observer it accepts new connections and keeps each existing exchange observer on its original loop. After at least five seconds of quiet and once its peers close, the second loop parks for the next burst. The [worker comparison](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45694786102) covers both policies, fixed counts, connection survival and tail latency.
 
-Set `KTSERVE_ADAPTIVE_WORKERS=1` on the Linux benchmark executable to try automatic scaling between one and two epoll workers. The pilot checks the calling thread's CPU affinity and the visible cgroup v2 CPU quota at startup. It stays at one worker when that budget cannot be verified or allows fewer than two CPUs.
-
-Three consecutive sampling windows at 75% or more primary loop thread CPU start a second worker. After five windows below 30% on both loops, the second worker stops accepting and releases its resources after its connections close. The windows are at least one second each.
-
-Set `KTSERVE_ADAPTIVE_HANDOFF=1` alongside `KTSERVE_ADAPTIVE_WORKERS=1` to try the keep-alive handoff. When the second worker starts, it takes one batch of half the recently active connections that are between exchanges. The socket stays open and both workers continue serving their own connections. Connections busy with parsers, handlers, or streams stay with their current owner. The experiment uses eventfd to wake the receiving loop and keeps the established retirement behavior. The library API offers fixed worker counts.
-
-The [adaptive workers workflow](../../.github/workflows/adaptive-workers.yml) compares fixed one, fixed two, adaptive and adaptive with handoff. It opens the burst connections before sending burst traffic and archives per-socket results, activation and handoff times, goodput, latency, CPU time and RSS. It uses a shared Linux host with separate CPU masks for the generator and server.
-
-The benchmark executable also accepts two throughput-first policies. `KTSERVE_ADAPTIVE_WORKERS=eager` starts two workers when the startup CPU budget permits. `KTSERVE_ADAPTIVE_WORKERS=standby` opens the second worker's transport at startup and parks it with accepts paused. Two samples of at least 100 ms at 75% or more primary thread CPU, plus recent traffic on multiple connections, wake it and enable a fresh keep-alive handoff. After at least five seconds of quiet and once the second worker's peers close, its loop parks for the next burst. The [CI pilot](../../.github/workflows/adaptive-workers.yml) measures both policies alongside both fixed counts and the original adaptive policy.
+The original cold-start worker remains a benchmark control. Set `KTSERVE_ADAPTIVE_WORKERS=1`, optionally with `KTSERVE_ADAPTIVE_HANDOFF=1`, to reproduce it.
 
 ## Develop on Apple Silicon
 

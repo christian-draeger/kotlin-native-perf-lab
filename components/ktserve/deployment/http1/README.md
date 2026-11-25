@@ -2,10 +2,10 @@
 
 This deployment puts the public TLS listener and the ktServe origin on the same Linux host. Caddy binds the chosen ingress address. ktServe binds IPv4 loopback on the origin port. Both services can run as unprivileged users. Expose the ingress port and restrict the origin port to local processes. Use a trusted certificate issued for the public host.
 
-Use a **version-pinned** build of your ktServe application. The standalone [Maven guide](../../RELEASING.md) shows how to consume a version. The Ubuntu smoke workflow also provides checksummed native binary snapshots for testing the deployment with the bundled routes. The release test pairs those routes with [Caddy 2.11.9](https://github.com/caddyserver/caddy/releases/tag/v2.11.9).
+Use a **version-pinned** build of your ktServe application. The standalone [Maven guide](../../RELEASING.md) shows how to consume a version. Use `serve(workers = 1)` to match the qualified origin topology. The Ubuntu smoke workflow also provides checksummed native binary snapshots for testing the deployment with the bundled routes. The release test pairs those routes with [Caddy 2.11.9](https://github.com/caddyserver/caddy/releases/tag/v2.11.9).
 
 ```sh
-PORT=8080 BIND_HOST=127.0.0.1 ./ktserve
+KTSERVE_WORKERS=1 PORT=8080 BIND_HOST=127.0.0.1 ./ktserve
 ```
 
 In a separate service process, point Caddy to the origin and configure the certificate. Set the binding address and port for the intended network. To test on the same host, use a certificate for `localhost`, bind `127.0.0.1`, and trust your issuing CA in the client.

@@ -184,6 +184,9 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: ktserve-maven-linux-consumers
@@ -193,10 +196,7 @@ jobs:
         run: |
           test "$(uname -m)" = "$ARCH"
           chmod +x "$ARCH"
-          "./$ARCH" 18082 &
-          pid=$!
-          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
-          test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 http://127.0.0.1:18082/health)" = ok
+          python3 scripts/tests/ktserve_public_workers_smoke.py "./$ARCH"
 
   rehearse-patch:
     name: Rehearse patch signing

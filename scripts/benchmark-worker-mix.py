@@ -17,7 +17,7 @@ spec.loader.exec_module(mix)
 MODES = {
     "fixed-1": ("1", "0", "0"),
     "fixed-2": ("2", "0", "0"),
-    "eager": ("1", "eager", "0"),
+    "eager": None,
     "standby": ("1", "standby", "1"),
     "adaptive-handoff": ("1", "1", "1"),
 }
@@ -50,8 +50,13 @@ def run(args):
         for repeat in range(args.repetitions):
             start = repeat % len(names)
             for name in names[start:] + names[:start]:
-                workers, policy, handoff = MODES[name]
-                os.environ.update(KTSERVE_WORKERS=workers, KTSERVE_ADAPTIVE_WORKERS=policy, KTSERVE_ADAPTIVE_HANDOFF=handoff)
+                override = MODES[name]
+                if override is None:
+                    for key in ("KTSERVE_WORKERS", "KTSERVE_ADAPTIVE_WORKERS", "KTSERVE_ADAPTIVE_HANDOFF"):
+                        os.environ.pop(key, None)
+                else:
+                    workers, policy, handoff = override
+                    os.environ.update(KTSERVE_WORKERS=workers, KTSERVE_ADAPTIVE_WORKERS=policy, KTSERVE_ADAPTIVE_HANDOFF=handoff)
                 path = args.output / f"{name}-{repeat + 1}"
                 log = path.with_suffix(".server.log")
                 with mix.server(args, "ktserve", server_affinity, log) as (process, port):
@@ -63,10 +68,11 @@ def run(args):
                 expected = "ktServe backend=epoll tcp=ipv4"
                 if name in ("fixed-2", "eager"):
                     expected += " workers=2"
-                elif policy != "0":
+                elif name in ("standby", "adaptive-handoff"):
                     expected += " workers=adaptive"
-                selected = expected in events and (policy not in ("eager", "standby") or
-                                                    f"ktServe adaptive worker_policy={policy}" in events)
+                selected = expected in events and (
+                    name != "eager" or "ktServe worker_policy=eager workers=2" in events
+                ) and (name != "standby" or "ktServe adaptive worker_policy=standby" in events)
                 passed = bool(selected and warmup["valid"] and row["valid"] and
                               mix.generator_headroom(row, args.threads) and mix.traffic_p99_within_budgets(row))
                 result = {

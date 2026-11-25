@@ -22,7 +22,7 @@ internal fun runJsonHttpProbe(args: Array<String>) {
     val mode = args[1]
     require(mode in setOf("stock", "string-stream", "sink-stream"))
     val maxBody = args.getOrNull(3)?.toInt() ?: 64 * 1024
-    serve(port = args[2].toInt(), limits = ServerLimits(responseBodyBytes = maxBody)) {
+    serve(port = args[2].toInt(), limits = ServerLimits(responseBodyBytes = maxBody), workers = 1) {
         get("/health") { text("ok") }
         get("/json") { encodeHttpProbe(mode, User.serializer(), benchmarkUser(42), maxBody) }
         get("/users/{id}") { request ->

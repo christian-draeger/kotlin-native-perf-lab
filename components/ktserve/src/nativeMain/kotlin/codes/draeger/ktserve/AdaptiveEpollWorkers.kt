@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
 import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import platform.posix.CLOCK_THREAD_CPUTIME_ID
 import platform.posix.clock_gettime
@@ -52,6 +53,7 @@ internal fun MemScope.runAdaptiveEpollWorkers(
 ) = withAdaptiveEpollListener(host, port, limits.connections, requireWakeup = handoffEnabled || standby) { openWorker, stopAccepts ->
     val primary = openWorker()
     val stopping = AtomicBoolean(false)
+    val blockingPermits = if (standby && routes.hasBlockingGets) Semaphore(limits.blockingHandlers) else null
     val startedAt = TimeSource.Monotonic.markNow()
     fun report(event: String) {
         println("ktServe adaptive $event elapsed_ms=${startedAt.elapsedNow().inWholeMilliseconds}")
@@ -65,7 +67,7 @@ internal fun MemScope.runAdaptiveEpollWorkers(
             val quietWindows = QUIET_MILLIS / sampleMillis
             val load = EpollWorkerLoad(sampleMillis)
             fun startWorker() = SecondaryEpollWorker(
-                this, openWorker, routes, limits, stopping, startedAt, standby, sampleMillis,
+                this, openWorker, routes, limits, stopping, startedAt, standby, sampleMillis, blockingPermits,
                 createHandoff = {
                     if (handoffEnabled) EpollKeepAliveHandoff(startedAt, limits, ::report) else null
                 },
@@ -101,7 +103,7 @@ internal fun MemScope.runAdaptiveEpollWorkers(
                     secondary.awaitStandby()
                 }
                 onListening()
-                val server = HttpServer(primary, routes, limits, clock = startedAt)
+                val server = HttpServer(primary, routes, limits, clock = startedAt, blockingPermits = blockingPermits)
                 server.run shouldStop@ {
                     if (stopRequested() || !isActive) {
                         stopping.store(true)
@@ -178,6 +180,7 @@ private class SecondaryEpollWorker(
     clock: TimeMark,
     private val standby: Boolean,
     sampleMillis: Int,
+    blockingPermits: Semaphore?,
     private val createHandoff: () -> EpollKeepAliveHandoff?,
     report: (String) -> Unit,
 ) {
@@ -198,7 +201,7 @@ private class SecondaryEpollWorker(
                     val usage = EpollWorkerLoad(sampleMillis)
                     var active = !standby
                     var retiring = false
-                    val server = HttpServer(transport, routes, limits, clock = clock)
+                    val server = HttpServer(transport, routes, limits, clock = clock, blockingPermits = blockingPermits)
                     wakeLoop.store(transport.signalApplicationProgress)
                     if (standby) {
                         transport.pauseAccepts(true)

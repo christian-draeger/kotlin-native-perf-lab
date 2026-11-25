@@ -6,8 +6,8 @@
 
 package codes.draeger.ktserve.ktor
 
+import codes.draeger.ktserve.Routes
 import codes.draeger.ktserve.ServerLimits
-import codes.draeger.ktserve.serve
 import io.ktor.events.Events
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationEnvironment
@@ -43,6 +43,15 @@ object KtServe : ApplicationEngineFactory<KtServeEngine, KtServeEngine.Configura
     ): KtServeEngine = KtServeEngine(environment, monitor, developmentMode, configuration, applicationProvider)
 }
 
+internal expect fun serveListener(
+    port: Int,
+    host: String,
+    limits: ServerLimits,
+    stopRequested: () -> Boolean,
+    onListening: () -> Unit,
+    configure: Routes.() -> Unit,
+)
+
 class KtServeEngine internal constructor(
     environment: ApplicationEnvironment,
     monitor: Events,
@@ -71,7 +80,7 @@ class KtServeEngine internal constructor(
     private val owner = newSingleThreadContext("ktserve-ktor")
     private val server = CoroutineScope(applicationProvider().parentCoroutineContext + owner)
         .launch(start = CoroutineStart.LAZY) {
-            serve(
+            serveListener(
                 port = connector.port,
                 host = address,
                 limits = limits,

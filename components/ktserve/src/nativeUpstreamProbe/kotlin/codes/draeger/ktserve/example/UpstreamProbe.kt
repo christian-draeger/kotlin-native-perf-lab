@@ -13,7 +13,7 @@ fun runUpstreamProbe() {
     val originPort = requireNotNull(getenv("BENCHMARK_UPSTREAM_PORT")?.toKString()?.toInt())
     val client = UpstreamClient(originPort)
     try {
-        serve(port = port, host = "127.0.0.1") {
+        serve(port = port, host = "127.0.0.1", workers = 1) {
             parityRoutes()
             getSuspending("/upstream/{scenario}") { request ->
                 val result = client.request(requireNotNull(request.pathParameter("scenario")))
