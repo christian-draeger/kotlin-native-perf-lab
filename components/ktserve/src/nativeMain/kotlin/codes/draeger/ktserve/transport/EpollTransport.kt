@@ -3,6 +3,9 @@
 package codes.draeger.ktserve.transport
 
 import kotlin.concurrent.atomics.AtomicInt
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.MemScope
@@ -35,7 +38,22 @@ import platform.linux.epoll_wait
 import platform.posix.AF_INET
 import platform.posix.EAGAIN
 import platform.posix.ECONNABORTED
+import platform.posix.EHOSTDOWN
+import platform.posix.EHOSTUNREACH
 import platform.posix.EINTR
+import platform.posix.EMFILE
+import platform.posix.ENETDOWN
+import platform.posix.ENETUNREACH
+import platform.posix.ENFILE
+import platform.posix.ENOBUFS
+import platform.posix.ENOMEM
+import platform.posix.ENONET
+import platform.posix.ENOPROTOOPT
+import platform.posix.ENOSPC
+import platform.posix.EOPNOTSUPP
+import platform.posix.EPERM
+import platform.posix.EPROTO
+import platform.posix.ETIMEDOUT
 import platform.posix.FD_CLOEXEC
 import platform.posix.F_DUPFD_CLOEXEC
 import platform.posix.F_SETFD
@@ -67,6 +85,7 @@ import platform.posix.sockaddr_in
 import platform.posix.socket
 
 private const val BATCH_SIZE = 64
+private val LISTENER_RETRY_DELAY = 100.milliseconds
 private const val LISTENER_TOKEN = 0UL
 private const val APPLICATION_TOKEN = ULong.MAX_VALUE
 // EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
@@ -271,6 +290,7 @@ private class EpollTransport(
     private var processing: Peer? = null
     private var nextConnection = 1L
     private var listenerWatched = false
+    private var listenerRetryAt: TimeMark? = null
     private var acceptOperation: OperationId? = null
     private var acceptCancelled = false
 
@@ -330,6 +350,7 @@ private class EpollTransport(
             close(listener)
             listener = -1
             listenerWatched = false
+            listenerRetryAt = null
             acceptCancelled = acceptOperation != null
         }
     }
@@ -360,8 +381,13 @@ private class EpollTransport(
         }
 
         if (poller < 0) return
-        watchListener()
-        val timeout = if (queued > 0 || hadAcceptCancellation || acceptCancelled) 0 else timeoutMillis
+        var timeout = if (queued > 0 || hadAcceptCancellation || acceptCancelled) 0 else timeoutMillis
+        if (listenerRetryAt?.hasPassedNow() == true) listenerRetryAt = null
+        watchListener(acceptOperation != null && !acceptCancelled && listenerRetryAt == null)
+        listenerRetryAt?.let { retryAt ->
+            val waitMillis = (-retryAt.elapsedNow()).inWholeMilliseconds.coerceAtLeast(0)
+            timeout = minOf(timeout, waitMillis.toInt() + 1)
+        }
         val count = epoll_wait(poller, events, BATCH_SIZE, timeout)
         if (count < 0 && errno == EINTR) return
         checked(count, "epoll_wait")
@@ -384,14 +410,22 @@ private class EpollTransport(
     private fun acceptReady(completions: TransportCompletions) {
         repeat(BATCH_SIZE) {
             val operation = acceptOperation ?: return
-            if (listener < 0 || acceptCancelled) return
+            if (!listenerWatched || acceptCancelled) return
             val fd = accept(listener, null, null)
             if (fd < 0) {
-                when (errno) {
-                    EINTR, ECONNABORTED -> return@repeat
+                when (val cause = errno) {
                     EAGAIN -> return
+                    // Linux reports some errors from individual pending sockets on the listener.
+                    EINTR, ECONNABORTED, EPERM, ENETDOWN, EPROTO, ENOPROTOOPT,
+                    EHOSTDOWN, ENONET, EHOSTUNREACH, EOPNOTSUPP, ENETUNREACH, ETIMEDOUT -> return@repeat
+                    EMFILE, ENFILE, ENOBUFS, ENOMEM -> {
+                        watchListener(false)
+                        delayListenerRetry()
+                        return
+                    }
                     else -> {
                         acceptOperation = null
+                        println("ktServe epoll accept failed (errno $cause)")
                         completions.failed(null, operation, TransportFailure.IO_FAILURE)
                         return
                     }
@@ -517,13 +551,20 @@ private class EpollTransport(
         }
     }
 
-    private fun watchListener() {
-        if (listener < 0) return
-        val needListener = acceptOperation != null && !acceptCancelled
-        if (needListener == listenerWatched) return
-        val action = if (needListener) EPOLL_CTL_ADD else EPOLL_CTL_DEL
-        checked(watch(action, listener, LISTENER_TOKEN, listenerEvents), "register listener")
-        listenerWatched = needListener
+    private fun delayListenerRetry() {
+        listenerRetryAt = TimeSource.Monotonic.markNow() + LISTENER_RETRY_DELAY
+    }
+
+    private fun watchListener(active: Boolean) {
+        if (listener < 0 || active == listenerWatched) return
+        val action = if (active) EPOLL_CTL_ADD else EPOLL_CTL_DEL
+        val result = watch(action, listener, LISTENER_TOKEN, listenerEvents)
+        if (result < 0 && active && (errno == ENOMEM || errno == ENOSPC)) {
+            delayListenerRetry()
+            return
+        }
+        checked(result, if (active) "register listener" else "unregister listener")
+        listenerWatched = active
     }
 
     private fun watch(action: Int, fd: Int, token: ULong, interest: UInt): Int {
