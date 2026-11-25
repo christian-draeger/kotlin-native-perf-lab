@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       suite:
-        description: Sample HTTP CPU stacks, measure the Native JSON stages, or compare Native JSON over HTTP
+        description: Select HTTP CPU stacks, JSON stages, or paired route dispatch measurements
         type: choice
-        options: [core, application, json-phases, json-http]
+        options: [core, application, json-phases, json-http, routing]
         default: core
 
 permissions:
@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   profiles:
-    if: inputs.suite != 'json-phases' && inputs.suite != 'json-http'
+    if: inputs.suite != 'json-phases' && inputs.suite != 'json-http' && inputs.suite != 'routing'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
@@ -181,4 +181,121 @@ jobs:
         with:
           name: exploratory-json-http-${{ matrix.arch }}
           path: ${{ runner.temp }}/json-http
+          if-no-files-found: warn
+
+  routing-build:
+    if: inputs.suite == 'routing'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: baseline
+          ref: '152a5fb8aed62fda87473d815d0e312e79337254'
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: deferred
+          ref: '161280e44e4699fc1b620b7af0e3f85cfb9ccaa8'
+          persist-credentials: false
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+        with:
+          gradle-version: '9.7.0'
+      - name: Build the exact route probes for Linux Native and JVM
+        run: |
+          for variant in baseline deferred candidate; do
+            project="$variant/components/ktserve"
+            artifact="probes/$variant"
+            mkdir -p "$artifact"
+            git -C "$variant" rev-parse HEAD > "$artifact/source.sha"
+            gradle --version > "$artifact/toolchain.txt"
+            grep -m 1 'kotlin("multiplatform") version' "$project/build.gradle.kts" >> "$artifact/toolchain.txt"
+            gradle -p "$project" -Pbenchmark.routingProbe routingProbeJvmDist
+            cp -R "$project/build/routingProbeJvm/." "$artifact/"
+            for arch in x86_64 aarch64; do
+              gradle -p "$project" -Pbenchmark.routingProbe "-Pbenchmark.targetArch=$arch" linkRoutingProbeReleaseExecutableNative
+              cp "$project/build/bin/native/routingProbeReleaseExecutable/ktserve-routing-probe.kexe" "$artifact/$arch"
+            done
+          done
+          test "$(cat probes/candidate/source.sha)" = "$GITHUB_SHA"
+          (cd probes && sha256sum */x86_64 */aarch64 */app.jar */lib/*.jar > inputs.sha256)
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: routing-probes-${{ github.run_attempt }}
+          path: probes/
+          if-no-files-found: error
+
+  routing:
+    name: Routing (${{ matrix.runtime }}, ${{ matrix.arch }})
+    needs: routing-build
+    if: inputs.suite == 'routing'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04, arch: x86_64, runtime: native }
+          - { runner: ubuntu-24.04-arm, arch: aarch64, runtime: native }
+          - { runner: ubuntu-24.04, arch: x86_64, runtime: jvm }
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        if: matrix.runtime == 'jvm'
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: routing-probes-${{ github.run_attempt }}
+          path: probes/
+      - name: Measure dispatch, throughput and fixed-rate p99
+        env:
+          ARCH: ${{ matrix.arch }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          test "$(uname -m)" = "$ARCH"
+          (cd probes && sha256sum --strict --check inputs.sha256)
+          sudo apt-get update -qq
+          sudo apt-get install -y wrk time
+          bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
+          export PATH="$RUNNER_TEMP/k6:$PATH"
+          root="$RUNNER_TEMP/routing"
+          mkdir -p "$root"
+          cp probes/inputs.sha256 "$root/"
+          { java -version; dpkg-query -W wrk time; k6 version; } > "$root/versions.txt" 2>&1
+          args=()
+          for variant in baseline deferred candidate; do
+            cp "probes/$variant/source.sha" "$root/$variant.sha"
+            cp "probes/$variant/toolchain.txt" "$root/$variant.toolchain"
+            if [[ "$RUNTIME" == jvm ]]; then
+              command="java -Xms128m -Xmx512m -cp probes/$variant/app.jar:probes/$variant/lib/* codes.draeger.ktserve.benchmark.RoutingProbeKt"
+            else
+              chmod +x "probes/$variant/$ARCH"
+              command="probes/$variant/$ARCH"
+            fi
+            args+=(--variant "$variant=$command")
+          done
+          failed=0
+          python3 scripts/benchmark-routing.py "${args[@]}" --output "$root/match" --only match || failed=1
+          python3 scripts/benchmark-routing.py "${args[@]}" --output "$root/saturation" --only http \
+            --resources 1 512 --repeats 3 || failed=1
+          python3 scripts/benchmark-routing.py "${args[@]}" --output "$root/fixed" --only http \
+            --resources 1 512 --repeats 3 --rate 5000 || failed=1
+          exit "$failed"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: exploratory-routing-${{ matrix.runtime }}-${{ matrix.arch }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/routing
           if-no-files-found: warn
