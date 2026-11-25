@@ -1,0 +1,36 @@
+aarch64 fresh TCP
+800 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.596, 'median_cpu_seconds_per_million': 134.916, 'median_peak_rss_mib': 21.152}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.689, 'median_cpu_seconds_per_million': 156.133, 'median_peak_rss_mib': 24.941}}
+  paired cpu_seconds_per_million_requests 16.65 [17.92, 16.65, 14.8]
+  paired p99_us 0.18 [0.34, -0.27, 0.18]
+  paired peak_rss_kib 18.9 [17.91, 23.58, 18.9]
+1600 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.928, 'median_cpu_seconds_per_million': 128.069, 'median_peak_rss_mib': 21.879}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.979, 'median_cpu_seconds_per_million': 146.829, 'median_peak_rss_mib': 24.902}}
+  paired cpu_seconds_per_million_requests 14.65 [15.62, 11.93, 14.65]
+  paired p99_us 0.85 [0.85, 1.3, 0.03]
+  paired peak_rss_kib 17.51 [13.02, 17.51, 18.0]
+aarch64 persistent
+800 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.383, 'median_cpu_seconds_per_million': 109.918, 'median_peak_rss_mib': 35.711}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.444, 'median_cpu_seconds_per_million': 123.673, 'median_peak_rss_mib': 40.16}}
+  paired cpu_seconds_per_million_requests 12.37 [11.36, 12.51, 12.37]
+  paired p99_us 0.12 [-0.06, 0.18, 0.12]
+  paired peak_rss_kib 12.46 [15.91, 11.75, 12.46]
+2400 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 51.929, 'median_cpu_seconds_per_million': 94.568, 'median_peak_rss_mib': 37.32}, 'candidate': {'qualified': 3, 'met': 2, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.73, 'median_cpu_seconds_per_million': 104.566, 'median_peak_rss_mib': 41.82}}
+  paired cpu_seconds_per_million_requests 10.57 [10.57, 8.22, 15.01]
+  paired p99_us 1.72 [1.72, 1.78, 1.54]
+  paired peak_rss_kib 12.16 [12.92, 12.06, 12.16]
+x86_64 fresh TCP
+800 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.236, 'median_cpu_seconds_per_million': 93.691, 'median_peak_rss_mib': 23.047}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.295, 'median_cpu_seconds_per_million': 101.199, 'median_peak_rss_mib': 25.98}}
+  paired cpu_seconds_per_million_requests 8.04 [8.04, 5.19, 9.31]
+  paired p99_us 0.11 [0.11, 0.85, -0.95]
+  paired peak_rss_kib 12.73 [20.11, 12.73, 7.03]
+1600 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.171, 'median_cpu_seconds_per_million': 87.467, 'median_peak_rss_mib': 21.605}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.206, 'median_cpu_seconds_per_million': 100.581, 'median_peak_rss_mib': 25.918}}
+  paired cpu_seconds_per_million_requests 14.78 [14.99, 14.78, 11.51]
+  paired p99_us 0.17 [0.3, 0.17, -0.39]
+  paired peak_rss_kib 20.52 [20.83, 20.52, 9.81]
+x86_64 persistent
+800 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.167, 'median_cpu_seconds_per_million': 76.202, 'median_peak_rss_mib': 36.555}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.389, 'median_cpu_seconds_per_million': 83.687, 'median_peak_rss_mib': 41.488}}
+  paired cpu_seconds_per_million_requests 9.82 [9.82, 8.21, 11.12]
+  paired p99_us 0.43 [1.76, 0.27, 0.43]
+  paired peak_rss_kib 12.71 [12.71, 12.12, 14.04]
+2400 {'calibration_qualified': True, 'reference': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 51.681, 'median_cpu_seconds_per_million': 68.316, 'median_peak_rss_mib': 38.074}, 'candidate': {'qualified': 3, 'met': 3, 'response_failures': 0, 'unsent_arrivals': 0, 'median_p99_ms': 52.395, 'median_cpu_seconds_per_million': 74.148, 'median_peak_rss_mib': 42.57}}
+  paired cpu_seconds_per_million_requests 7.31 [7.31, 9.2, 5.96]
+  paired p99_us 1.3 [1.3, 0.93, 1.38]
+  paired peak_rss_kib 11.81 [12.26, 11.48, 11.81]

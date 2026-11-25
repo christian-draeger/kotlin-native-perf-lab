@@ -1,0 +1,23 @@
+{
+  "800": {
+    "calibration_qualified": true,
+    "reference": {
+      "qualified": 1,
+      "met": 1,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 56.247,
+      "median_cpu_seconds_per_million": 242.991,
+      "median_peak_rss_mib": 24.316
+    },
+    "candidate": {
+      "qualified": 1,
+      "met": 1,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 57.445,
+      "median_cpu_seconds_per_million": 211.838,
+      "median_peak_rss_mib": 30.469
+    }
+  }
+}

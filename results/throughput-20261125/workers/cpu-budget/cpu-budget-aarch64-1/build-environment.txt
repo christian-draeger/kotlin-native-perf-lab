@@ -1,0 +1,19 @@
+benchmark_source=github-hosted-actions
+runner_label=ubuntu-24.04-arm
+ci_run_id=45585545966
+ci_run_attempt=1
+ci_event=workflow_dispatch
+rustc 1.100.0 (0ef1bc386 2026-11-09)
+binary: rustc
+commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a
+commit-date: 2026-11-09
+host: aarch64-unknown-linux-gnu
+release: 1.100.0
+LLVM version: 23.1.5
+cargo 1.100.0 (3acc79c0c 2026-11-05)
+Apache Maven 3.9.12 (848fbb4bf2d427b72bdb2471c22fced7ebd9a7a1)
+Maven home: /usr/share/apache-maven-3.9.12
+Java version: 21.0.13.1, vendor: Eclipse Adoptium, runtime: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-100000002.0.LTS/arm64
+Default locale: en_US, platform encoding: UTF-8
+OS name: "linux", version: "7.0.0-1017-azure", arch: "aarch64", family: "unix"
+    kotlin("multiplatform") version "2.4.21"

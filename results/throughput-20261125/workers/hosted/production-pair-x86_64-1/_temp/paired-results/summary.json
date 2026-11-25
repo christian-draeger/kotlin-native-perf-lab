@@ -1,0 +1,44 @@
+{
+  "800": {
+    "calibration_qualified": true,
+    "reference": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.167,
+      "median_cpu_seconds_per_million": 76.202,
+      "median_peak_rss_mib": 36.555
+    },
+    "candidate": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.389,
+      "median_cpu_seconds_per_million": 83.687,
+      "median_peak_rss_mib": 41.488
+    }
+  },
+  "2400": {
+    "calibration_qualified": true,
+    "reference": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 51.681,
+      "median_cpu_seconds_per_million": 68.316,
+      "median_peak_rss_mib": 38.074
+    },
+    "candidate": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.395,
+      "median_cpu_seconds_per_million": 74.148,
+      "median_peak_rss_mib": 42.57
+    }
+  }
+}
