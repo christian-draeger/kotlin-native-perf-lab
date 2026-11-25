@@ -29,12 +29,12 @@ caddy run --config components/ktserve/deployment/http1/Caddyfile
 
 ## Upgrade, drain, and recover
 
-Verify the candidate binary or package, and run health and application checks before routing traffic to it. For rolling updates, start the replacement on a fresh private port and update the ingress only after it is ready. Drain the old origin, then send SIGTERM and verify that its process and listener exit. For a single-instance stop, stop Caddy before sending SIGTERM to the origin. Keep the previous verified binary and matching configuration available for rollback.
+Verify the candidate binary or package, and run health and application checks before routing traffic to it. For rolling updates, put independent ingress and origin instances behind a load balancer. Start the replacement instance, verify readiness, and remove the old one from rotation before stopping it. For a single instance, plan a maintenance window, stop Caddy, send SIGTERM to the origin, and verify both have exited before restarting. Keep the previous verified binary and matching configuration available for rollback.
 
 If the ingress is reachable but the origin is unhealthy, check the bind address, the private port, and the origin's resource limits before increasing capacity. Record the certificate configuration, application release, proxy version, and limits for each deployment.
 
 ## Validate the deployment
 
-The **ktServe HTTP/1.1 ingress** workflow runs release binaries on Linux x86_64 and ARM64. It checks certificate validation, a loopback-only origin, persistent connections, request bounds, forwarding policy, request bursts, and graceful shutdown. Its logs and binary digests identify the tested configuration.
+The **ktServe HTTP/1.1 ingress** workflow runs release binaries on Linux x86_64 and ARM64. It checks certificate validation, a loopback-only origin, persistent connections, request bounds, forwarding policy, request bursts, and graceful shutdown. **ktServe paired release qualification** also rehearses replacement and rollback on the same private port behind a running proxy. That rehearsal expects a brief origin outage during the single-instance replacement. Both workflows retain logs and binary digests.
 
 [Caddy server options](https://caddyserver.com/docs/caddyfile/options) · [Reverse proxy controls](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
