@@ -86,9 +86,6 @@ internal class ChunkedBody(private var bodyBudget: Int, private var metadataBudg
     private enum class Phase { SIZE, DATA, DATA_END, TRAILERS }
 }
 
-private const val CR: Byte = 13
-private const val LF: Byte = 10
-
 private fun chunkSize(bytes: ByteArray, length: Int): Long {
     var size = 0L
     var index = 0
@@ -105,32 +102,50 @@ private fun chunkSize(bytes: ByteArray, length: Int): Long {
     }
     if (index == 0) return -1
     if (index == length) return size
-    while (index < length && bytes[index].isOws()) index++
-    if (index == length || bytes[index] != ';'.code.toByte()) return -1
-    for (offset in index + 1 until length) {
-        val octet = bytes[offset].toInt() and 0xff
-        if (octet != 9 && octet !in 32..126) return -1
-    }
-    return size
+    return if (validChunkExtensions(bytes, index, length)) size else -1
 }
 
-private fun validTrailer(bytes: ByteArray, length: Int): Boolean {
-    var colon = 0
-    while (colon < length && bytes[colon] != ':'.code.toByte()) {
-        val char = bytes[colon].toInt().toChar()
-        if (char !in 'A'..'Z' && char !in 'a'..'z' && char !in '0'..'9' && char !in "!#$%&'*+-.^`_|~") return false
-        colon++
-    }
-    if (colon == 0 || colon == length) return false
-    val field = bytes.decodeToString(endIndex = colon).lowercase()
-    when (field) {
-        "content-length", "transfer-encoding", "connection", "host", "expect" -> return false
-    }
-    for (index in colon + 1 until length) {
-        val octet = bytes[index].toInt() and 0xff
-        if (octet < 32 && octet != 9 || octet == 127) return false
+private fun validChunkExtensions(bytes: ByteArray, start: Int, end: Int): Boolean {
+    var index = start
+    while (index < end) {
+        index = bytes.skipOws(index, end)
+        if (index == end || bytes[index++] != ';'.code.toByte()) return false
+        val name = bytes.skipOws(index, end)
+        index = bytes.tokenEnd(name, end)
+        if (index == name) return false
+        val equals = bytes.skipOws(index, end)
+        if (equals < end && bytes[equals] == '='.code.toByte()) {
+            val value = bytes.skipOws(equals + 1, end)
+            if (value == end) return false
+            index = if (bytes[value] == '"'.code.toByte()) quotedValueEnd(bytes, value + 1, end)
+            else bytes.tokenEnd(value, end)
+            if (index <= value) return false
+        }
     }
     return true
 }
 
-private fun Byte.isOws() = this == 32.toByte() || this == 9.toByte()
+private fun quotedValueEnd(bytes: ByteArray, start: Int, end: Int): Int {
+    var index = start
+    while (index < end) {
+        val octet = bytes[index++]
+        if (octet == '"'.code.toByte()) return index
+        if (octet == 92.toByte()) {
+            if (index == end || !bytes[index++].isFieldValue()) return -1
+        } else if (!octet.isFieldValue()) return -1
+    }
+    return -1
+}
+
+private fun validTrailer(bytes: ByteArray, length: Int): Boolean {
+    val colon = bytes.tokenEnd(0, length)
+    if (colon == 0 || colon == length || bytes[colon] != ':'.code.toByte()) return false
+    if (bytes.matchesAsciiIgnoreCase(0, colon, "content-length") ||
+        bytes.matchesAsciiIgnoreCase(0, colon, "transfer-encoding") ||
+        bytes.matchesAsciiIgnoreCase(0, colon, "connection") ||
+        bytes.matchesAsciiIgnoreCase(0, colon, "host") ||
+        bytes.matchesAsciiIgnoreCase(0, colon, "expect")
+    ) return false
+    for (index in colon + 1 until length) if (!bytes[index].isFieldValue()) return false
+    return true
+}
