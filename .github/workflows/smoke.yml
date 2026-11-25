@@ -52,6 +52,11 @@ jobs:
           base=http://127.0.0.1:18080
           test "$(curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 "$base/health")" = ok
           test "$(curl -fsS "$base/")" = 'Hello from ktServe on the JVM'
+      - name: Verify the standalone REST consumer
+        run: |
+          example=components/ktserve/examples/rest-jvm
+          ./components/ktserve/gradlew -p "$example" installDist
+          python3 "$example/smoke.py" "$example/build/install/ktserve-rest-jvm/bin/ktserve-rest-jvm"
 
   x86_smoke:
     uses: ./.github/workflows/smoke-linux.yml

@@ -146,6 +146,24 @@ The parser validates the wire structure as bytes before decoding application val
 
 The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
 
+## Standalone REST routes
+
+Register a bounded, suspending handler with `route("PUT", "/items/{id}") { request, body -> … }`.
+Use `body.readChunk()` to consume the body incrementally. These routes can share the listener
+with `get` and `postStreaming`. A matching general route takes precedence for its method and
+path. A HEAD request uses an explicit HEAD route if present, then falls back to GET with the
+response body suppressed. On a known path, automatic origin-form OPTIONS returns 204 and
+`Allow`, and a method mismatch returns 405 with the same method list. Other paths return 404.
+The experimental h2c listener requires legacy GET and streaming POST routes. It rejects configuration with general routes or early request policies.
+
+Register short synchronous `beforeEach` checks for headers or other request metadata.
+Checks run in registration order before routing and body consumption. Return `null` to
+continue or a response to reject the exchange. A rejection with an unread body closes
+the connection after writing the response. For authenticated deployments, enforce the
+identity at a trusted ingress and restrict direct access to the origin. The separate
+[REST JVM consumer](examples/rest-jvm/) shows a verified identity assertion and bounded
+JSON handling.
+
 ## Observe an HTTP/1.x server
 
 Install a `ServerObserver` with `observe` inside the route configuration. It receives readiness and drain events, the number of active connections, connection admission rejections, and terminal exchange records. A record includes a connection-local request number, status when a response was selected, elapsed time, and the completion or failure reason. The server records request-body, handler, and response deadlines separately. Events omit paths, headers, and bodies.
