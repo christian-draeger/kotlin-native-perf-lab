@@ -8,6 +8,8 @@ The expanded exploratory suite also includes Go/net/http, Hono/Node.js, Elysia/B
 
 Hosted measurements use a separate VM for each architecture and endpoint. The frameworks for one endpoint run sequentially on that VM, and its results keep their own environment and raw logs. Compare frameworks within that endpoint and architecture. The VM's load generator and server still share resources, and hosted CPU models can vary across endpoints and runs. Run controlled measurements on the dedicated hosts below.
 
+Expanded runs archive a worker profile for each launcher. The profile describes supported concurrency and the configured worker, event-loop or process setup. Runtime-selected thread counts remain unspecified when the run does not record their actual values. The dashboard shows these profiles alongside the results.
+
 ## Measurements
 
 - Throughput (HTTP requests/second).

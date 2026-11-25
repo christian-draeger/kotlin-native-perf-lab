@@ -347,6 +347,7 @@ select:hover:not(:disabled) { border-color: #838099; }
 .framework-run a { padding-block: 8px; }
 .table-scroll { max-width: 100%; overflow: auto; margin-top: 10px; border: 1px solid var(--edge); border-radius: 7px; }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: .79rem; font-variant-numeric: tabular-nums; text-align: right; }
+.worker-details { text-align: left; }
 table caption { padding: 7px 10px; text-align: left; color: var(--muted); }
 th, td { padding: 8px 11px; border-top: 1px solid var(--edge); }
 th:first-child, td:first-child { text-align: left; }

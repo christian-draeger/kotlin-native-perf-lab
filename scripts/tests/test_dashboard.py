@@ -1,7 +1,9 @@
 import csv
 from copy import deepcopy
 import importlib.util
+import json
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
@@ -132,6 +134,8 @@ class DashboardTest(unittest.TestCase):
                 "benchmark_suite=expanded\nbenchmark_endpoint=/json\n"
                 "benchmark_source=github-hosted-actions\nci_run_id=5678\nmachine=x86_64\n"
             )
+            profiles = json.loads((SCRIPT.parent / "expanded-server-workers.json").read_text())
+            (run / "server-workers.json").write_text(json.dumps(profiles))
             base = {
                 "endpoint": "/json", "variant": "ktserve", "valid": 1, "rps": 150,
                 "p50_us": 50, "p95_us": 100, "p99_us": 200, "cpu_seconds_per_million_requests": 8,
@@ -149,6 +153,19 @@ class DashboardTest(unittest.TestCase):
                 {group["variant"]: group["stats"]["rps"]["median"] for group in ranking["groups"]},
                 {"ktserve": 150, "ktserve-workers-2": 240},
             )
+            self.assertEqual(
+                {group["variant"]: group["worker_profile"] for group in ranking["groups"]},
+                {variant: profiles[variant] for variant in ("ktserve", "ktserve-workers-2")},
+            )
+
+    def test_expanded_worker_profiles_cover_all_launchers(self):
+        launchers = subprocess.check_output(
+            ["bash", "-c", 'BENCHMARK_SUITE=expanded; source scripts/benchmark-variants.sh; printf "%s\\n" "${variants[@]}"'],
+            cwd=SCRIPT.parent.parent, text=True,
+        ).splitlines()
+        profiles = json.loads((SCRIPT.parent / "expanded-server-workers.json").read_text())
+        self.assertEqual(len(launchers), len(profiles))
+        self.assertEqual(set(launchers), set(profiles))
 
     def test_separates_groups_and_excludes_invalid_trials(self):
         with TemporaryDirectory() as directory:

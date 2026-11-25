@@ -103,6 +103,8 @@ def read_run(csv_path, note, checkout, revision):
         groups[row["endpoint"], canonical_variant(row["variant"])].append(row)
     environment_path = folder / "environment.txt"
     environment = read_environment(environment_path)
+    workers_path = folder / "server-workers.json"
+    worker_profiles = json.loads(workers_path.read_text()) if workers_path.is_file() else {}
     ci = environment.get("benchmark_source") == "github-hosted-actions"
     suite = environment.get("benchmark_suite")
     integration = environment.get("integration_family") if suite == "integration" else None
@@ -166,6 +168,8 @@ def read_run(csv_path, note, checkout, revision):
         operations = operation_stats(valid)
         if operations:
             entry["operations"] = operations
+        if variant in worker_profiles:
+            entry["worker_profile"] = worker_profiles[variant]
         result["groups"].append(entry)
     return result
 

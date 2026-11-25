@@ -90,7 +90,9 @@ function renderChart(container, groups, metric) {
     const row = make("div", "", "chart-row " + variant.color);
     const heading = make("div", "", "chart-row-heading");
     const name = make("div", "", "variant-name");
-    name.append(make("i", "", "swatch"), make("strong", variant.label), make("span", variant.detail));
+    const workerSetup = group.worker_profile?.setup;
+    const detail = workerSetup ? [variant.detail, workerSetup].filter(Boolean).join(" · ") : variant.detail;
+    name.append(make("i", "", "swatch"), make("strong", variant.label), make("span", detail));
     const reading = make("div", "", "chart-value");
     if (stats) {
       reading.append(make("strong", format(stats.median, metric)), make("span", info.unit));
@@ -119,13 +121,23 @@ function renderChart(container, groups, metric) {
 
 function renderTable(groups, endpoint) {
   element("table-endpoint").textContent = endpoint;
+  const showWorkerProfiles = groups.some((group) => group.worker_profile);
+  element("worker-capability").hidden = !showWorkerProfiles;
+  element("worker-setup").hidden = !showWorkerProfiles;
   const rows = groups.map((group) => {
     const variant = variantInfo(group.variant);
     const row = make("tr", "", variant.color);
     const heading = make("th");
     heading.scope = "row";
     heading.append(make("i", "", "swatch"), make("span", variant.label));
-    row.append(heading, make("td", group.valid + " / " + group.total));
+    row.append(heading);
+    if (showWorkerProfiles) {
+      row.append(
+        make("td", group.worker_profile?.support ?? "—", "worker-details"),
+        make("td", group.worker_profile?.setup ?? "—", "worker-details"),
+      );
+    }
+    row.append(make("td", group.valid + " / " + group.total));
     for (const metric of ["rps", "p50", "p95", "p99", "cpu", "rss"]) {
       row.append(make("td", group.stats ? format(group.stats[metric].median, metric) : "—"));
     }
@@ -147,7 +159,7 @@ function renderMethod(run) {
   });
   element("parameters").replaceChildren(...parameters);
   const caveat = [
-    run.suite === "expanded" ? "Server worker counts follow each measured launch configuration." : "",
+    run.suite === "expanded" ? "Worker setup follows each launcher. Runtime defaults may use multiple threads." : "",
     run.note.note ?? (run.local ? "wrk and the servers shared one host." : ""),
   ].filter(Boolean).join(" ");
   element("caveat").textContent = caveat;
@@ -162,6 +174,9 @@ function runSources(run, csv = "results.csv") {
   ];
   if (run.has_environment) {
     sources.push(fileLink(run, "Environment", run.folder + "/environment.txt"));
+  }
+  if (run.groups?.some((group) => group.worker_profile)) {
+    sources.push(fileLink(run, "Worker profiles", run.folder + "/server-workers.json"));
   }
   sources.push(...(run.note?.links ?? []).map((link) => fileLink(run, link.label, link.path)));
   if (/^[0-9]+$/.test(run.ci_run_id ?? "")) {
