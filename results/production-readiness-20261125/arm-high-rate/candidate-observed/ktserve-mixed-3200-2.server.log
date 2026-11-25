@@ -1,0 +1,5 @@
+ktServe epoll tcp_nodelay=default
+ktServe epoll peer_trigger=level
+ktServe epoll application_wakeup=poll
+ktServe backend=epoll tcp=ipv4
+ktServe observed_exchanges=54431
