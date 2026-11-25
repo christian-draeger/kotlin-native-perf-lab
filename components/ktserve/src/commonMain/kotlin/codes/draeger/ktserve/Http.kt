@@ -8,7 +8,7 @@ class Request internal constructor(
     val query: String?,
     private val parameters: Map<String, String> = emptyMap(),
     val bodyLength: Int? = 0,
-    private val rawHead: String? = null,
+    private val rawFields: ByteArray? = null,
     private val decodedFields: List<HttpField> = emptyList(),
     val version: String = "HTTP/1.1",
 ) {
@@ -18,40 +18,36 @@ class Request internal constructor(
 
     /** Return the first matching field. Header names are case-insensitive. */
     fun header(name: String): String? {
-        forEachField { head, start, colon, valueStart, end ->
-            if (colon - start == name.length && head.regionMatches(start, name, 0, name.length, ignoreCase = true)) {
-                return head.substring(valueStart, end)
-            }
+        forEachField { fields, start, colon, valueStart, end ->
+            if (fields.matchesAsciiIgnoreCase(start, colon, name)) return fields.decodeToString(valueStart, end)
         }
         return decodedFields.firstOrNull { it.name.equals(name, ignoreCase = true) }?.value
     }
 
-    /** Return the request head fields in wire order, with repeated names preserved. */
+    /** Return the request header fields in wire order, with repeated names preserved. */
     fun headers(): List<HttpField> {
-        if (rawHead == null) return decodedFields.toList()
+        if (rawFields == null) return decodedFields.toList()
         return buildList {
-            forEachField { head, start, colon, valueStart, end ->
-                add(HttpField(head.substring(start, colon), head.substring(valueStart, end)))
+            forEachField { fields, start, colon, valueStart, end ->
+                add(HttpField(fields.decodeToString(start, colon), fields.decodeToString(valueStart, end)))
             }
         }
     }
 
-    private inline fun forEachField(action: (String, Int, Int, Int, Int) -> Unit) {
-        val head = rawHead ?: return
-        val firstEnd = head.indexOf("\r\n")
-        if (firstEnd < 0) return
-        var start = firstEnd + 2
-        while (start < head.length) {
-            val end = head.lineEnd(start)
-            val colon = head.indexOf(':', start)
-            val valueStart = head.skipOws(colon + 1, end)
-            action(head, start, colon, valueStart, head.trimmedEnd(valueStart, end))
+    private inline fun forEachField(action: (ByteArray, Int, Int, Int, Int) -> Unit) {
+        val fields = rawFields ?: return
+        var start = 0
+        while (start < fields.size) {
+            val end = fields.indexOf(CR, start, fields.size)
+            val colon = fields.indexOf(':'.code.toByte(), start, end)
+            val valueStart = fields.skipOws(colon + 1, end)
+            action(fields, start, colon, valueStart, fields.trimmedEnd(valueStart, end))
             start = end + 2
         }
     }
 
     internal fun withParameters(values: Map<String, String>) =
-        Request(method, path, query, values, bodyLength, rawHead, decodedFields, version)
+        Request(method, path, query, values, bodyLength, rawFields, decodedFields, version)
 }
 
 class Response internal constructor(
