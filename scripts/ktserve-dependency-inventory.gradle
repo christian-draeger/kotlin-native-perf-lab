@@ -1,0 +1,29 @@
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+
+gradle.rootProject { project ->
+    project.tasks.register('writeKtServeDependencyInventory') {
+        doLast {
+            def configurations = [
+                jvm: project.configurations.getByName('jvmRuntimeClasspath'),
+                linuxX64: project.configurations.getByName('linuxX64CompileKlibraries'),
+                linuxArm64: project.configurations.getByName('linuxArm64CompileKlibraries'),
+                macosArm64: project.configurations.getByName('macosArm64CompileKlibraries'),
+                buildPlugins: project.buildscript.configurations.getByName('classpath'),
+            ]
+            def packages = configurations.collectEntries { scope, configuration ->
+                def resolution = configuration.incoming.resolutionResult
+                def unresolved = resolution.allDependencies.find { it instanceof UnresolvedDependencyResult }
+                if (unresolved != null) throw unresolved.failure
+                def modules = resolution.allComponents.collect { it.id }.findAll { it instanceof ModuleComponentIdentifier }
+                [(scope): modules.collect {
+                    [name: "${it.group}:${it.module}".toString(), version: it.version]
+                }.toSet().sort { it.name + '@' + it.version }]
+            }
+            def inventory = project.file(project.providers.gradleProperty('ktserve.dependencyInventory').get())
+            inventory.parentFile.mkdirs()
+            inventory.text = JsonOutput.prettyPrint(JsonOutput.toJson(packages)) + '\n'
+        }
+    }
+}
