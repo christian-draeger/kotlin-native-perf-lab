@@ -85,7 +85,7 @@ import platform.posix.sockaddr_in
 import platform.posix.socket
 
 private const val BATCH_SIZE = 64
-private val LISTENER_RETRY_DELAY = 100.milliseconds
+private const val LISTENER_RETRY_MILLIS = 100
 private const val LISTENER_TOKEN = 0UL
 private const val APPLICATION_TOKEN = ULong.MAX_VALUE
 // EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
@@ -381,14 +381,8 @@ private class EpollTransport(
         }
 
         if (poller < 0) return
-        var timeout = if (queued > 0 || hadAcceptCancellation || acceptCancelled) 0 else timeoutMillis
-        if (listenerRetryAt?.hasPassedNow() == true) listenerRetryAt = null
-        watchListener(acceptOperation != null && !acceptCancelled && listenerRetryAt == null)
-        listenerRetryAt?.let { retryAt ->
-            val waitMillis = (-retryAt.elapsedNow()).inWholeMilliseconds.coerceAtLeast(0)
-            timeout = minOf(timeout, waitMillis.toInt() + 1)
-        }
-        val count = epoll_wait(poller, events, BATCH_SIZE, timeout)
+        val timeout = if (queued > 0 || hadAcceptCancellation || acceptCancelled) 0 else timeoutMillis
+        val count = epoll_wait(poller, events, BATCH_SIZE, listenerPollTimeout(timeout))
         if (count < 0 && errno == EINTR) return
         checked(count, "epoll_wait")
         for (index in 0 until count) {
@@ -419,7 +413,7 @@ private class EpollTransport(
                     EINTR, ECONNABORTED, EPERM, ENETDOWN, EPROTO, ENOPROTOOPT,
                     EHOSTDOWN, ENONET, EHOSTUNREACH, EOPNOTSUPP, ENETUNREACH, ETIMEDOUT -> return@repeat
                     EMFILE, ENFILE, ENOBUFS, ENOMEM -> {
-                        watchListener(false)
+                        setListenerInterest(false)
                         delayListenerRetry()
                         return
                     }
@@ -551,20 +545,37 @@ private class EpollTransport(
         }
     }
 
-    private fun delayListenerRetry() {
-        listenerRetryAt = TimeSource.Monotonic.markNow() + LISTENER_RETRY_DELAY
+    private fun listenerPollTimeout(timeout: Int): Int {
+        if (listener < 0) return timeout
+        val active = acceptOperation != null && !acceptCancelled
+        // Backoff leaves the listener unwatched, so an unchanged registration has no clock work.
+        if (active == listenerWatched) return timeout
+        if (active) {
+            val retryAt = listenerRetryAt
+            if (retryAt != null) {
+                val remaining = -retryAt.elapsedNow()
+                if (remaining.isPositive()) return minOf(timeout, remaining.inWholeMilliseconds.toInt() + 1)
+                listenerRetryAt = null
+            }
+        }
+        return if (setListenerInterest(active)) timeout else minOf(timeout, LISTENER_RETRY_MILLIS)
     }
 
-    private fun watchListener(active: Boolean) {
-        if (listener < 0 || active == listenerWatched) return
+    private fun delayListenerRetry() {
+        listenerRetryAt = TimeSource.Monotonic.markNow() + LISTENER_RETRY_MILLIS.milliseconds
+    }
+
+    private fun setListenerInterest(active: Boolean): Boolean {
         val action = if (active) EPOLL_CTL_ADD else EPOLL_CTL_DEL
-        val result = watch(action, listener, LISTENER_TOKEN, listenerEvents)
+        val events = if (active) listenerEvents else 0U
+        val result = watch(action, listener, LISTENER_TOKEN, events)
         if (result < 0 && active && (errno == ENOMEM || errno == ENOSPC)) {
             delayListenerRetry()
-            return
+            return false
         }
         checked(result, if (active) "register listener" else "unregister listener")
         listenerWatched = active
+        return true
     }
 
     private fun watch(action: Int, fd: Int, token: ULong, interest: UInt): Int {
