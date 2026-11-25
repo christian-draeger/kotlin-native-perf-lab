@@ -168,7 +168,21 @@ def read_run(csv_path, note, checkout, revision):
         operations = operation_stats(valid)
         if operations:
             entry["operations"] = operations
-        if variant in worker_profiles:
+        if variant == "ktserve-eager":
+            counts = frozenset(row.get("effective_workers") for row in group)
+            setups = {
+                frozenset(("1",)): "1 epoll worker · CPU budget fallback",
+                frozenset(("2",)): "2 epoll workers · shared listener",
+                frozenset(("1", "2")): "1 or 2 epoll workers across trials",
+            }
+            if counts not in setups:
+                raise ValueError(f"Missing or invalid Eager worker counts in {csv_path}")
+            entry["worker_profile"] = {
+                **worker_profiles[variant],
+                "setup": setups[counts],
+                "effective_workers": sorted(map(int, counts)),
+            }
+        elif variant in worker_profiles:
             entry["worker_profile"] = worker_profiles[variant]
         result["groups"].append(entry)
     return result

@@ -12,6 +12,9 @@ SCRIPT = Path(__file__).resolve().parents[1] / "build-dashboard.py"
 spec = importlib.util.spec_from_file_location("build_dashboard", SCRIPT)
 dashboard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dashboard)
+parser_spec = importlib.util.spec_from_file_location("parse_wrk", SCRIPT.with_name("parse_wrk.py"))
+wrk = importlib.util.module_from_spec(parser_spec)
+parser_spec.loader.exec_module(wrk)
 
 
 class DashboardTest(unittest.TestCase):
@@ -166,6 +169,46 @@ class DashboardTest(unittest.TestCase):
         profiles = json.loads((SCRIPT.parent / "expanded-server-workers.json").read_text())
         self.assertEqual(len(launchers), len(profiles))
         self.assertEqual(set(launchers), set(profiles))
+
+    def test_eager_ranking_records_effective_count_without_relabeling_fixed_modes(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / "results/20261122T221558Z"
+            run.mkdir(parents=True)
+            (run / "environment.txt").write_text("benchmark_suite=expanded\nmachine=aarch64\n")
+            worker_profiles = (SCRIPT.parent / "expanded-server-workers.json").read_text()
+            (run / "server-workers.json").write_text(worker_profiles)
+            path = run / "results.csv"
+            row = {
+                "variant": "ktserve", "endpoint": "/json", "valid": 1, "rps": 100,
+                "p50_us": 50, "p95_us": 100, "p99_us": 150,
+                "cpu_seconds_per_million_requests": 10, "peak_rss_kib": 2048,
+                "connections": 16, "threads": 2, "warmup_s": 10, "target_duration_s": 5,
+                "effective_workers": "",
+            }
+            for count, setup in ((1, "1 epoll worker · CPU budget fallback"),
+                                 (2, "2 epoll workers · shared listener")):
+                with self.subTest(count=count):
+                    with path.open("w", newline="") as output:
+                        writer = csv.DictWriter(output, fieldnames=row)
+                        writer.writeheader()
+                        writer.writerows([row, {**row, "variant": "ktserve-eager", "effective_workers": count}])
+                    groups = {group["variant"]: group for group in dashboard.read_run(path, {}, root, "test")["groups"]}
+                    self.assertEqual(groups["ktserve"]["worker_profile"]["setup"], "1 epoll worker")
+                    self.assertEqual(groups["ktserve-eager"]["worker_profile"]["setup"], setup)
+                    self.assertEqual(groups["ktserve-eager"]["worker_profile"]["effective_workers"], [count])
+
+    def test_eager_worker_count_requires_one_parseable_startup_record(self):
+        with TemporaryDirectory() as directory:
+            log = Path(directory) / "startup.log"
+            log.write_text("ktServe worker_policy=eager workers=2\nktServe backend=epoll tcp=ipv4 workers=2\n")
+            self.assertEqual(wrk.read_eager_worker_count(log), 2)
+            for text in ("", "ktServe worker_policy=eager workers=3\n",
+                         "ktServe worker_policy=eager workers=1\nktServe worker_policy=eager workers=2\n"):
+                with self.subTest(text=text):
+                    log.write_text(text)
+                    with self.assertRaisesRegex(ValueError, "Expected one Eager startup record"):
+                        wrk.read_eager_worker_count(log)
 
     def test_separates_groups_and_excludes_invalid_trials(self):
         with TemporaryDirectory() as directory:

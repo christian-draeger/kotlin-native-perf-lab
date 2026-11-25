@@ -20,6 +20,7 @@ case "$variant" in
     ;;
   ktserve-reference)
     # The selected reference can be a pre-rename snapshot.
+    unset KTSERVE_ADAPTIVE_WORKERS KTSERVE_ADAPTIVE_HANDOFF
     exec env KTSERVE_WORKERS=1 NATIVESERVE_WORKERS=1 "${KTSERVE_REFERENCE_BINARY:?Missing ktServe reference binary}"
     ;;
   ktserve-epoll|ktserve-io-uring)
@@ -28,10 +29,13 @@ case "$variant" in
     exec env KTSERVE_BACKEND="$backend" "${KTSERVE_IO_BINARY:?Missing experimental backend binary}" \
       "${PORT:-8080}" "${BIND_HOST:-127.0.0.1}"
     ;;
-  ktserve|ktserve-workers-2|ktserve-workers-2-reuseport)
+  ktserve|ktserve-workers-2|ktserve-workers-2-reuseport|ktserve-eager)
     bin="$ROOT/components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe"
     [[ -x "$bin" ]] || { echo 'Missing ktServe release binary. Run scripts/build-all.sh' >&2; exit 1; }
-    if [[ "$variant" == ktserve-workers-2* ]]; then
+    unset KTSERVE_ADAPTIVE_WORKERS KTSERVE_ADAPTIVE_HANDOFF
+    if [[ "$variant" == ktserve-eager ]]; then
+      unset KTSERVE_WORKERS KTSERVE_WORKER_LISTENER
+    elif [[ "$variant" == ktserve-workers-2* ]]; then
       export KTSERVE_WORKERS=2
       export KTSERVE_WORKER_LISTENER=shared
       if [[ "$variant" == ktserve-workers-2-reuseport ]]; then
@@ -39,6 +43,8 @@ case "$variant" in
       fi
     elif [[ "${BENCHMARK_SUITE:-}" == workers || "${BENCHMARK_SUITE:-}" == expanded ]]; then
       export KTSERVE_WORKERS=1
+    else
+      export KTSERVE_WORKERS="${KTSERVE_WORKERS:-1}"
     fi
     exec "$bin"
     ;;
