@@ -1,0 +1,19 @@
+time (GNU Time) UNKNOWN
+Calibration at 200 offered req/s qualified: True
+Calibration at 800 offered req/s qualified: True
+old before
+ktserve-workers-2 200 offered req/s trial 1: 192.1 successful req/s; 84 failed, 0 dropped, valid=False, accounting and recovery passed=False
+candidate after
+ktserve-workers-2 200 offered req/s trial 1: 200.6 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+candidate after
+ktserve-workers-2 800 offered req/s trial 1: 800.4 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve-workers-2 800 offered req/s trial 1: 784.7 successful req/s; 157 failed, 0 dropped, valid=False, accounting and recovery passed=False
+candidate after
+ktserve-workers-2 200 offered req/s trial 2: 200.7 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
+old before
+ktserve-workers-2 200 offered req/s trial 2: 190.6 successful req/s; 100 failed, 0 dropped, valid=False, accounting and recovery passed=False
+old before
+ktserve-workers-2 800 offered req/s trial 2: 781.4 successful req/s; 193 failed, 0 dropped, valid=False, accounting and recovery passed=False
+candidate after
+ktserve-workers-2 800 offered req/s trial 2: 800.7 successful req/s; 0 failed, 0 dropped, valid=True, accounting and recovery passed=True
