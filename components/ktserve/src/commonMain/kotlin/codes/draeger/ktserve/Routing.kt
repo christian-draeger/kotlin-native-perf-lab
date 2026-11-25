@@ -216,7 +216,8 @@ internal class MethodRoutes<Handler> {
 
     fun prepare() {
         if (patterns.size < 8) return
-        patternsBySize = patterns.groupBy { it.shape.size }.mapValues { (_, routes) -> PatternGroup(routes) }
+        val groups = patterns.groupBy { it.shape.size }.mapValues { (_, routes) -> PatternGroup(routes) }
+        patternsBySize = groups.takeIf { it.size > 1 || it.values.first().partitioned }
     }
 
     fun isEmpty(): Boolean = exact.isEmpty() && patterns.isEmpty()
@@ -229,20 +230,20 @@ internal class MethodRoutes<Handler> {
         val parts = request.path.removePrefix("/").split('/')
         val groups = patternsBySize
         val candidates = if (groups == null) patterns else groups[parts.size]?.candidates(parts) ?: return null
-        routeSearch@ for (route in candidates) {
+        for (route in candidates) {
             if (parts.size != route.shape.size) continue
+            val values = mutableMapOf<String, String>()
+            var matches = true
             for (index in parts.indices) {
                 val literal = route.shape[index]
                 val value = parts[index]
                 if (literal != null && literal != value || literal == null && value.isEmpty()) {
-                    continue@routeSearch
+                    matches = false
+                    break
                 }
+                route.names[index]?.let { values[it] = value }
             }
-            val values = mutableMapOf<String, String>()
-            for (index in parts.indices) {
-                route.names[index]?.let { values[it] = parts[index] }
-            }
-            return action(route.handler, request.withParameters(values))
+            if (matches) return action(route.handler, request.withParameters(values))
         }
         return null
     }
@@ -255,7 +256,8 @@ internal class PatternGroup<Handler>(private val routes: List<RoutePattern<Handl
     private val position = routes.first().shape.indices
         .filter { index -> routes.all { it.shape[index] != null } }
         .maxByOrNull { index -> routes.map { it.shape[index] }.toSet().size }
-    private val literals = position?.let { index -> routes.groupBy { it.shape[index] } }
+    private val literals = position?.let { index -> routes.groupBy { it.shape[index] }.takeIf { it.size > 1 } }
+    val partitioned: Boolean get() = literals != null
 
     fun candidates(parts: List<String>): List<RoutePattern<Handler>> =
         if (position == null || literals == null) routes else literals[parts[position]].orEmpty()
