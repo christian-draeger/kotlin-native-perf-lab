@@ -9,6 +9,35 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class HttpConnectionTest {
+    @Test
+    fun bufferedResponseUsesAnAbsoluteDeadlineAcrossPartialWrites() {
+        val conn = HttpConnection(0, ServerLimits(responseMillis = 10, idleMillis = 100))
+        val routes = Routes().apply { get("/health") { text("ok") } }
+        conn.receive("GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n", now = 1)
+        assertTrue(conn.prepareResponse(routes, now = 1))
+        assertTrue(conn.wrote(1, now = 8))
+        assertFalse(conn.expired(now = 10))
+        assertEquals(ExchangeExpiry.RESPONSE, conn.expiry(now = 11))
+        assertFalse(conn.wrote(1, now = 11))
+    }
+
+    @Test
+    fun responseDeadlineStartsAgainWhenTheNextResponseIsQueued() {
+        val conn = HttpConnection(0, ServerLimits(responseMillis = 10, idleMillis = 100))
+        val routes = Routes().apply { get("/health") { text("ok") } }
+        conn.receive(
+            "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n" +
+                "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n",
+            now = 1,
+        )
+        assertTrue(conn.prepareResponse(routes, now = 1))
+        assertTrue(conn.wrote(conn.outputLength, now = 8))
+        assertFalse(conn.expired(now = 12))
+        assertTrue(conn.prepareResponse(routes, now = 12))
+        assertFalse(conn.expired(now = 21))
+        assertEquals(ExchangeExpiry.RESPONSE, conn.expiry(now = 22))
+    }
+
     private val request = "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
     @Test

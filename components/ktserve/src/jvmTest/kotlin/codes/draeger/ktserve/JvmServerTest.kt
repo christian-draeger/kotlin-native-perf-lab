@@ -20,6 +20,70 @@ import kotlin.test.assertTrue
 
 class JvmServerTest {
     @Test
+    fun responseDeadlineCancelsAStalledProducerAndLeavesOtherConnectionsUsable() {
+        val cancelled = CompletableFuture<Unit>()
+        val closed = CompletableFuture<Unit>()
+        withServer(ServerLimits(responseMillis = 800, idleMillis = 30_000), routes = {
+            get("/deadline") {
+                streamSuspending(length = 2, onClose = { closed.complete(Unit) }) {
+                    try {
+                        write("a".encodeToByteArray())
+                        awaitCancellation()
+                    } finally {
+                        cancelled.complete(Unit)
+                    }
+                }
+            }
+        }) { port, _ ->
+            client(port).use { slow ->
+                slow.send("GET /deadline HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                val input = slow.getInputStream().buffered()
+                assertEquals(2, input.responseLength(200))
+                assertEquals('a'.code, input.read())
+                client(port).use { other ->
+                    other.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    assertEquals("ok", other.getInputStream().buffered().response())
+                }
+                assertEquals(-1, input.read())
+            }
+            closed.get(5, TimeUnit.SECONDS)
+            cancelled.get(5, TimeUnit.SECONDS)
+        }
+    }
+
+    @Test
+    fun blockingAdmissionRemainsBoundedPastHandlerTimeoutAndShutdown() {
+        val entered = CompletableFuture<Unit>()
+        val release = CompletableFuture<Unit>()
+        try {
+            withServer(ServerLimits(blockingHandlers = 1, handlerMillis = 500, drainMillis = 100), routes = {
+                getBlocking("/blocking") {
+                    entered.complete(Unit)
+                    release.get(10, TimeUnit.SECONDS)
+                    text("done")
+                }
+            }) { port, stop ->
+                client(port).use { first ->
+                    first.send("GET /blocking HTTP/1.1\r\nHost: localhost\r\n\r\n")
+                    entered.get(5, TimeUnit.SECONDS)
+                    client(port).use { other ->
+                        other.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                        assertEquals("ok", other.getInputStream().buffered().response())
+                    }
+                    assertEquals(-1, first.getInputStream().read())
+                }
+                client(port).use { excess ->
+                    excess.send("GET /blocking HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    assertEquals("", excess.getInputStream().buffered().response(status = 503))
+                }
+                stop.set(true)
+            }
+        } finally {
+            release.complete(Unit)
+        }
+    }
+
+    @Test
     fun suspendingResponseKeepsOrderAndOtherConnectionsProgress() {
         val ready = CompletableDeferred<Unit>()
         withServer(ServerLimits(), routes = {

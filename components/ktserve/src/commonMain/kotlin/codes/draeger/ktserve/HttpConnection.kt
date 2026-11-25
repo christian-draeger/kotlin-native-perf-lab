@@ -16,13 +16,18 @@ class ServerLimits(
     val requestBodyMillis: Long = 30_000,
     val handlerMillis: Long = 30_000,
     val responseHeaderBytes: Int = 16 * 1024,
+    val responseMillis: Long = 30_000,
+    val blockingHandlers: Int = 8,
 ) {
     init {
         require(connections > 0 && headerBytes >= 64 && responseBodyBytes > 0)
         require(idleMillis > 0 && requestHeadMillis > 0 && drainMillis > 0)
         require(requestBodyBytes >= 0 && requestBodyMillis > 0 && handlerMillis > 0 && responseHeaderBytes > 0)
+        require(responseMillis > 0 && blockingHandlers > 0)
     }
 }
+
+internal enum class ExchangeExpiry { IDLE, REQUEST_HEAD, REQUEST_BODY, HANDLER, RESPONSE }
 
 internal class HttpConnection(
     connectedAt: Long,
@@ -53,12 +58,20 @@ internal class HttpConnection(
     private var closeAfterWrite = false
     private var lastActivity = connectedAt
     private var headStarted: Long? = null
+    private var responseDeadline = Long.MAX_VALUE
 
-    fun expired(now: Long): Boolean =
-        now - lastActivity >= limits.idleMillis ||
-            headStarted?.let { now - it >= limits.requestHeadMillis } == true ||
-            incoming?.let { now - it.started >= limits.requestBodyMillis } == true ||
-            handler?.let { now - it.started >= limits.handlerMillis } == true
+    fun expired(now: Long): Boolean = expiry(now) != null
+
+    fun expiry(now: Long): ExchangeExpiry? = when {
+        responseExpired(now) -> ExchangeExpiry.RESPONSE
+        headStarted?.let { now - it >= limits.requestHeadMillis } == true -> ExchangeExpiry.REQUEST_HEAD
+        incoming?.let { now - it.started >= limits.requestBodyMillis } == true -> ExchangeExpiry.REQUEST_BODY
+        handler?.let { now - it.started >= limits.handlerMillis } == true -> ExchangeExpiry.HANDLER
+        now - lastActivity >= limits.idleMillis -> ExchangeExpiry.IDLE
+        else -> null
+    }
+
+    fun responseExpired(now: Long): Boolean = now >= responseDeadline
 
     fun beginDrain(): Boolean {
         draining = true
@@ -92,7 +105,7 @@ internal class HttpConnection(
             draining = true
         }
         lastActivity = now
-        queue(response, pending.version, pending.keepAlive, pending.headOnly)
+        queue(response, pending.version, pending.keepAlive, now, pending.headOnly)
         return true
     }
 
@@ -100,9 +113,10 @@ internal class HttpConnection(
         routes: Routes,
         now: Long,
         start: ((suspend () -> Response) -> SuspendedGet)? = null,
+        startBlocking: ((() -> Response) -> SuspendedGet?)? = null,
     ): Boolean {
         if (output != null) return true
-        incoming?.let { return consumeBody(it) }
+        incoming?.let { return consumeBody(it, now) }
         if (awaitingHandler || stream != null) return false
         val application = routes.applicationHandler
         when (val head = input.parse(allowAnyRequestBody = application != null)) {
@@ -113,7 +127,7 @@ internal class HttpConnection(
             }
             is ParsedHead.Rejected -> {
                 headStarted = null
-                queue(emptyResponse(head.status), "HTTP/1.1", keepAlive = false)
+                queue(emptyResponse(head.status), "HTTP/1.1", keepAlive = false, now)
             }
             is ParsedHead.Complete -> {
                 countRequest?.invoke()
@@ -124,8 +138,19 @@ internal class HttpConnection(
                 val launch: ((suspend () -> Response) -> Unit)? = start?.let {
                     { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now) }
                 }
-                val response = routes.respond(head.request, launch) ?: return false
-                queue(response, head.version, head.keepAlive)
+                val launchBlocking: ((() -> Response) -> Boolean)? = startBlocking?.let {
+                    { run ->
+                        val call = it(run)
+                        if (call == null) {
+                            false
+                        } else {
+                            handler = PendingHandler(call, head.version, head.keepAlive, now)
+                            true
+                        }
+                    }
+                }
+                val response = routes.respond(head.request, launch, launchBlocking) ?: return false
+                queue(response, head.version, head.keepAlive, now)
             }
         }
         return true
@@ -139,7 +164,7 @@ internal class HttpConnection(
     ): Boolean {
         val length = head.request.bodyLength
         if (length != null && length > limits.requestBodyBytes) {
-            queue(emptyResponse(413), head.version, keepAlive = false)
+            queue(emptyResponse(413), head.version, keepAlive = false, now)
             return true
         }
         val content = RequestContent(signalApplicationProgress)
@@ -153,24 +178,24 @@ internal class HttpConnection(
         }
         val body = IncomingBody(decoder(length), head.version, head.keepAlive, now, content = content)
         incoming = body
-        return consumeBody(body)
+        return consumeBody(body, now)
     }
 
     private fun preparePost(routes: Routes, head: ParsedHead.Complete, now: Long): Boolean {
         val length = head.request.bodyLength
         if (length != null && length > limits.requestBodyBytes) {
-            queue(emptyResponse(413), head.version, keepAlive = false)
+            queue(emptyResponse(413), head.version, keepAlive = false, now)
             return true
         }
         return when (val post = routes.openPost(head.request)) {
             is PostBody.Rejected -> {
-                queue(post.response, head.version, head.keepAlive && length == 0)
+                queue(post.response, head.version, head.keepAlive && length == 0, now)
                 true
             }
             is PostBody.Open -> {
                 val body = IncomingBody(decoder(length), head.version, head.keepAlive, now, sink = post.sink)
                 incoming = body
-                consumeBody(body)
+                consumeBody(body, now)
             }
         }
     }
@@ -178,7 +203,7 @@ internal class HttpConnection(
     private fun decoder(length: Int?): RequestBodyDecoder =
         if (length == null) ChunkedBody(limits.requestBodyBytes, limits.headerBytes) else FixedLengthBody(length)
 
-    private fun consumeBody(body: IncomingBody): Boolean {
+    private fun consumeBody(body: IncomingBody, now: Long): Boolean {
         bodyBlocked = false
         try {
             when (val progress = body.decoder.consume(input, body.input)) {
@@ -196,29 +221,34 @@ internal class HttpConnection(
                     }
                     val response = checkNotNull(body.sink).complete()
                     closeRequest()
-                    queue(response, body.version, body.keepAlive)
+                    queue(response, body.version, body.keepAlive, now)
                 }
                 else -> {
                     closeRequest()
                     cancelHandler()
-                    queue(emptyResponse(progress.status), body.version, keepAlive = false)
+                    queue(emptyResponse(progress.status), body.version, keepAlive = false, now)
                 }
             }
         } catch (_: Exception) {
             closeRequest()
             cancelHandler()
-            queue(emptyResponse(500), body.version, keepAlive = false)
+            queue(emptyResponse(500), body.version, keepAlive = false, now)
         }
         return true
     }
 
     fun wrote(count: Int, now: Long): Boolean {
         checkNotNull(output)
+        if (responseExpired(now)) return false
         lastActivity = now
         outputOffset += count
         if (outputOffset < outputLength) return true
         output = null
-        val pending = stream ?: return !closeAfterWrite
+        val pending = stream
+        if (pending == null) {
+            responseDeadline = Long.MAX_VALUE
+            return !closeAfterWrite
+        }
         if (pending.phase == ChunkPhase.END ||
             !pending.chunked && pending.remaining == 0 && pending.source !is AsyncResponseSource
         ) {
@@ -269,9 +299,10 @@ internal class HttpConnection(
         return true
     }
 
-    fun resumeProducer(): Boolean = pull(checkNotNull(stream))
+    fun resumeProducer(now: Long): Boolean = !responseExpired(now) && pull(checkNotNull(stream))
 
     fun closeResponse() {
+        responseDeadline = Long.MAX_VALUE
         val pending = stream ?: return
         stream = null
         pending.source.release()
@@ -296,7 +327,9 @@ internal class HttpConnection(
         handler = null
     }
 
-    private fun queue(response: Response, version: String, keepAlive: Boolean, headOnly: Boolean = false) {
+    private fun queue(response: Response, version: String, keepAlive: Boolean, now: Long, headOnly: Boolean = false) {
+        // Keep the same deadline across the header and every buffered or streamed write.
+        responseDeadline = now + minOf(limits.responseMillis, Long.MAX_VALUE - now)
         val stream = response.stream
         val chunked = stream != null && stream.length == null
         if ((stream?.length ?: response.body.size) > limits.responseBodyBytes ||

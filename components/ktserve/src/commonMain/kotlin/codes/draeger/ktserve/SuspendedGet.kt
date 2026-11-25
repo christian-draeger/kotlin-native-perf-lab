@@ -21,6 +21,11 @@ internal class SuspendedGet(
         if (completed.trySend(response).isSuccess) signalApplicationProgress?.invoke() else response.releaseSource()
     }
 
+    // A blocking call retains its admission permit until it actually returns.
+    fun releaseWhenDone(release: () -> Unit) {
+        job.invokeOnCompletion { release() }
+    }
+
     fun takeResponse(): Response? = completed.tryReceive().getOrNull()
 
     fun cancel() {
