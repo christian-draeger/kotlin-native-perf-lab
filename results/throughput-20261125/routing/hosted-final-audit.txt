@@ -1,0 +1,168 @@
+exploratory-routing-jvm-x86_64-1/fixed/http.csv
+2 baseline 3 / 3 2000.167 32.497 724.597 120500.0 scored errors 0
+2 deferred 3 / 3 2000.0 32.5 610.508 117204.0 scored errors 0
+   rps -0.01 [0.0, -0.01, -0.01]
+   cpu_seconds_per_million_requests -2.5 [-2.5, 13.17, -5.12]
+   p99_us -10.45 [1.76, -15.75, -10.45]
+   peak_rss_kib -2.72 [-2.72, -6.01, -1.15]
+2 candidate 3 / 3 2000.167 30.833 637.33 104812.0 scored errors 0
+   rps 0.01 [0.01, -0.01, 0.01]
+   cpu_seconds_per_million_requests -2.62 [4.99, -2.62, -7.7]
+   p99_us -12.04 [-19.44, -12.04, -8.16]
+   peak_rss_kib -13.03 [-14.57, -13.03, -11.6]
+1024 baseline 3 / 3 2000.167 39.16 762.068 151452.0 scored errors 0
+1024 deferred 3 / 3 2000.167 39.163 808.138 123140.0 scored errors 0
+   rps 0.0 [0.03, 0.0, -0.01]
+   cpu_seconds_per_million_requests 6.82 [10.61, 6.82, -6.37]
+   p99_us 6.05 [16.77, -5.33, 6.05]
+   peak_rss_kib -18.49 [-18.04, -18.49, -21.78]
+1024 candidate 3 / 3 2000.333 33.328 635.481 120500.0 scored errors 0
+   rps 0.0 [0.02, -0.01, 0.0]
+   cpu_seconds_per_million_requests -14.89 [-4.27, -15.9, -14.89]
+   p99_us -11.08 [-10.04, -11.08, -16.61]
+   peak_rss_kib -19.79 [-19.79, -14.4, -22.49]
+exploratory-routing-jvm-x86_64-1/match/match.csv
+2 baseline match ns 438.61 registration ms 28.2449
+2 deferred match ns 534.0 registration ms 32.046
+2 candidate match ns 184.42 registration ms 27.6111
+128 baseline match ns 1086.5 registration ms 35.2778
+128 deferred match ns 1203.71 registration ms 34.588
+128 candidate match ns 393.87 registration ms 38.2396
+1024 baseline match ns 4462.44 registration ms 54.0771
+1024 deferred match ns 3074.77 registration ms 55.6711
+1024 candidate match ns 472.15 registration ms 60.3424
+exploratory-routing-jvm-x86_64-1/saturation/http.csv
+2 baseline 3 / 3 155072.904 6.682 172.0 152172.0 scored errors 0
+2 deferred 3 / 3 154251.791 6.728 175.0 152304.0 scored errors 0
+   rps -0.53 [3.1, -0.53, -0.85]
+   cpu_seconds_per_million_requests 0.69 [-1.93, 0.7, 0.69]
+   p99_us 1.74 [20.35, 1.26, 1.74]
+   peak_rss_kib 0.09 [0.08, 2.85, 0.09]
+2 candidate 3 / 3 156348.435 6.711 178.0 156628.0 scored errors 0
+   rps 0.58 [2.62, 0.22, 0.58]
+   cpu_seconds_per_million_requests -1.32 [-1.32, 1.21, -1.38]
+   p99_us 11.95 [107.56, 11.95, -5.23]
+   peak_rss_kib 2.93 [-0.9, 3.07, 2.93]
+1024 baseline 3 / 3 92528.406 11.145 332.0 151316.0 scored errors 0
+1024 deferred 3 / 3 109240.352 9.442 223.0 150716.0 scored errors 0
+   rps 17.86 [17.26, 17.86, 18.22]
+   cpu_seconds_per_million_requests -15.16 [-14.45, -15.16, -16.11]
+   p99_us -32.83 [-32.83, -28.16, -34.02]
+   peak_rss_kib -0.4 [-3.71, -0.4, 1.36]
+1024 candidate 3 / 3 149661.818 6.993 163.0 153116.0 scored errors 0
+   rps 61.52 [61.52, 61.15, 61.96]
+   cpu_seconds_per_million_requests -37.31 [-37.6, -37.16, -37.31]
+   p99_us -50.9 [-50.9, -47.25, -51.18]
+   peak_rss_kib 0.68 [-2.13, 0.68, 2.75]
+exploratory-routing-native-aarch64-1/fixed/http.csv
+2 baseline 3 / 3 2000.333 26.662 1333.296 16908.0 scored errors 0
+2 deferred 3 / 3 2000.333 25.829 1340.837 16908.0 scored errors 0
+   rps 0.0 [-0.01, 0.02, 0.0]
+   cpu_seconds_per_million_requests -3.12 [-3.02, -3.24, -3.12]
+   p99_us 2.49 [3.19, 2.49, -12.83]
+   peak_rss_kib 0.0 [1.09, -1.08, 0.0]
+2 candidate 3 / 3 2000.167 24.165 1419.015 17032.0 scored errors 0
+   rps -0.01 [-0.01, 0.01, -0.01]
+   cpu_seconds_per_million_requests -12.11 [-12.11, -6.46, -15.62]
+   p99_us 6.43 [-9.81, 6.43, 9.25]
+   peak_rss_kib 0.54 [0.73, -0.35, 0.54]
+1024 baseline 3 / 3 2000.167 120.813 1153.342 18316.0 scored errors 0
+1024 deferred 3 / 3 2000.167 51.662 1244.128 17724.0 scored errors 0
+   rps 0.0 [0.0, -0.01, 0.01]
+   cpu_seconds_per_million_requests -57.24 [-51.91, -57.24, -57.24]
+   p99_us 7.87 [15.4, 4.73, 7.87]
+   peak_rss_kib -3.53 [-3.54, -2.51, -3.53]
+1024 candidate 3 / 3 2000.167 25.831 1231.901 17668.0 scored errors 0
+   rps 0.0 [0.0, -0.02, 0.01]
+   cpu_seconds_per_million_requests -77.93 [-76.34, -77.93, -78.62]
+   p99_us 9.62 [22.86, 9.62, 6.81]
+   peak_rss_kib -3.52 [-3.52, -3.01, -3.83]
+exploratory-routing-native-aarch64-1/match/match.csv
+2 baseline match ns 955.98 registration ms 0.2346
+2 deferred match ns 950.01 registration ms 0.2002
+2 candidate match ns 501.71 registration ms 0.2136
+128 baseline match ns 8908.13 registration ms 1.1133
+128 deferred match ns 3028.37 registration ms 1.1154
+128 candidate match ns 1028.52 registration ms 1.1003
+1024 baseline match ns 82101.43 registration ms 11.156
+1024 deferred match ns 17672.26 registration ms 11.2293
+1024 candidate match ns 1146.24 registration ms 11.5249
+exploratory-routing-native-aarch64-1/saturation/http.csv
+2 baseline 3 / 3 82239.166 12.524 387.0 15616.0 scored errors 0
+2 deferred 3 / 3 84412.467 12.119 374.0 15796.0 scored errors 0
+   rps 2.69 [2.64, 3.13, 2.69]
+   cpu_seconds_per_million_requests -3.23 [-3.23, -3.47, -3.06]
+   p99_us -3.42 [-3.36, -6.2, -3.42]
+   peak_rss_kib 0.0 [1.28, 0.0, -0.1]
+2 candidate 3 / 3 87754.23 11.601 374.0 15752.0 scored errors 0
+   rps 6.71 [6.71, 5.09, 10.67]
+   cpu_seconds_per_million_requests -7.37 [-7.37, -5.6, -10.37]
+   p99_us -3.36 [-3.36, -1.74, -7.63]
+   peak_rss_kib 0.87 [0.9, 0.87, -0.58]
+1024 baseline 3 / 3 10732.457 106.315 2973.0 17676.0 scored errors 0
+1024 deferred 3 / 3 27323.747 37.199 1145.0 17536.0 scored errors 0
+   rps 149.35 [149.35, 154.59, 138.15]
+   cpu_seconds_per_million_requests -64.28 [-64.28, -65.01, -63.08]
+   p99_us -60.46 [-60.46, -61.49, -59.42]
+   peak_rss_kib -0.79 [-1.53, -0.72, -0.79]
+1024 candidate 3 / 3 78320.576 13.293 406.0 17656.0 scored errors 0
+   rps 616.39 [634.53, 616.39, 608.53]
+   cpu_seconds_per_million_requests -87.24 [-87.56, -87.24, -87.19]
+   p99_us -85.91 [-86.39, -85.91, -85.83]
+   peak_rss_kib -0.25 [-0.79, -0.11, -0.25]
+exploratory-routing-native-x86_64-1/fixed/http.csv
+2 baseline 3 / 3 2000.333 17.497 716.168 17840.0 scored errors 0
+2 deferred 3 / 3 2000.167 17.499 707.561 17868.0 scored errors 0
+   rps 0.0 [0.0, -0.01, 0.0]
+   cpu_seconds_per_million_requests 0.0 [0.0, 0.01, 0.0]
+   p99_us -1.2 [12.89, -4.4, -1.2]
+   peak_rss_kib 0.2 [0.69, 0.13, 0.2]
+2 candidate 3 / 3 2000.167 16.665 745.836 17920.0 scored errors 0
+   rps -0.01 [-0.02, -0.01, -0.01]
+   cpu_seconds_per_million_requests -4.76 [0.01, -4.76, -9.52]
+   p99_us 3.0 [3.0, -1.92, 10.65]
+   peak_rss_kib 0.43 [0.34, 0.43, 1.05]
+1024 baseline 3 / 3 2000.167 54.995 749.028 19240.0 scored errors 0
+1024 deferred 3 / 3 2000.167 29.998 697.39 18480.0 scored errors 0
+   rps 0.0 [0.0, 0.0, 0.0]
+   cpu_seconds_per_million_requests -45.59 [-45.45, -46.15, -45.59]
+   p99_us -8.96 [-8.96, -4.16, -12.4]
+   peak_rss_kib -3.95 [-3.48, -3.95, -4.83]
+1024 candidate 3 / 3 2000.167 19.186 664.953 18592.0 scored errors 0
+   rps 0.0 [0.0, -0.12, 0.0]
+   cpu_seconds_per_million_requests -64.71 [-65.15, -64.57, -64.71]
+   p99_us -10.09 [13.22, -10.09, -25.97]
+   peak_rss_kib -3.32 [-3.32, -3.37, -3.23]
+exploratory-routing-native-x86_64-1/match/match.csv
+2 baseline match ns 308.79 registration ms 0.1844
+2 deferred match ns 306.82 registration ms 0.1937
+2 candidate match ns 165.03 registration ms 0.1857
+128 baseline match ns 3023.51 registration ms 0.8669
+128 deferred match ns 1174.33 registration ms 0.8347
+128 candidate match ns 350.65 registration ms 0.8872
+1024 baseline match ns 33125.09 registration ms 6.0556
+1024 deferred match ns 8619.71 registration ms 6.0806
+1024 candidate match ns 422.55 registration ms 6.2807
+exploratory-routing-native-x86_64-1/saturation/http.csv
+2 baseline 3 / 3 133961.531 7.759 240.0 16564.0 scored errors 0
+2 deferred 3 / 3 133071.28 7.801 238.0 16508.0 scored errors 0
+   rps -0.66 [-0.66, 0.46, -1.01]
+   cpu_seconds_per_million_requests 0.67 [0.67, -0.76, 0.69]
+   p99_us -1.24 [0.0, -1.24, -1.26]
+   peak_rss_kib -0.27 [-0.43, 0.27, -0.27]
+2 candidate 3 / 3 138461.465 7.476 243.0 16648.0 scored errors 0
+   rps 3.36 [3.36, 4.99, 2.54]
+   cpu_seconds_per_million_requests -3.4 [-3.4, -5.5, -2.78]
+   p99_us 2.1 [2.92, 0.0, 2.1]
+   peak_rss_kib 0.65 [0.97, 0.48, 0.65]
+1024 baseline 3 / 3 27781.615 42.711 1388.0 18728.0 scored errors 0
+1024 deferred 3 / 3 56709.703 18.125 549.0 18428.0 scored errors 0
+   rps 105.22 [105.27, 105.22, 100.67]
+   cpu_seconds_per_million_requests -57.81 [-57.81, -57.92, -56.85]
+   p99_us -60.69 [-61.15, -60.69, -60.16]
+   peak_rss_kib -1.07 [-1.07, -0.73, -1.66]
+1024 candidate 3 / 3 123655.198 8.503 261.0 18644.0 scored errors 0
+   rps 345.55 [347.59, 345.55, 339.47]
+   cpu_seconds_per_million_requests -80.09 [-80.19, -80.09, -79.86]
+   p99_us -81.48 [-81.53, -80.92, -81.48]
+   peak_rss_kib -0.23 [-0.23, 0.28, -0.51]

@@ -1,0 +1,6 @@
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+OpenJDK 64-Bit Server VM Temurin-21.0.13+9 (build 21.0.13+9-LTS, mixed mode, sharing)
+time	1.9-0.2build1
+wrk	4.1.0-4build2
+k6 v2.4.0 (commit/dd9395906d, go1.26.11, linux/amd64)

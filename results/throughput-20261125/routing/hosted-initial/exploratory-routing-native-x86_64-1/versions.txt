@@ -1,0 +1,6 @@
+openjdk version "17.0.21" 2026-10-20
+OpenJDK Runtime Environment Temurin-17.0.21+9 (build 17.0.21+9)
+OpenJDK 64-Bit Server VM Temurin-17.0.21+9 (build 17.0.21+9, mixed mode, sharing)
+time	1.9-0.2build1
+wrk	4.1.0-4build2
+k6 v2.4.0 (commit/dd9395906d, go1.26.11, linux/amd64)

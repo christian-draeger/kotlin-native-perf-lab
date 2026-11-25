@@ -1,0 +1,55 @@
+{
+  "baseline": {
+    "samples_by_event": {
+      "jdk.ObjectAllocationSample": 3716,
+      "jdk.ExecutionSample": 194
+    },
+    "top_weighted_sampled_allocation_classes_with_ktserve_frames": {
+      "java/util/LinkedHashMap": 18386623976,
+      "[B": 1959354272,
+      "kotlinx/serialization/json/internal/JsonToStringWriter": 392283960,
+      "java/lang/Long": 362425904,
+      "java/lang/String": 243817600,
+      "[Ljava/lang/Object;": 199830952,
+      "kotlinx/serialization/json/internal/StreamingJsonEncoder": 162361648,
+      "codes/draeger/ktserve/Request": 83800384,
+      "java/util/LinkedHashMap$Entry": 72277416,
+      "codes/draeger/ktserve/transport/OperationId": 65086440,
+      "codes/draeger/ktserve/transport/NioTransport$Transfer": 63897272,
+      "java/nio/HeapByteBuffer": 62326008
+    },
+    "sampled_dispatch_frames": {
+      "codes/draeger/ktserve/HttpConnection.prepareResponse": 175,
+      "codes/draeger/ktserve/HttpConnection.prepareStandalone": 167,
+      "codes/draeger/ktserve/HttpConnection.queue": 5,
+      "codes/draeger/ktserve/MethodRoutes.add": 1,
+      "codes/draeger/ktserve/Routes.get": 1
+    }
+  },
+  "range": {
+    "samples_by_event": {
+      "jdk.ObjectAllocationSample": 3653,
+      "jdk.ExecutionSample": 159
+    },
+    "top_weighted_sampled_allocation_classes_with_ktserve_frames": {
+      "[B": 3211701072,
+      "java/lang/String": 737065744,
+      "java/util/HashMap$Node": 376221448,
+      "codes/draeger/ktserve/transport/OperationId": 374101728,
+      "java/util/LinkedHashMap$Entry": 327867552,
+      "java/lang/Long": 310582400,
+      "[Ljava/util/HashMap$Node;": 299636624,
+      "java/nio/HeapByteBuffer": 276212080,
+      "codes/draeger/ktserve/transport/ConnectionId": 250637680,
+      "codes/draeger/ktserve/transport/NioTransport$Transfer": 205999656,
+      "java/util/LinkedHashMap": 170554208,
+      "[Lkotlinx/serialization/json/JsonEncoder;": 167218200
+    },
+    "sampled_dispatch_frames": {
+      "codes/draeger/ktserve/HttpConnection.prepareResponse": 104,
+      "codes/draeger/ktserve/HttpConnection.prepareStandalone": 76,
+      "codes/draeger/ktserve/RoutePattern.parameters": 18,
+      "codes/draeger/ktserve/HttpConnection.queue": 13
+    }
+  }
+}
