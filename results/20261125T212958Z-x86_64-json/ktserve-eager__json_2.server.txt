@@ -1,0 +1,4 @@
+ktServe adaptive worker_policy=eager
+ktServe worker_policy=eager workers=2
+ktServe backend=epoll tcp=ipv4 workers=2
+ktServe worker_listener=shared

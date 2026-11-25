@@ -1,0 +1,13 @@
+2026-11-25T21:42:52.976Z  INFO 111324 --- [           main] codes.draeger.baseline.Application       : Starting Application v0.0.0 using Java 21.0.13 with PID 111324 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-boot/target/spring-boot.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-25T21:42:52.980Z  INFO 111324 --- [           main] codes.draeger.baseline.Application       : No active profile set, falling back to 1 default profile: "default"
+2026-11-25T21:42:53.584Z  INFO 111324 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 38845 (http)
+2026-11-25T21:42:53.595Z  INFO 111324 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-25T21:42:53.595Z  INFO 111324 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-11-25T21:42:53.617Z  INFO 111324 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 588 ms
+2026-11-25T21:42:53.879Z  INFO 111324 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 38845 (http) with context path '/'
+2026-11-25T21:42:53.891Z  INFO 111324 --- [           main] codes.draeger.baseline.Application       : Started Application in 1.2 seconds (process running for 1.517)
+2026-11-25T21:42:54.091Z  INFO 111324 --- [.1-38845-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-11-25T21:42:54.091Z  INFO 111324 --- [.1-38845-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-11-25T21:42:54.092Z  INFO 111324 --- [.1-38845-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-11-25T21:43:09.383Z  INFO 111324 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-25T21:43:09.387Z  INFO 111324 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete
