@@ -10,6 +10,14 @@ import kotlin.test.assertTrue
 
 class HttpConnectionTest {
     @Test
+    fun experimentalHttp2RoutingKeepsItsLegacyMethodSurface() {
+        val routes = Routes().apply { get("/health") { text("ok") } }
+        assertEquals(200, routes.respond(Request("GET", "/health", null, version = "HTTP/2")).status)
+        assertEquals(405, routes.respond(Request("HEAD", "/health", null, version = "HTTP/2")).status)
+        assertEquals(405, routes.respond(Request("OPTIONS", "/health", null, version = "HTTP/2")).status)
+    }
+
+    @Test
     fun bufferedResponseUsesAnAbsoluteDeadlineAcrossPartialWrites() {
         val conn = HttpConnection(0, ServerLimits(responseMillis = 10, idleMillis = 100))
         val routes = Routes().apply { get("/health") { text("ok") } }

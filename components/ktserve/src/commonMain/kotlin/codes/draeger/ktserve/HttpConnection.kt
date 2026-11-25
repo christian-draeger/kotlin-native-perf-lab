@@ -119,7 +119,8 @@ internal class HttpConnection(
         incoming?.let { return consumeBody(it, now) }
         if (awaitingHandler || stream != null) return false
         val application = routes.applicationHandler
-        when (val head = input.parse(allowAnyRequestBody = application != null)) {
+        val hasRequestRoutes = routes.hasRequestRoutes
+        when (val head = input.parse(allowAnyRequestBody = application != null || hasRequestRoutes)) {
             ParsedHead.Incomplete -> {
                 // Pipelined bytes start their deadline when the previous response lets us parse them.
                 if (input.size > 0 && headStarted == null) headStarted = now
@@ -133,10 +134,32 @@ internal class HttpConnection(
                 countRequest?.invoke()
                 input.consume(head.consumed)
                 headStarted = null
+                val request = head.request
+                val headOnly = request.method == "HEAD"
+                val denial = routes.requestPolicy?.let { policy ->
+                    try {
+                        policy(request)
+                    } catch (_: Exception) {
+                        emptyResponse(500)
+                    }
+                }
+                if (denial != null) {
+                    queue(denial, head.version, head.keepAlive && request.bodyLength == 0, now, headOnly)
+                    return true
+                }
                 if (application != null) return prepareApplication(head, now, checkNotNull(start), application)
-                if (head.request.method == "POST") return preparePost(routes, head, now)
+                if (hasRequestRoutes) {
+                    routes.dispatchRequestRoute(request) { handler, matched ->
+                        prepareApplication(head, now, checkNotNull(start), handler, matched)
+                    }?.let { return it }
+                    if ((request.method == "GET" || headOnly) && request.bodyLength != 0) {
+                        queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
+                        return true
+                    }
+                }
+                if (request.method == "POST") return preparePost(routes, head, now)
                 val launch: ((suspend () -> Response) -> Unit)? = start?.let {
-                    { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now) }
+                    { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now, headOnly) }
                 }
                 val launchBlocking: ((() -> Response) -> Boolean)? = startBlocking?.let {
                     { run ->
@@ -144,13 +167,14 @@ internal class HttpConnection(
                         if (call == null) {
                             false
                         } else {
-                            handler = PendingHandler(call, head.version, head.keepAlive, now)
+                            handler = PendingHandler(call, head.version, head.keepAlive, now, headOnly)
                             true
                         }
                     }
                 }
-                val response = routes.respond(head.request, launch, launchBlocking) ?: return false
-                queue(response, head.version, head.keepAlive, now)
+                val response = routes.respond(request, launch, launchBlocking) ?: return false
+                val keepAlive = head.keepAlive && (!hasRequestRoutes || request.bodyLength == 0)
+                queue(response, head.version, keepAlive, now, headOnly)
             }
         }
         return true
@@ -160,17 +184,18 @@ internal class HttpConnection(
         head: ParsedHead.Complete,
         now: Long,
         start: (suspend () -> Response) -> SuspendedGet,
-        application: suspend (Request, RequestContent) -> Response,
+        application: RequestHandler,
+        request: Request = head.request,
     ): Boolean {
-        val length = head.request.bodyLength
+        val length = request.bodyLength
+        val headOnly = request.method == "HEAD"
         if (length != null && length > limits.requestBodyBytes) {
-            queue(emptyResponse(413), head.version, keepAlive = false, now)
+            queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
             return true
         }
         val content = RequestContent(signalApplicationProgress)
         handler = PendingHandler(
-            start { application(head.request, content) }, head.version, head.keepAlive, now,
-            headOnly = head.request.method == "HEAD",
+            start { application(request, content) }, head.version, head.keepAlive, now, headOnly,
         )
         if (length == 0) {
             content.finish()
@@ -187,7 +212,7 @@ internal class HttpConnection(
             queue(emptyResponse(413), head.version, keepAlive = false, now)
             return true
         }
-        return when (val post = routes.openPost(head.request)) {
+        return when (val post = routes.openPost(head.request, http1Methods = true)) {
             is PostBody.Rejected -> {
                 queue(post.response, head.version, head.keepAlive && length == 0, now)
                 true

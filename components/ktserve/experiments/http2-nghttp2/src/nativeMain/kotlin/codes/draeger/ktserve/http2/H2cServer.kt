@@ -72,7 +72,9 @@ private fun serveH2cWithSocketOptions(
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     val routes = Routes().apply(configure)
-    require(routes.applicationHandler == null) { "The h2c experiment does not support a standalone application handler" }
+    require(routes.applicationHandler == null && !routes.hasRequestRoutes && routes.requestPolicy == null) {
+        "The h2c experiment supports legacy routes without HTTP/1.x request policies"
+    }
     val transport = openEpollTransport(host, port, limits.connections, tcpNoDelay)
     try {
         println("ktServe backend=epoll protocol=h2c tcp_nodelay=${if (tcpNoDelay) "on" else "default"}")
