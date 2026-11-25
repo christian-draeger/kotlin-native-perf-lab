@@ -51,7 +51,9 @@ kotlin {
             getByName("macosMain").kotlin.exclude("codes/draeger/ktserve/example/**")
         }
     } else {
-        jvm()
+        jvm {
+            if (routingProbe) compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
+        }
         val arch = providers.gradleProperty("benchmark.targetArch").getOrElse(System.getProperty("os.arch"))
         val native = when (targetOs) {
             "linux" -> when (arch) {
