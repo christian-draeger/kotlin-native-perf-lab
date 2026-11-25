@@ -5,6 +5,8 @@ class Routes {
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
     internal var hasSuspendingGets = false
         private set
+    internal var hasBlockingGets = false
+        private set
     internal var applicationHandler: (suspend (Request, RequestContent) -> Response)? = null
         private set
 
@@ -21,6 +23,16 @@ class Routes {
         require(applicationHandler == null) { "A standalone application owns all routes" }
         gets.add(path, GetHandler.Suspending(handler))
         hasSuspendingGets = true
+    }
+
+    /**
+     * Offload a blocking HTTP/1.x GET. Admission is bounded by [ServerLimits.blockingHandlers].
+     * A saturated dispatcher rejects the request with HTTP 503.
+     */
+    fun getBlocking(path: String, handler: (Request) -> Response) {
+        require(applicationHandler == null) { "A standalone application owns all routes" }
+        gets.add(path, GetHandler.Blocking(handler))
+        hasBlockingGets = true
     }
 
     /** Open one body sink per POST. HTTP/1.1 accepts chunked bodies. */
@@ -45,6 +57,7 @@ class Routes {
     internal fun respond(
         request: Request,
         start: ((suspend () -> Response) -> Unit)?,
+        startBlocking: ((() -> Response) -> Boolean)? = null,
     ): Response? {
         return try {
             if (request.method == "GET") {
@@ -54,6 +67,11 @@ class Routes {
                         is GetHandler.Suspending -> {
                             if (start == null) return emptyResponse(501)
                             start { handler.run(matched) }
+                            return null
+                        }
+                        is GetHandler.Blocking -> {
+                            if (startBlocking == null) return emptyResponse(501)
+                            if (!startBlocking { handler.run(matched) }) return emptyResponse(503)
                             return null
                         }
                     }
@@ -85,6 +103,7 @@ class Routes {
 private sealed interface GetHandler {
     class Immediate(val run: (Request) -> Response) : GetHandler
     class Suspending(val run: suspend (Request) -> Response) : GetHandler
+    class Blocking(val run: (Request) -> Response) : GetHandler
 }
 
 internal sealed interface PostBody {

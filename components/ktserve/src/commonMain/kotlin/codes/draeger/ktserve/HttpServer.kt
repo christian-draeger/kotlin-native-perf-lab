@@ -8,8 +8,10 @@ import codes.draeger.ktserve.transport.TransportCompletions
 import codes.draeger.ktserve.transport.TransportFailure
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.sync.Semaphore
 import kotlin.time.TimeSource
 
 internal class HttpServerCounters {
@@ -34,6 +36,17 @@ internal class HttpServer(
         if (routes.hasSuspendingGets || routes.applicationHandler != null) {
             { run -> SuspendedGet(handlerScope.value, signalApplicationProgress, run) }
         } else null
+    private val blockingScope = if (routes.hasBlockingGets) CoroutineScope(SupervisorJob() + Dispatchers.IO) else null
+    private val launchBlockingHandler: ((() -> Response) -> SuspendedGet?)? = blockingScope?.let { scope ->
+        val permits = Semaphore(limits.blockingHandlers)
+        return@let { run ->
+            if (permits.tryAcquire()) {
+                SuspendedGet(scope, signalApplicationProgress, run).also { it.releaseWhenDone(permits::release) }
+            } else {
+                null
+            }
+        }
+    }
     private val clock = timeSource.markNow()
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
@@ -45,10 +58,12 @@ internal class HttpServer(
         } finally {
             clients.values.forEach { it.close() }
             if (handlerScope.isInitialized()) handlerScope.value.cancel()
+            blockingScope?.cancel()
         }
     }
 
     private fun runLoop(stopRequested: () -> Boolean) {
+        val sweepMillis = minOf(250L, limits.responseMillis)
         var nextSweep = 0L
         acceptNext()
         while (true) {
@@ -60,7 +75,7 @@ internal class HttpServer(
             }
             val deadline = drainDeadline
             if (deadline != null && (clients.isEmpty() || beforePoll >= deadline)) break
-            var timeout = if (deadline == null) 250 else minOf(250L, deadline - beforePoll).toInt()
+            var timeout = if (deadline == null) sweepMillis.toInt() else minOf(sweepMillis, deadline - beforePoll).toInt()
             if (signalApplicationProgress == null) {
                 if (suspended.isNotEmpty()) timeout = minOf(timeout, 2)
             } else if (clients.isNotEmpty()) {
@@ -72,7 +87,7 @@ internal class HttpServer(
             val afterPoll = completionTime()
             if (afterPoll >= nextSweep) {
                 closeMatching { it.expired(afterPoll) }
-                nextSweep = afterPoll + 250
+                nextSweep = afterPoll + sweepMillis
             }
             finishHandlers(afterPoll)
         }
@@ -119,7 +134,7 @@ internal class HttpServer(
 
     private fun advance(id: ConnectionId, client: HttpConnection, time: Long) {
         if (client.writePending) return
-        val responseReady = client.prepareResponse(routes, time, launchHandler)
+        val responseReady = client.prepareResponse(routes, time, launchHandler, launchBlockingHandler)
         val waiting = client.awaitingHandler || client.awaitingProducer
         if (waiting) suspended.add(id) else if (suspended.isNotEmpty()) suspended.remove(id)
         val result = if (responseReady) {
@@ -148,7 +163,7 @@ internal class HttpServer(
         for (id in suspended.toList()) {
             val client = clients[id] ?: continue
             if (client.awaitingProducer) {
-                if (!client.resumeProducer()) disconnect(id) else if (!client.awaitingProducer) advance(id, client, time)
+                if (!client.resumeProducer(time)) disconnect(id) else if (!client.awaitingProducer) advance(id, client, time)
             } else if (client.finishHandler(time) || client.bodyBlocked) {
                 advance(id, client, time)
             }
