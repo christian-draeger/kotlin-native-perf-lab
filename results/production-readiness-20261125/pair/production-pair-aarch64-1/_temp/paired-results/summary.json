@@ -1,0 +1,62 @@
+{
+  "800": {
+    "calibration_qualified": true,
+    "reference": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 51.855,
+      "median_cpu_seconds_per_million": 107.46,
+      "median_peak_rss_mib": 35.652
+    },
+    "candidate": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.081,
+      "median_cpu_seconds_per_million": 107.446,
+      "median_peak_rss_mib": 34.516
+    },
+    "candidate-observed": {
+      "qualified": 3,
+      "met": 3,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.328,
+      "median_cpu_seconds_per_million": 109.945,
+      "median_peak_rss_mib": 35.699
+    }
+  },
+  "3200": {
+    "calibration_qualified": true,
+    "reference": {
+      "qualified": 3,
+      "met": 2,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.616,
+      "median_cpu_seconds_per_million": 94.354,
+      "median_peak_rss_mib": 38.293
+    },
+    "candidate": {
+      "qualified": 2,
+      "met": 0,
+      "response_failures": 0,
+      "unsent_arrivals": 16,
+      "median_p99_ms": 56.195,
+      "median_cpu_seconds_per_million": 94.35849999999999,
+      "median_peak_rss_mib": 38.84
+    },
+    "candidate-observed": {
+      "qualified": 3,
+      "met": 1,
+      "response_failures": 0,
+      "unsent_arrivals": 0,
+      "median_p99_ms": 52.486,
+      "median_cpu_seconds_per_million": 94.042,
+      "median_peak_rss_mib": 38.992
+    }
+  }
+}

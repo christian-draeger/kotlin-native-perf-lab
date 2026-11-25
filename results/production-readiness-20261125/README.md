@@ -16,3 +16,24 @@ Three counterbalanced pairs at 800 offered requests/s also compared the candidat
 - [TLS ingress artifacts](ingress/) from [GitHub Actions](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45570247028). These exercise the exact candidate release binaries on both architectures.
 - [Resolved dependency inventory and OSV response](dependencies/) from the [0.3.0 signing rehearsal](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45570252010).
 - [Supplemental Axum endurance data](endurance-reference-axum/) from [an independent GitHub-hosted run](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45568569846). The standalone Axum result uses a different VM and has no controlled comparative weight.
+
+## Endurance on Linux x86_64
+
+The exact candidate served a 31-minute mixed load run on an Intel Xeon 6975P-C. The schedule used 800 offered requests/s interleaved with two-minute bursts at 1,600 and 3,200. k6 counted 1,871,994 successful responses including warm-up, zero failed responses and one unsent JSON arrival during the second burst. Median window p99 over the first steady phase, the 3,200 burst and the last recovery phase was 51.530, 51.698 and 51.724 ms, respectively. Resident memory at the ends of recovery windows stayed between 26.0 and 26.4 MiB in the last phase. Warm-up, each minute of traffic, process measurements and the post-run parity check are retained. [Endurance artifacts](endurance/) · [GitHub Actions](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45570239053)
+
+## Paired HTTP/1.1 release qualification
+
+Both GitHub-hosted Ubuntu architectures passed the service gate at 800 offered requests/s. Eighteen trials across both architectures, the reference, the candidate and the observed candidate reached the required rate and met every per-operation target with zero failed responses and zero unsent arrivals. The overall p99 combines endpoints with different targets, including a deliberate application delay.
+
+| Architecture | Overall p99, reference → candidate | CPU s per million successful requests | Peak RSS |
+| --- | ---: | ---: | ---: |
+| ARM64 | 51.855 → 52.081 ms | 107.460 → 107.446 | 35.652 → 34.516 MiB |
+| x86_64 | 52.325 → 52.372 ms | 102.423 → 101.161 | 37.211 → 36.191 MiB |
+
+All table entries are medians across three trials per variant. Median within-pair p99 change was +0.44% on ARM64 and −0.19% on x86_64. In-memory observation changed paired CPU cost by median +2.31% on ARM64 and +0.03% on x86_64. The identical-server 800/s control had median CPU s per million of 107.406 → 103.698 on ARM64 and 121.159 → 121.189 on x86_64.
+
+At 3,200 offered requests/s, x86_64 did not qualify the load generator. ARM64 met the targets in two out of three reference trials, zero candidate trials and one observed candidate trial. Two default-candidate trials breached several 20 ms endpoint targets under delivered load. The third recorded 16 unsent arrivals and did not qualify. The ARM64 3,200 median CPU cost was similar between variants, despite differences in the request tail. Each trial recovered afterward. These outcomes limit the supported mix to the tested 800/s profile and motivate separate capacity profiling. The CPU model, load settings, failed and unqualified trials and separate TLS upgrade and rollback logs are retained. [Complete traces](pair/) · [GitHub Actions](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45570243060)
+
+## Decision
+
+Qualified for release within the stated HTTP/1.1 profile. The [same-commit Maven staging run](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45572662741) passed the independent JVM, macOS and both Linux application consumers. The [signing rehearsal](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45570252010) passed with a temporary key. The OSV query found no advisories in the 46 resolved coordinates checked. TLS ingress, upgrade, graceful shutdown and rollback checks passed. The performance scope is the tested fixture at 800 requests/s. The load generator shares the same VM and uses separate logical CPUs, so cross-framework production claims require measurements on independent hosts.
