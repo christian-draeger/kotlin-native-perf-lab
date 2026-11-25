@@ -4,7 +4,7 @@ Security fixes target the latest supported production minor line, or the newest 
 
 ## Report a vulnerability
 
-Use [GitHub private vulnerability reporting](https://github.com/christian-draeger/kotlin-native-perf-lab/security/advisories/new). Include the ktServe version or commit, the affected platform and deployment configuration, the impact, and sanitized observations that help us verify it. Send security reports through the private form. Keep credentials, personal data, and production traffic out of attachments.
+Use [GitHub private vulnerability reporting](https://github.com/christian-draeger/ktserve/security/advisories/new). Include the ktServe version or commit, the affected platform and deployment configuration, the impact, and sanitized observations that help us verify it. Send security reports through the private form. Keep credentials, personal data, and production traffic out of attachments.
 
 The repository maintainers triage reports privately, confirm affected versions, and coordinate the fix and its disclosure. Public advisories document the impact, upgrade instructions, and any temporary mitigation.
 

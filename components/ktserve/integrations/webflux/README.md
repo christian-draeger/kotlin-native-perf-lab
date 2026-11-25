@@ -19,4 +19,4 @@ The socket tests run a shared WebFlux module on Reactor Netty and ktServe. They 
 ./components/ktserve/gradlew -p components/ktserve/integrations/webflux test
 ```
 
-Controlled engine comparison is tracked in [#45](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/45).
+Controlled engine comparison is tracked in [#45](https://github.com/christian-draeger/ktserve/issues/45).

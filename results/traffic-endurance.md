@@ -19,7 +19,7 @@ Run the **ktServe traffic endurance** workflow with the `endurance` profile for 
 
 ## Hosted x86_64 pilot
 
-The first full run measured release commit `ea12f5ae0c21b83de2d6f74c5f2c1447caa3b1b1` on Ubuntu 24.04. All started requests passed HTTP and payload validation during the 30 measured minutes. Each server completed the postflight and recovered to the offered 800 requests/s. The VMs used different CPU models. [CI run and artifacts](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45505063246)
+The first full run measured release commit `ea12f5ae0c21b83de2d6f74c5f2c1447caa3b1b1` on Ubuntu 24.04. All started requests passed HTTP and payload validation during the 30 measured minutes. Each server completed the postflight and recovered to the offered 800 requests/s. The VMs used different CPU models. [CI run and artifacts](https://github.com/christian-draeger/ktserve/actions/runs/45505063246)
 
 | Server | Host CPU | Successful / offered after warm-up | k6 drops including warm-up | One-minute p99 range after warm-up | Process peak RSS |
 | --- | --- | ---: | ---: | ---: | ---: |
