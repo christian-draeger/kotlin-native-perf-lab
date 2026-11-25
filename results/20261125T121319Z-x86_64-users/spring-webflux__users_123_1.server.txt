@@ -1,0 +1,6 @@
+2026-11-25T12:17:38.970Z  INFO 8090 --- [           main] codes.draeger.baseline.Application       : Starting Application v0.0.0 using Java 21.0.13 with PID 8090 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-webflux/target/spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-25T12:17:38.972Z  INFO 8090 --- [           main] codes.draeger.baseline.Application       : No active profile set, falling back to 1 default profile: "default"
+2026-11-25T12:17:39.766Z  INFO 8090 --- [           main] o.s.boot.reactor.netty.NettyWebServer    : Netty started on port 49029 (http)
+2026-11-25T12:17:39.777Z  INFO 8090 --- [           main] codes.draeger.baseline.Application       : Started Application in 1.092 seconds (process running for 1.405)
+2026-11-25T12:17:55.187Z  INFO 8090 --- [ionShutdownHook] o.s.boot.reactor.netty.GracefulShutdown  : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-25T12:17:55.188Z  INFO 8090 --- [ netty-shutdown] o.s.boot.reactor.netty.GracefulShutdown  : Graceful shutdown complete

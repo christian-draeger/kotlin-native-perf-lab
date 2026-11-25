@@ -1,0 +1,8 @@
+__  ____  __  _____   ___  __ ____  ______ 
+ --/ __ \/ / / / _ | / _ \/ //_/ / / / __/ 
+ -/ /_/ / /_/ / __ |/ , _/ ,< / /_/ /\ \   
+--\___\_\____/_/ |_/_/|_/_/|_|\____/___/   
+2026-11-25 12:21:46,743 INFO  [io.quarkus] (main) quarkus 0.0.0 on JVM (powered by Quarkus 3.40.1) started in 0.751s. Listening on: http://127.0.0.1:40853
+2026-11-25 12:21:46,749 INFO  [io.quarkus] (main) Profile prod activated. 
+2026-11-25 12:21:46,749 INFO  [io.quarkus] (main) Installed features: [cdi, kotlin, rest, rest-jackson, smallrye-context-propagation, vertx]
+2026-11-25 12:22:02,380 INFO  [io.quarkus] (Shutdown thread) quarkus stopped in 0.026s

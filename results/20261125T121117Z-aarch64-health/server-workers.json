@@ -1,0 +1,21 @@
+{
+  "ktor-jvm": {"support": "Concurrent CIO coroutine dispatch", "setup": "CIO dispatcher defaults"},
+  "ktor-native": {"support": "Concurrent CIO coroutine dispatch", "setup": "CIO dispatcher defaults"},
+  "rust-axum": {"support": "Multiple Tokio worker threads", "setup": "Tokio multi-thread runtime defaults"},
+  "ktserve": {"support": "Multiple epoll loops in one process", "setup": "1 epoll worker"},
+  "ktserve-workers-2": {"support": "Multiple epoll loops in one process", "setup": "2 epoll workers · shared listener"},
+  "go-http": {"support": "Goroutines scheduled on multiple OS threads", "setup": "net/http goroutines · Go runtime defaults"},
+  "hono-node": {"support": "Multiple Node.js processes via cluster", "setup": "1 Node.js process · 1 JS event loop"},
+  "elysia-bun": {"support": "Multiple Bun processes can share a listener", "setup": "1 Bun server process"},
+  "fastapi": {"support": "Multiple Uvicorn worker processes", "setup": "1 Uvicorn worker · uvloop"},
+  "spring-boot": {"support": "Tomcat request thread pool", "setup": "Tomcat thread-pool defaults"},
+  "aspnet-core": {"support": "Kestrel I/O queues and .NET thread pool", "setup": "Kestrel and .NET runtime defaults"},
+  "quarkus": {"support": "Vert.x event loops and REST worker pool", "setup": "Quarkus REST worker-pool defaults"},
+  "vertx": {"support": "Multiple Vert.x event loops", "setup": "Vert.x event-loop defaults"},
+  "micronaut": {"support": "Multiple Netty I/O event loops", "setup": "Netty worker defaults"},
+  "http4k": {"support": "Jetty request thread pool", "setup": "Jetty thread-pool defaults"},
+  "javalin": {"support": "Jetty request thread pool", "setup": "Jetty thread-pool defaults"},
+  "spring-webflux": {"support": "Multiple Reactor Netty I/O event loops", "setup": "Reactor Netty worker defaults"},
+  "flask": {"support": "Configurable Waitress handler threads", "setup": "1 Waitress process · 4 handler threads"},
+  "django": {"support": "Multiple Uvicorn worker processes", "setup": "1 Uvicorn worker · uvloop"}
+}

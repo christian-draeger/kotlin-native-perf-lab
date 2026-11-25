@@ -1,0 +1,13 @@
+2026-11-25T12:26:07.024Z  INFO 77059 --- [           main] codes.draeger.baseline.Application       : Starting Application v0.0.0 using Java 21.0.13 with PID 77059 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-boot/target/spring-boot.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-25T12:26:07.028Z  INFO 77059 --- [           main] codes.draeger.baseline.Application       : No active profile set, falling back to 1 default profile: "default"
+2026-11-25T12:26:07.851Z  INFO 77059 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat initialized with port 56787 (http)
+2026-11-25T12:26:07.867Z  INFO 77059 --- [           main] o.apache.catalina.core.StandardService   : Starting service [Tomcat]
+2026-11-25T12:26:07.867Z  INFO 77059 --- [           main] o.apache.catalina.core.StandardEngine    : Starting Servlet engine: [Apache Tomcat/11.0.27]
+2026-11-25T12:26:07.899Z  INFO 77059 --- [           main] b.w.c.s.WebApplicationContextInitializer : Root WebApplicationContext: initialization completed in 811 ms
+2026-11-25T12:26:08.219Z  INFO 77059 --- [           main] o.s.boot.tomcat.TomcatWebServer          : Tomcat started on port 56787 (http) with context path '/'
+2026-11-25T12:26:08.238Z  INFO 77059 --- [           main] codes.draeger.baseline.Application       : Started Application in 1.621 seconds (process running for 2.081)
+2026-11-25T12:26:08.340Z  INFO 77059 --- [.1-56787-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-11-25T12:26:08.341Z  INFO 77059 --- [.1-56787-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-11-25T12:26:08.342Z  INFO 77059 --- [.1-56787-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 1 ms
+2026-11-25T12:26:23.623Z  INFO 77059 --- [ionShutdownHook] o.s.boot.tomcat.GracefulShutdown         : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-25T12:26:23.627Z  INFO 77059 --- [tomcat-shutdown] o.s.boot.tomcat.GracefulShutdown         : Graceful shutdown complete

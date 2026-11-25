@@ -1,0 +1,6 @@
+2026-11-25T12:25:25.088Z  INFO 68649 --- [           main] codes.draeger.baseline.Application       : Starting Application v0.0.0 using Java 21.0.13.1 with PID 68649 (/home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab/competitors/spring-webflux/target/spring-webflux.jar started by runner in /home/runner/work/kotlin-native-perf-lab/kotlin-native-perf-lab)
+2026-11-25T12:25:25.092Z  INFO 68649 --- [           main] codes.draeger.baseline.Application       : No active profile set, falling back to 1 default profile: "default"
+2026-11-25T12:25:26.158Z  INFO 68649 --- [           main] o.s.boot.reactor.netty.NettyWebServer    : Netty started on port 49357 (http)
+2026-11-25T12:25:26.175Z  INFO 68649 --- [           main] codes.draeger.baseline.Application       : Started Application in 1.467 seconds (process running for 1.847)
+2026-11-25T12:25:41.615Z  INFO 68649 --- [ionShutdownHook] o.s.boot.reactor.netty.GracefulShutdown  : Commencing graceful shutdown. Waiting for active requests to complete
+2026-11-25T12:25:41.617Z  INFO 68649 --- [ netty-shutdown] o.s.boot.reactor.netty.GracefulShutdown  : Graceful shutdown complete
