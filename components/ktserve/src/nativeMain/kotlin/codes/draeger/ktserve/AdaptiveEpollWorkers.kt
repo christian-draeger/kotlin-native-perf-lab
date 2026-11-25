@@ -17,10 +17,15 @@ import kotlinx.cinterop.MemScope
 import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.newFixedThreadPoolContext
+import kotlinx.coroutines.newSingleThreadContext
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import platform.posix.CLOCK_THREAD_CPUTIME_ID
@@ -54,18 +59,35 @@ internal fun MemScope.runAdaptiveEpollWorkers(
     try {
         runBlocking {
             val load = EpollWorkerLoad()
+            val cleanupDispatcher = newSingleThreadContext("ktserve-worker-cleanup")
+            val cleanupQueue = Channel<SecondaryEpollWorker>(1)
+            val cleaning = AtomicBoolean(false)
+            val cleanupReady = CompletableDeferred<Unit>()
+            val cleaner = launch(cleanupDispatcher, start = CoroutineStart.ATOMIC) {
+                withContext(NonCancellable) {
+                    cleanupReady.complete(Unit)
+                    for (worker in cleanupQueue) {
+                        val started = TimeSource.Monotonic.markNow()
+                        worker.close()
+                        report("worker_cleanup_ms=${started.elapsedNow().inWholeMilliseconds}")
+                        if (worker.started.load()) report("active_workers=1")
+                        cleaning.store(false)
+                    }
+                }
+            }
             var secondary: SecondaryEpollWorker? = null
             var hot = 0
             var quiet = 0
             var scaleUpFailed = false
             try {
+                cleanupReady.await()
                 println("ktServe backend=epoll tcp=ipv4 workers=adaptive")
                 if (handoffEnabled) println("ktServe adaptive handoff=enabled")
                 report("active_workers=1")
                 onListening()
                 val server = HttpServer(primary, routes, limits, clock = startedAt)
                 server.run shouldStop@ {
-                    if (stopRequested()) {
+                    if (stopRequested() || !isActive) {
                         stopping.store(true)
                         stopAccepts()
                         return@shouldStop true
@@ -74,17 +96,17 @@ internal fun MemScope.runAdaptiveEpollWorkers(
                     load.sample()?.let { percent ->
                         val worker = secondary
                         if (worker != null && worker.job.isCompleted && worker.recover(primary, server)) {
-                            worker.close()
+                            cleaning.store(true)
+                            check(cleanupQueue.trySend(worker).isSuccess)
                             secondary = null
                             hot = 0
                             quiet = 0
                             scaleUpFailed = worker.failed.load()
-                            if (worker.started.load()) report("active_workers=1")
                         }
                         hot = if (percent >= BUSY_PERCENT) minOf(hot + 1, BUSY_WINDOWS) else 0
                         val current = secondary
                         if (current == null) {
-                            if (hot == BUSY_WINDOWS && !scaleUpFailed) {
+                            if (hot == BUSY_WINDOWS && !scaleUpFailed && !cleaning.load()) {
                                 try {
                                     secondary = SecondaryEpollWorker(
                                         this, openWorker, routes, limits, stopping, startedAt,
@@ -108,9 +130,17 @@ internal fun MemScope.runAdaptiveEpollWorkers(
             } finally {
                 stopping.store(true)
                 stopAccepts()
-                secondary?.let { worker ->
-                    withContext(NonCancellable) { worker.job.join() }
-                    worker.close()
+                withContext(NonCancellable) {
+                    try {
+                        secondary?.let { worker ->
+                            worker.job.join()
+                            worker.close()
+                        }
+                    } finally {
+                        cleanupQueue.close()
+                        cleaner.join()
+                        cleanupDispatcher.close()
+                    }
                 }
             }
         }
