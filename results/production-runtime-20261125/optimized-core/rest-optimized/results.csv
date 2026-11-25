@@ -1,0 +1,5 @@
+variant,endpoint,run,valid,requests,rps,p50_us,p95_us,p99_us,cpu_start_seconds,cpu_end_seconds,cpu_seconds,cpu_seconds_per_million_requests,peak_rss_kib,end_rss_kib,connect_errors,read_errors,write_errors,timeouts,http_errors,warmup_errors,threads,connections,target_duration_s,duration_s,warmup_s,warmup_stability,git_sha,load_cpu_seconds,load_peak_rss_kib,load_cpu_equivalents
+application-mix-ktserve,/json,1,1,1283772,210417.551,62,160,549,4.28,10.55,6.27,4.884,19672,11808,0,0,0,0,0,0,2,16,6,6.101069,4,unchecked,65fefff5167169f72b85377bfece10dee05f5928,4.57,4680,0.749
+application-mix-ktserve,/json,2,1,1127324,187745.773,69,237,1153,4.16,10.06,5.9,5.234,18712,12060,0,0,0,0,0,0,2,16,6,6.004524,4,unchecked,65fefff5167169f72b85377bfece10dee05f5928,4.59,4680,0.765
+application-mix-ktserve,/json,3,1,1398836,229324.708,58,125,216,4.19,10.53,6.34,4.532,18720,11792,0,0,0,0,0,0,2,16,6,6.099805,4,unchecked,65fefff5167169f72b85377bfece10dee05f5928,4.84,4704,0.793
+application-mix-ktserve,/json,4,1,1538104,252149.106,56,113,172,4.24,10.46,6.22,4.044,19620,11800,0,0,0,0,0,0,2,16,6,6.099978,4,unchecked,65fefff5167169f72b85377bfece10dee05f5928,4.41,4424,0.723
