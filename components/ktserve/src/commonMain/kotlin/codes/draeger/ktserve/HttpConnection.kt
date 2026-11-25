@@ -123,7 +123,8 @@ internal class HttpConnection(
         incoming?.let { return consumeBody(it, now) }
         if (awaitingHandler || stream != null) return false
         val application = routes.applicationHandler
-        val hasRequestRoutes = routes.hasRequestRoutes
+        val hasExtensions = routes.hasRequestExtensions
+        val hasRequestRoutes = hasExtensions && routes.hasRequestRoutes
         when (val head = input.parse(allowAnyRequestBody = application != null || hasRequestRoutes)) {
             ParsedHead.Incomplete -> {
                 // Pipelined bytes start their deadline when the previous response lets us parse them.
@@ -143,50 +144,104 @@ internal class HttpConnection(
                 countRequest?.invoke()
                 input.consume(head.consumed)
                 headStarted = null
-                val request = head.request
-                val headOnly = request.method == "HEAD"
-                val denial = routes.requestPolicy?.let { policy ->
-                    try {
-                        policy(request)
-                    } catch (_: Exception) {
-                        emptyResponse(500)
-                    }
-                }
-                if (denial != null) {
-                    queue(denial, head.version, head.keepAlive && request.bodyLength == 0, now, headOnly)
-                    return true
+                if (hasExtensions) {
+                    return prepareExtendedResponse(routes, head, now, start, startBlocking)
                 }
                 if (application != null) return prepareApplication(head, now, checkNotNull(start), application)
-                if (hasRequestRoutes) {
-                    routes.dispatchRequestRoute(request) { handler, matched ->
-                        prepareApplication(head, now, checkNotNull(start), handler, matched)
-                    }?.let { return it }
-                    if ((request.method == "GET" || headOnly) && request.bodyLength != 0) {
-                        queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
-                        return true
-                    }
-                }
-                if (request.method == "POST") return preparePost(routes, head, now)
-                val launch: ((suspend () -> Response) -> Unit)? = start?.let {
-                    { run -> handler = PendingHandler(it(run), head.version, head.keepAlive, now, headOnly) }
-                }
-                val launchBlocking: ((() -> Response) -> Boolean)? = startBlocking?.let {
-                    { run ->
-                        val call = it(run)
-                        if (call == null) {
-                            false
-                        } else {
-                            handler = PendingHandler(call, head.version, head.keepAlive, now, headOnly)
-                            true
-                        }
-                    }
-                }
-                val response = routes.respond(request, launch, launchBlocking) ?: return false
-                val keepAlive = head.keepAlive && (!hasRequestRoutes || request.bodyLength == 0)
-                queue(response, head.version, keepAlive, now, headOnly)
+                return prepareStandalone(routes, head, now, head.keepAlive, start, startBlocking)
             }
         }
         return true
+    }
+
+    private fun prepareExtendedResponse(
+        routes: Routes,
+        head: ParsedHead.Complete,
+        now: Long,
+        start: ((suspend () -> Response) -> SuspendedGet)?,
+        startBlocking: ((() -> Response) -> SuspendedGet?)?,
+    ): Boolean {
+        val request = head.request
+        val headOnly = request.method == "HEAD"
+        val keepAlive = head.keepAlive && request.bodyLength == 0
+        val denial = try {
+            routes.requestPolicy?.invoke(request)
+        } catch (_: Exception) {
+            emptyResponse(500)
+        }
+        if (denial != null) {
+            queue(denial, head.version, keepAlive, now, headOnly)
+            return true
+        }
+        val application = routes.applicationHandler
+        if (application != null) return prepareApplication(head, now, checkNotNull(start), application)
+        routes.dispatchRequestRoute(request) { handler, matched ->
+            prepareApplication(head, now, checkNotNull(start), handler, matched)
+        }?.let { return it }
+        if ((request.method == "GET" || headOnly) && request.bodyLength != 0) {
+            queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
+            return true
+        }
+        return prepareStandalone(routes, head, now, keepAlive, start, startBlocking)
+    }
+
+    private fun prepareStandalone(
+        routes: Routes,
+        head: ParsedHead.Complete,
+        now: Long,
+        keepAlive: Boolean,
+        start: ((suspend () -> Response) -> SuspendedGet)?,
+        startBlocking: ((() -> Response) -> SuspendedGet?)?,
+    ): Boolean {
+        val request = head.request
+        if (request.method == "POST") return preparePost(routes, head, now)
+        val headOnly = when (request.method) {
+            "GET" -> false
+            "HEAD" -> true
+            else -> {
+                queue(routes.http1MethodError(request), head.version, keepAlive, now)
+                return true
+            }
+        }
+        val response = try {
+            routes.dispatchGet(request) { handler, matched ->
+                when (handler) {
+                    is GetHandler.Immediate -> handler.run(matched)
+                    is GetHandler.Suspending -> {
+                        if (start == null) emptyResponse(501)
+                        else {
+                            handlerStarted(start { handler.run(matched) }, head, now, keepAlive, headOnly)
+                            return false
+                        }
+                    }
+                    is GetHandler.Blocking -> {
+                        if (startBlocking == null) emptyResponse(501)
+                        else {
+                            val call = startBlocking { handler.run(matched) }
+                            if (call == null) emptyResponse(503)
+                            else {
+                                handlerStarted(call, head, now, keepAlive, headOnly)
+                                return false
+                            }
+                        }
+                    }
+                }
+            } ?: routes.http1MethodError(request)
+        } catch (_: Exception) {
+            emptyResponse(500)
+        }
+        queue(response, head.version, keepAlive, now, headOnly)
+        return true
+    }
+
+    private fun handlerStarted(
+        call: SuspendedGet,
+        head: ParsedHead.Complete,
+        now: Long,
+        keepAlive: Boolean,
+        headOnly: Boolean,
+    ) {
+        handler = PendingHandler(call, head.version, keepAlive, now, headOnly)
     }
 
     private fun prepareApplication(

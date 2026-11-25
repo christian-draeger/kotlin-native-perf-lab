@@ -5,6 +5,8 @@ class Routes {
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
     private var requestRoutes: MutableMap<String, MethodRoutes<RequestHandler>>? = null
     internal val hasRequestRoutes: Boolean get() = requestRoutes != null
+    internal var hasRequestExtensions = false
+        private set
     internal var requestPolicy: ((Request) -> Response?)? = null
         private set
     internal var hasSuspendingGets = false
@@ -64,6 +66,7 @@ class Routes {
         }
         val routes = requestRoutes ?: linkedMapOf<String, MethodRoutes<RequestHandler>>().also { requestRoutes = it }
         routes.getOrPut(method) { MethodRoutes() }.add(path, handler)
+        hasRequestExtensions = true
     }
 
     /**
@@ -73,6 +76,7 @@ class Routes {
     fun beforeEach(policy: (Request) -> Response?) {
         val previous = requestPolicy
         requestPolicy = if (previous == null) policy else { request -> previous(request) ?: policy(request) }
+        hasRequestExtensions = true
     }
 
     internal fun dispatchRequestRoute(
@@ -95,42 +99,28 @@ class Routes {
         applicationHandler = handler
     }
 
-    internal fun respond(request: Request): Response = checkNotNull(respond(request, null, http1Methods = false))
+    internal inline fun dispatchGet(request: Request, action: (GetHandler, Request) -> Response): Response? =
+        gets.resolve(request, action)
 
-    internal fun respond(
-        request: Request,
-        start: ((suspend () -> Response) -> Unit)?,
-        startBlocking: ((() -> Response) -> Boolean)? = null,
-        http1Methods: Boolean = true,
-    ): Response? {
-        return try {
-            if (request.method == "GET" || http1Methods && request.method == "HEAD") {
-                gets.resolve(request) { handler, matched ->
-                    when (handler) {
-                        is GetHandler.Immediate -> return handler.run(matched)
-                        is GetHandler.Suspending -> {
-                            if (start == null) return emptyResponse(501)
-                            start { handler.run(matched) }
-                            return null
-                        }
-                        is GetHandler.Blocking -> {
-                            if (startBlocking == null) return emptyResponse(501)
-                            if (!startBlocking { handler.run(matched) }) return emptyResponse(503)
-                            return null
-                        }
-                    }
+    internal fun respond(request: Request): Response = try {
+        val response = if (request.method == "GET") {
+            dispatchGet(request) { handler, matched ->
+                when (handler) {
+                    is GetHandler.Immediate -> handler.run(matched)
+                    else -> emptyResponse(501)
                 }
             }
-            if (!http1Methods) return legacyMethodError(request)
-            val allowed = allowedMethods(request)
-            when {
-                allowed == null -> emptyResponse(404)
-                request.method == "OPTIONS" -> emptyResponse(204).withHeaders(HttpField("Allow", allowed))
-                else -> methodNotAllowed(allowed)
-            }
-        } catch (_: Exception) {
-            emptyResponse(500)
-        }
+        } else null
+        response ?: legacyMethodError(request)
+    } catch (_: Exception) {
+        emptyResponse(500)
+    }
+
+    internal fun http1MethodError(request: Request): Response {
+        val allowed = allowedMethods(request) ?: return emptyResponse(404)
+        return if (request.method == "OPTIONS") {
+            emptyResponse(204).withHeaders(HttpField("Allow", allowed))
+        } else methodNotAllowed(allowed)
     }
 
     internal fun openPost(request: Request, http1Methods: Boolean = false): PostBody = try {
@@ -172,7 +162,7 @@ class Routes {
 
 internal typealias RequestHandler = suspend (Request, RequestContent) -> Response
 
-private sealed interface GetHandler {
+internal sealed interface GetHandler {
     class Immediate(val run: (Request) -> Response) : GetHandler
     class Suspending(val run: suspend (Request) -> Response) : GetHandler
     class Blocking(val run: (Request) -> Response) : GetHandler
@@ -183,7 +173,7 @@ internal sealed interface PostBody {
     class Rejected(val response: Response) : PostBody
 }
 
-private class MethodRoutes<Handler> {
+internal class MethodRoutes<Handler> {
     private val exact = mutableMapOf<String, Handler>()
     private val patterns = mutableListOf<RoutePattern<Handler>>()
 
@@ -241,7 +231,7 @@ private class MethodRoutes<Handler> {
 
 }
 
-private data class RoutePattern<Handler>(
+internal data class RoutePattern<Handler>(
     val shape: List<String?>,
     val names: List<String?>,
     val handler: Handler,
