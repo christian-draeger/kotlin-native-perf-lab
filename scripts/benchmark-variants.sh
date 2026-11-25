@@ -8,7 +8,7 @@ case "${BENCHMARK_SUITE:-core}" in
     if [[ "${COMPARE_WORKER_LISTENERS:-false}" == true ]]; then variants+=(ktserve-workers-2-reuseport); fi
     ;;
   io-backends) variants=(ktserve-epoll ktserve-io-uring) ;;
-  expanded) variants=("${core_variants[@]}" "${competitor_variants[@]}") ;;
+  expanded) variants=("${core_variants[@]}" ktserve-workers-2 "${competitor_variants[@]}") ;;
   competitors) variants=("${competitor_variants[@]}") ;;
   *) echo 'BENCHMARK_SUITE must be core, application, application-mix, expanded, competitors, workers or io-backends.' >&2; exit 2 ;;
 esac

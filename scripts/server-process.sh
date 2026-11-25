@@ -25,6 +25,12 @@ start_server() {
         }
       fi
       case "$variant" in
+        ktserve)
+          if [[ "${BENCHMARK_SUITE:-}" == expanded ]]; then
+            grep -qFx 'ktServe backend=epoll tcp=ipv4' "$log" || return 1
+          fi
+          ;;
+        ktserve-workers-2) grep -qFx 'ktServe worker_listener=shared' "$log" || return 1 ;;
         ktserve-workers-2-reuseport) grep -qFx 'ktServe worker_listener=reuseport' "$log" || return 1 ;;
         ktserve-epoll) grep -qFx 'ktServe backend=epoll tcp=ipv4' "$log" || return 1 ;;
         ktserve-io-uring) grep -q '^ktServe backend=io_uring tcp=ipv4 features=0x' "$log" || return 1 ;;

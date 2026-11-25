@@ -123,6 +123,33 @@ class DashboardTest(unittest.TestCase):
         self.assertEqual(dashboard.canonical_variant("nativeserve-workers-2"), "ktserve-workers-2")
         self.assertEqual(dashboard.canonical_variant("spring-webflux-reactor-netty"), "spring-webflux-reactor-netty")
 
+    def test_keeps_both_ktserve_worker_profiles_in_the_same_ranking(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = root / "results/20261125T120000Z-x86_64-json"
+            run.mkdir(parents=True)
+            (run / "environment.txt").write_text(
+                "benchmark_suite=expanded\nbenchmark_endpoint=/json\n"
+                "benchmark_source=github-hosted-actions\nci_run_id=5678\nmachine=x86_64\n"
+            )
+            base = {
+                "endpoint": "/json", "variant": "ktserve", "valid": 1, "rps": 150,
+                "p50_us": 50, "p95_us": 100, "p99_us": 200, "cpu_seconds_per_million_requests": 8,
+                "peak_rss_kib": 20_000, "connections": 16, "threads": 2, "warmup_s": 10, "target_duration_s": 5,
+            }
+            path = run / "results.csv"
+            with path.open("w", newline="") as output:
+                writer = csv.DictWriter(output, fieldnames=base)
+                writer.writeheader()
+                writer.writerows([base, {**base, "variant": "ktserve-workers-2", "rps": 240}])
+
+            ranking = dashboard.read_run(path, {}, root, "archive")
+            self.assertEqual((ranking["suite"], ranking["valid"]), ("expanded", 2))
+            self.assertEqual(
+                {group["variant"]: group["stats"]["rps"]["median"] for group in ranking["groups"]},
+                {"ktserve": 150, "ktserve-workers-2": 240},
+            )
+
     def test_separates_groups_and_excludes_invalid_trials(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
