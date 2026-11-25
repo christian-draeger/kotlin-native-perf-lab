@@ -1,5 +1,9 @@
 package codes.draeger.ktserve
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -94,6 +98,43 @@ class HttpConnectionTest {
         assertFalse(connection.prepareResponse(routes, now = 8))
         assertFalse(connection.expired(now = 12))
         assertTrue(connection.expired(now = 13))
+    }
+
+    @Test
+    fun aPartialPipelinedHeadWaitsForTheActiveResponseProducer() {
+        val ready = CompletableDeferred<Unit>()
+        val scope = CoroutineScope(Dispatchers.Unconfined)
+        val connection = HttpConnection(
+            0, ServerLimits(requestHeadMillis = 5, idleMillis = 50, responseMillis = 40),
+            dispatcher = { scope },
+        )
+        val routes = Routes().apply {
+            get("/health") {
+                streamSuspending(length = 1) {
+                    ready.await()
+                    write(byteArrayOf(42))
+                }
+            }
+        }
+        try {
+            connection.receive(request, now = 1)
+            assertTrue(connection.prepareResponse(routes, now = 1))
+            assertTrue(connection.wrote(connection.outputLength, now = 2))
+            assertTrue(connection.awaitingProducer)
+
+            connection.receive("GET /heal", now = 3)
+            assertNull(connection.expiry(now = 8))
+            ready.complete(Unit)
+            assertTrue(connection.resumeProducer(now = 10))
+            assertTrue(connection.wrote(connection.outputLength, now = 11))
+
+            assertFalse(connection.prepareResponse(routes, now = 11))
+            assertNull(connection.expiry(now = 15))
+            assertEquals(ExchangeExpiry.REQUEST_HEAD, connection.expiry(now = 16))
+        } finally {
+            connection.close()
+            scope.cancel()
+        }
     }
 
     @Test

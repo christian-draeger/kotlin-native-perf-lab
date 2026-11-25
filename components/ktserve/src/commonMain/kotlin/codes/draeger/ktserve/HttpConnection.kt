@@ -87,7 +87,7 @@ internal class HttpConnection(
             monitorPending = false
             checkNotNull(monitor).copyInto(input.bytes, input.size, endIndex = count)
         }
-        if (input.size == 0 && incoming == null && !awaitingHandler && output == null) {
+        if (input.size == 0 && incoming == null && !awaitingHandler && output == null && stream == null) {
             headStarted = now
             observation?.begin()
         }
