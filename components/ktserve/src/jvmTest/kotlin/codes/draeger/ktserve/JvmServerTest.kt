@@ -165,6 +165,12 @@ class JvmServerTest {
                 assertEquals(setOf("GET", "PUT", "HEAD", "OPTIONS"), allowed.split(", ").toSet())
             }
             assertTrue(exchange("OPTIONS", "/missing").startsWith("HTTP/1.1 404 "))
+            client(port).use { unmatched ->
+                unmatched.send("DELETE /resource/5 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 2\r\n\r\n")
+                val reply = unmatched.getInputStream().readBytes().decodeToString()
+                assertTrue(reply.startsWith("HTTP/1.1 405 "))
+                assertTrue(reply.contains("Connection: close\r\n"))
+            }
         }
     }
 

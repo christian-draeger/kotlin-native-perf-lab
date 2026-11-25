@@ -152,7 +152,7 @@ internal class HttpConnection(
                     routes.dispatchRequestRoute(request) { handler, matched ->
                         prepareApplication(head, now, checkNotNull(start), handler, matched)
                     }?.let { return it }
-                    if (request.method != "POST" && request.bodyLength != 0) {
+                    if ((request.method == "GET" || headOnly) && request.bodyLength != 0) {
                         queue(emptyResponse(413), head.version, keepAlive = false, now, headOnly)
                         return true
                     }
@@ -173,7 +173,8 @@ internal class HttpConnection(
                     }
                 }
                 val response = routes.respond(request, launch, launchBlocking) ?: return false
-                queue(response, head.version, head.keepAlive, now, headOnly)
+                val keepAlive = head.keepAlive && (!hasRequestRoutes || request.bodyLength == 0)
+                queue(response, head.version, keepAlive, now, headOnly)
             }
         }
         return true
