@@ -90,6 +90,23 @@ private const val LISTENER_TOKEN = 0UL
 private const val APPLICATION_TOKEN = ULong.MAX_VALUE
 // EPOLLEXCLUSIVE from Linux's eventpoll UAPI is absent from the linuxX64 sysroot bindings.
 private const val EPOLL_EXCLUSIVE = 0x1000_0000U
+private const val CLOSED_LISTENER = -1
+private const val DUPLICATING_LISTENER = -2
+
+internal interface AdaptiveEpollTransport : StreamTransport {
+    val hasConnections: Boolean
+    fun pauseAccepts(paused: Boolean)
+    fun detachIdlePeer(id: ConnectionId): DetachedEpollPeer?
+    fun adoptIdlePeer(socket: DetachedEpollPeer): ConnectionId?
+}
+
+/** Owns the descriptor and its admission slot until a transport adopts it or the mailbox discards it. */
+internal class DetachedEpollPeer(val descriptor: Int, private val releaseSlot: () -> Unit) {
+    fun discard() {
+        close(descriptor)
+        releaseSlot()
+    }
+}
 
 internal fun MemScope.openPlatformTransport(
     host: String,
@@ -145,6 +162,44 @@ internal fun MemScope.openWorkerEpollTransports(
     }
 }
 
+internal fun MemScope.withAdaptiveEpollListener(
+    host: String,
+    port: Int,
+    connectionLimit: Int,
+    requireWakeup: Boolean,
+    run: (MemScope.() -> AdaptiveEpollTransport, () -> Unit) -> Unit,
+) {
+    val tcpNoDelay = configuredTcpNoDelay()
+    val edgeTriggered = configuredEdgeTrigger()
+    val wakeOnApplicationProgress = configuredApplicationWakeup() || requireWakeup
+    val budget = SharedConnectionBudget(connectionLimit)
+    val listener = AtomicInt(openListener(host, port))
+    fun stopAccepts() {
+        val fd = listener.exchange(CLOSED_LISTENER)
+        if (fd >= 0) close(fd)
+    }
+    fun duplicateListener(): Int {
+        val fd = listener.load()
+        check(fd >= 0 && listener.compareAndSet(fd, DUPLICATING_LISTENER)) { "Adaptive listener is closing" }
+        try {
+            return checked(fcntl(fd, F_DUPFD_CLOEXEC, 0), "duplicate listener")
+        } finally {
+            // A worker that borrows the descriptor closes it if shutdown won the race.
+            if (!listener.compareAndSet(DUPLICATING_LISTENER, fd)) close(fd)
+        }
+    }
+    try {
+        run({
+            openEpollTransport(
+                connectionLimit, EPOLLIN or EPOLL_EXCLUSIVE, tcpNoDelay, edgeTriggered, wakeOnApplicationProgress, budget,
+                ::duplicateListener,
+            )
+        }, ::stopAccepts)
+    } finally {
+        stopAccepts()
+    }
+}
+
 private fun configuredTcpNoDelay(): Boolean {
     val mode = getenv("KTSERVE_EPOLL_TCP_NODELAY")?.toKString() ?: return false
     require(mode == "default" || mode == "on") { "KTSERVE_EPOLL_TCP_NODELAY must be default or on" }
@@ -174,7 +229,7 @@ private fun MemScope.openEpollTransport(
     wakeOnApplicationProgress: Boolean = false,
     sharedBudget: SharedConnectionBudget? = null,
     open: () -> Int,
-): StreamTransport {
+): AdaptiveEpollTransport {
     val events = allocArray<epoll_event>(BATCH_SIZE)
     val change = alloc<epoll_event>()
     // The event loop owns this option value and the accepted sockets for the enclosing scope.
@@ -282,7 +337,7 @@ private class EpollTransport(
     private val applicationSignal: EpollApplicationSignal?,
     private val applicationCount: CPointer<ULongVar>?,
     private val sharedBudget: SharedConnectionBudget?,
-) : StreamTransport {
+) : AdaptiveEpollTransport {
     override val signalApplicationProgress: (() -> Unit)? = applicationSignal?.let { it::signal }
 
     private val peers = mutableMapOf<ConnectionId, Peer>()
@@ -290,9 +345,39 @@ private class EpollTransport(
     private var processing: Peer? = null
     private var nextConnection = 1L
     private var listenerWatched = false
+    private var acceptsPaused = false
     private var listenerRetryAt: TimeMark? = null
     private var acceptOperation: OperationId? = null
     private var acceptCancelled = false
+
+    override val hasConnections: Boolean get() = peers.isNotEmpty()
+
+    override fun pauseAccepts(paused: Boolean) {
+        acceptsPaused = paused
+        if (paused && listenerWatched) setListenerInterest(false)
+    }
+
+    override fun detachIdlePeer(id: ConnectionId): DetachedEpollPeer? {
+        val budget = checkNotNull(sharedBudget)
+        val peer = peers[id] ?: return null
+        if (peer === processing || peer.fd < 0 || peer.write.buffer != null || peer.read.failure != null) return null
+        if (peer.interest != 0U && watch(EPOLL_CTL_DEL, peer.fd, id.value.toULong(), 0U) < 0) return null
+        if (peer.queued) work.remove(peer)
+        peers.remove(id)
+        peer.read.buffer = null
+        return DetachedEpollPeer(peer.fd) { budget.release() }
+    }
+
+    override fun adoptIdlePeer(socket: DetachedEpollPeer): ConnectionId? {
+        check(sharedBudget != null)
+        val id = ConnectionId(nextConnection++)
+        val interest = if (edgeTriggered) EPOLLIN or EPOLLET else EPOLLIN
+        if (watch(EPOLL_CTL_ADD, socket.descriptor, id.value.toULong(), interest) < 0) return null
+        val peer = Peer(id, socket.descriptor)
+        peer.interest = EPOLLIN
+        peers[id] = peer
+        return id
+    }
 
     override fun accept(operation: OperationId): Submission {
         if (listener < 0) return Submission.CLOSED
@@ -548,7 +633,7 @@ private class EpollTransport(
 
     private fun listenerPollTimeout(timeout: Int): Int {
         if (listener < 0) return timeout
-        val active = acceptOperation != null && !acceptCancelled
+        val active = acceptOperation != null && !acceptCancelled && !acceptsPaused
         // Backoff leaves the listener unwatched, so an unchanged registration has no clock work.
         if (active == listenerWatched) return timeout
         if (active) {

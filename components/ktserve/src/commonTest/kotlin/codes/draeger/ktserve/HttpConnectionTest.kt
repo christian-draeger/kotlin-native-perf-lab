@@ -53,6 +53,26 @@ class HttpConnectionTest {
     private val request = "GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n"
 
     @Test
+    fun keepAliveHandoffPreservesTheIdleDeadlineAfterThePipelineFinishes() {
+        val limits = ServerLimits(idleMillis = 10)
+        val routes = Routes().apply { get("/health") { text("ok") } }
+        val connection = HttpConnection(0, limits)
+        connection.receive(request.repeat(2), now = 1)
+        assertTrue(connection.prepareResponse(routes, now = 1))
+        assertNull(connection.idleSnapshot(since = 0))
+        assertTrue(connection.wrote(connection.outputLength, now = 2))
+        assertNull(connection.idleSnapshot(since = 0))
+        assertTrue(connection.prepareResponse(routes, now = 2))
+        assertTrue(connection.wrote(connection.outputLength, now = 3))
+
+        val state = assertNotNull(connection.idleSnapshot(since = 3))
+        assertNull(connection.idleSnapshot(since = 4))
+        val resumed = HttpConnection(state.lastActivity, limits, input = state.input)
+        assertFalse(resumed.expired(now = 12))
+        assertEquals(ExchangeExpiry.IDLE, resumed.expiry(now = 13))
+    }
+
+    @Test
     fun pendingOutputBlocksPipelinedDispatchAndDrainsBeforeClose() {
         var handled = 0
         val routes = Routes().apply {

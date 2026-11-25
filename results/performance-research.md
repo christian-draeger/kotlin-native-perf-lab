@@ -2,6 +2,8 @@
 
 Research baseline `43870c3673a6b1603bb0b407c727e1cea0b92528`, 24 November 2026. Goal is comparable application performance against Axum on documented CPU and memory budgets. The current CI results use shared Linux VMs. The controlled decision remains tracked in [#16](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/16) and [#21](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/21).
 
+The [throughput-first worker scheduling research](worker-scheduling-research.md) covers the later adaptive keep-alive pilot, prior art and the proposed capacity and activation experiments.
+
 ## Current evidence
 
 The expanded CI run measured 18 stacks, three endpoints and both architectures. All 324 trials passed the harness checks. For each endpoint, the frameworks took turns on the same VM with 16 HTTP/1.1 connections, two wrk threads, ten seconds of warm-up and five measured seconds. The table compares the one-worker ktServe and Axum release medians within each VM. CPU means server process CPU seconds per million responses. p99 is the median of three trial-level p99s at each server's achieved throughput. [Workflow](https://github.com/christian-draeger/kotlin-native-perf-lab/actions/runs/45345839468) · [Raw results](https://github.com/christian-draeger/kotlin-native-perf-lab/tree/0f627bea0062838f7e5d3dc6cfd656b082560add/results)

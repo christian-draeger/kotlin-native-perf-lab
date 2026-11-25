@@ -12,6 +12,7 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Semaphore
+import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
 internal class HttpServerCounters {
@@ -25,6 +26,7 @@ internal class HttpServer(
     private val limits: ServerLimits,
     private val counters: HttpServerCounters? = null,
     timeSource: TimeSource = TimeSource.Monotonic,
+    private val clock: TimeMark = timeSource.markNow(),
 ) : TransportCompletions {
     private val clients = mutableMapOf<ConnectionId, HttpConnection>()
     private val suspended = mutableSetOf<ConnectionId>()
@@ -48,7 +50,6 @@ internal class HttpServer(
             }
         }
     }
-    private val clock = timeSource.markNow()
     private var nextOperation = 1L
     private var drainDeadline: Long? = null
     private var batchTime = -1L
@@ -63,6 +64,42 @@ internal class HttpServer(
             blockingScope?.cancel()
             observation?.emit(ServerEvent.Lifecycle.STOPPED)
         }
+    }
+
+    fun hasMultipleActiveConnections(withinMillis: Long): Boolean {
+        val since = now() - withinMillis
+        var count = 0
+        for (client in clients.values) {
+            if (client.activeSince(since) && ++count == 2) return true
+        }
+        return false
+    }
+
+    /** Run on the current owner between polls. An accepted move releases its idle read lease. */
+    fun splitIdleConnections(maxIdleMillis: Long, move: (ConnectionId, IdleHttpConnection) -> Boolean) {
+        check(observation == null && drainDeadline == null)
+        val since = now() - maxIdleMillis
+        val candidates = clients.mapNotNull { (id, client) ->
+            client.idleSnapshot(since)?.let { id to it }
+        }
+        var remaining = candidates.size / 2
+        for ((id, state) in candidates) {
+            if (remaining == 0) break
+            if (move(id, state)) {
+                clients.remove(id)
+                remaining--
+            }
+        }
+    }
+
+    /** Called after the new transport owner has adopted the socket. Both loops share a clock. */
+    fun resumeIdleConnection(id: ConnectionId, state: IdleHttpConnection) {
+        check(observation == null && drainDeadline == null)
+        val client = HttpConnection(
+            state.lastActivity, limits, dispatcher, countRequest, signalApplicationProgress, input = state.input,
+        )
+        clients[id] = client
+        advance(id, client, now())
     }
 
     private fun runLoop(stopRequested: () -> Boolean) {
