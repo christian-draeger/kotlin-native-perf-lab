@@ -211,20 +211,20 @@ internal class MethodRoutes<Handler> {
         exact[request.path]?.let { return action(it, request) }
         if (patterns.isEmpty()) return null
         val parts = request.path.removePrefix("/").split('/')
-        for (route in patterns) {
+        routeSearch@ for (route in patterns) {
             if (parts.size != route.shape.size) continue
-            val values = mutableMapOf<String, String>()
-            var matches = true
             for (index in parts.indices) {
                 val literal = route.shape[index]
                 val value = parts[index]
                 if (literal != null && literal != value || literal == null && value.isEmpty()) {
-                    matches = false
-                    break
+                    continue@routeSearch
                 }
-                route.names[index]?.let { values[it] = value }
             }
-            if (matches) return action(route.handler, request.withParameters(values))
+            val values = mutableMapOf<String, String>()
+            for (index in parts.indices) {
+                route.names[index]?.let { values[it] = parts[index] }
+            }
+            return action(route.handler, request.withParameters(values))
         }
         return null
     }
