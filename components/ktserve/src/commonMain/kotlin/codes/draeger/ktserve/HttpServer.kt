@@ -33,7 +33,7 @@ internal class HttpServer(
     private val dispatcher: () -> CoroutineScope = { handlerScope.value }
     private val countRequest: (() -> Unit)? = counters?.let { totals -> { totals.requests++ } }
     private val launchHandler: ((suspend () -> Response) -> SuspendedGet)? =
-        if (routes.hasSuspendingGets || routes.applicationHandler != null) {
+        if (routes.hasSuspendingGets || routes.hasRequestRoutes || routes.applicationHandler != null) {
             { run -> SuspendedGet(handlerScope.value, signalApplicationProgress, run) }
         } else null
     private val blockingScope = if (routes.hasBlockingGets) CoroutineScope(SupervisorJob() + Dispatchers.IO) else null

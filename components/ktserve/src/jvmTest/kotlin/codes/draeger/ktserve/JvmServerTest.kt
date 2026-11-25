@@ -84,6 +84,91 @@ class JvmServerTest {
     }
 
     @Test
+    fun standaloneRoutesDispatchBoundedBodiesAndComposeEarlyPolicies() {
+        val authorized = AtomicInteger()
+        val updates = AtomicInteger()
+        withServer(ServerLimits(requestBodyBytes = 8), routes = {
+            beforeEach { request ->
+                if (request.path.startsWith("/notes/") && request.header("X-Test-Identity") != "writer") {
+                    text("denied", status = 403)
+                } else null
+            }
+            beforeEach { request ->
+                if (request.path.startsWith("/notes/")) authorized.incrementAndGet()
+                null
+            }
+            route("PATCH", "/notes/{id}") { request, content ->
+                updates.incrementAndGet()
+                var size = 0
+                while (true) {
+                    val chunk = content.readChunk() ?: break
+                    size += chunk.size
+                }
+                text("${request.pathParameter("id")}:$size")
+            }
+        }) { port, _ ->
+            client(port).use { denied ->
+                denied.send("PATCH /notes/1 HTTP/1.1\r\nHost: localhost\r\nContent-Length: 3\r\n\r\n")
+                val input = denied.getInputStream().buffered()
+                assertEquals("denied", input.response(status = 403))
+                assertEquals(-1, input.read())
+                assertEquals(0, authorized.get())
+                assertEquals(0, updates.get())
+            }
+            client(port).use { allowed ->
+                allowed.send(
+                    "PATCH /notes/7 HTTP/1.1\r\nHost: localhost\r\nX-Test-Identity: writer\r\n" +
+                        "Transfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n" +
+                        "GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+                )
+                val input = allowed.getInputStream().buffered()
+                assertEquals("7:3", input.response())
+                assertEquals("ok", input.response())
+                assertEquals(-1, input.read())
+            }
+            client(port).use { oversized ->
+                oversized.send(
+                    "PATCH /notes/7 HTTP/1.1\r\nHost: localhost\r\nX-Test-Identity: writer\r\n" +
+                        "Content-Length: 9\r\n\r\n",
+                )
+                val input = oversized.getInputStream().buffered()
+                assertEquals("", input.response(status = 413))
+                assertEquals(-1, input.read())
+                assertEquals(1, updates.get())
+            }
+        }
+    }
+
+    @Test
+    fun standaloneHeadAndOptionsUseTheSupportedPathMethods() {
+        withServer(ServerLimits(), routes = {
+            route("GET", "/resource/{id}") { request, _ -> text("id=${request.pathParameter("id")}") }
+            route("PUT", "/resource/{id}") { _, _ -> text("updated") }
+            route("HEAD", "/override") { _, _ -> text("custom") }
+            get("/override") { text("normal get") }
+        }) { port, _ ->
+            fun exchange(method: String, path: String): String = client(port).use { socket ->
+                socket.send("$method $path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                socket.getInputStream().readBytes().decodeToString()
+            }
+            assertTrue(exchange("HEAD", "/health").let {
+                it.startsWith("HTTP/1.1 200 ") && it.contains("Content-Length: 2\r\n") && it.endsWith("\r\n\r\n")
+            })
+            assertTrue(exchange("HEAD", "/resource/5").let {
+                it.startsWith("HTTP/1.1 200 ") && it.contains("Content-Length: 4\r\n") && it.endsWith("\r\n\r\n")
+            })
+            assertTrue(exchange("HEAD", "/override").contains("Content-Length: 6\r\n"))
+            for ((method, status) in listOf("OPTIONS" to 204, "DELETE" to 405)) {
+                val reply = exchange(method, "/resource/5")
+                assertTrue(reply.startsWith("HTTP/1.1 $status "))
+                val allowed = reply.lineSequence().single { it.startsWith("Allow: ") }.removePrefix("Allow: ")
+                assertEquals(setOf("GET", "PUT", "HEAD", "OPTIONS"), allowed.split(", ").toSet())
+            }
+            assertTrue(exchange("OPTIONS", "/missing").startsWith("HTTP/1.1 404 "))
+        }
+    }
+
+    @Test
     fun suspendingResponseKeepsOrderAndOtherConnectionsProgress() {
         val ready = CompletableDeferred<Unit>()
         withServer(ServerLimits(), routes = {
