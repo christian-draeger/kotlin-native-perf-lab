@@ -92,6 +92,10 @@ jobs:
           python3 scripts/tests/ktserve_worker_admission_smoke.py "$PORT" "$server_pid"
           wait "$server_pid"
           server_pid=''
+      - name: Verify Linux listener exhaustion recovery
+        run: |
+          python3 scripts/tests/ktserve_listener_recovery_smoke.py \
+            components/ktserve/build/bin/native/releaseExecutable/ktserve.kexe
       - name: Exercise ktServe resource bounds
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}
