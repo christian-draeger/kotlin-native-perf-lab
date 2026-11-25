@@ -23,6 +23,7 @@ if (publicationVersion != null) {
 }
 
 val targetOs = providers.gradleProperty("benchmark.targetOs").getOrElse("linux")
+val routingProbe = publicationVersion == null && providers.gradleProperty("benchmark.routingProbe").isPresent
 if (publicationVersion == null && targetOs == "macos") {
     layout.buildDirectory.set(layout.projectDirectory.dir("build/macos"))
 }
@@ -50,7 +51,9 @@ kotlin {
             getByName("macosMain").kotlin.exclude("codes/draeger/ktserve/example/**")
         }
     } else {
-        jvm()
+        jvm {
+            if (routingProbe) compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
+        }
         val arch = providers.gradleProperty("benchmark.targetArch").getOrElse(System.getProperty("os.arch"))
         val native = when (targetOs) {
             "linux" -> when (arch) {
@@ -65,6 +68,12 @@ kotlin {
         native.binaries.executable {
             baseName = "ktserve"
             entryPoint = "codes.draeger.ktserve.example.main"
+        }
+        if (routingProbe) {
+            native.binaries.executable("routingProbe", listOf(RELEASE)) {
+                baseName = "ktserve-routing-probe"
+                entryPoint = "codes.draeger.ktserve.benchmark.routingMain"
+            }
         }
         val stressCompilation = native.compilations.create("stress") {
             associateWith(native.compilations.getByName("main"))
@@ -107,9 +116,11 @@ kotlin {
             }
         }
         sourceSets {
+            if (routingProbe) getByName("jvmMain").kotlin.srcDir("benchmarks/routing/kotlin")
             getByName("nativeMain") {
                 if (targetOs == "macos") kotlin.setSrcDirs(listOf("src/macosMain/kotlin"))
                 kotlin.srcDir("src/nativeShared/kotlin")
+                if (routingProbe) kotlin.srcDir("benchmarks/routing/kotlin")
             }
             if (targetOs == "linux") getByName("nativeTest").kotlin.srcDir("src/linuxTest/kotlin")
         }
@@ -122,6 +133,14 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+    }
+}
+
+if (routingProbe) {
+    tasks.register<Sync>("routingProbeJvmDist") {
+        into(layout.buildDirectory.dir("routingProbeJvm"))
+        from(tasks.named<Jar>("jvmJar")) { rename { "app.jar" } }
+        from(configurations.named("jvmRuntimeClasspath")) { into("lib") }
     }
 }
 

@@ -1,5 +1,8 @@
 package codes.draeger.ktserve
 
+internal fun configuredRoutes(configure: Routes.() -> Unit): Routes =
+    Routes().apply(configure).also(Routes::prepare)
+
 class Routes {
     private val gets = MethodRoutes<GetHandler>()
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
@@ -17,6 +20,12 @@ class Routes {
         private set
     internal var observer: ServerObserver? = null
         private set
+
+    internal fun prepare() {
+        gets.prepare()
+        posts.prepare()
+        requestRoutes?.values?.forEach { it.prepare() }
+    }
 
     /** Install the event sink for this HTTP/1.x listener. */
     fun observe(observer: ServerObserver) {
@@ -176,6 +185,7 @@ internal sealed interface PostBody {
 internal class MethodRoutes<Handler> {
     private val exact = mutableMapOf<String, Handler>()
     private val patterns = mutableListOf<RoutePattern<Handler>>()
+    private var patternsBySize: Map<Int, PatternGroup<Handler>>? = null
 
     fun add(path: String, handler: Handler) {
         require(path.startsWith('/') && '?' !in path && '#' !in path) { "Expected an absolute route path" }
@@ -201,6 +211,13 @@ internal class MethodRoutes<Handler> {
         val shape = parts.mapIndexed { index, part -> part.takeIf { names[index] == null } }
         require(patterns.none { it.shape == shape }) { "Duplicate route pattern $path" }
         patterns.add(RoutePattern(shape, names, handler))
+        patternsBySize = null
+    }
+
+    fun prepare() {
+        if (patterns.size < 8) return
+        val groups = patterns.groupBy { it.shape.size }.mapValues { (_, routes) -> PatternGroup(routes) }
+        patternsBySize = groups.takeIf { it.size > 1 || it.values.first().partitioned }
     }
 
     fun isEmpty(): Boolean = exact.isEmpty() && patterns.isEmpty()
@@ -210,29 +227,55 @@ internal class MethodRoutes<Handler> {
     inline fun <Result> resolve(request: Request, action: (Handler, Request) -> Result): Result? {
         exact[request.path]?.let { return action(it, request) }
         if (patterns.isEmpty()) return null
-        val parts = request.path.removePrefix("/").split('/')
-        for (route in patterns) {
-            if (parts.size != route.shape.size) continue
-            val values = mutableMapOf<String, String>()
-            var matches = true
-            for (index in parts.indices) {
-                val literal = route.shape[index]
-                val value = parts[index]
-                if (literal != null && literal != value || literal == null && value.isEmpty()) {
-                    matches = false
-                    break
-                }
-                route.names[index]?.let { values[it] = value }
-            }
-            if (matches) return action(route.handler, request.withParameters(values))
+        val groups = patternsBySize
+        val candidates = if (groups == null) patterns else {
+            val parts = request.path.removePrefix("/").split('/')
+            groups[parts.size]?.candidates(parts) ?: return null
+        }
+        for (route in candidates) {
+            val parameters = route.parameters(request.path) ?: continue
+            return action(route.handler, request.withParameters(parameters))
         }
         return null
     }
 
 }
 
+internal class PatternGroup<Handler>(private val routes: List<RoutePattern<Handler>>) {
+    // A fixed segment shared by every route as a literal partitions the list
+    // without changing the declaration order of routes that can match.
+    private val position = routes.first().shape.indices
+        .filter { index -> routes.all { it.shape[index] != null } }
+        .maxByOrNull { index -> routes.map { it.shape[index] }.toSet().size }
+    private val literals = position?.let { index -> routes.groupBy { it.shape[index] }.takeIf { it.size > 1 } }
+    val partitioned: Boolean get() = literals != null
+
+    fun candidates(parts: List<String>): List<RoutePattern<Handler>> =
+        if (position == null || literals == null) routes else literals[parts[position]].orEmpty()
+}
+
 internal data class RoutePattern<Handler>(
     val shape: List<String?>,
     val names: List<String?>,
     val handler: Handler,
-)
+) {
+    fun parameters(path: String): Map<String, String>? {
+        var start = if (path.startsWith('/')) 1 else 0
+        var captured: MutableMap<String, String>? = null
+        for (index in shape.indices) {
+            val separator = path.indexOf('/', start)
+            if ((separator < 0) != (index == shape.lastIndex)) return null
+            val end = if (separator < 0) path.length else separator
+            val literal = shape[index]
+            if (literal == null) {
+                if (end == start) return null
+                val parameters = captured ?: mutableMapOf<String, String>().also { captured = it }
+                parameters[checkNotNull(names[index])] = path.substring(start, end)
+            } else if (end - start != literal.length || !path.regionMatches(start, literal, 0, literal.length)) {
+                return null
+            }
+            start = end + 1
+        }
+        return captured
+    }
+}
