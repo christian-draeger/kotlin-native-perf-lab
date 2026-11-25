@@ -2,7 +2,7 @@
 
 ktServe is an HTTP server for Kotlin/Native and the JVM. Use its Kotlin routing API in a standalone service, select it as a Ktor engine, or enable it in a Spring Boot WebFlux application.
 
-The Kotlin Native Performance Lab is the project behind ktServe. Its [GitHub Pages site](https://christian-draeger.github.io/kotlin-native-perf-lab/) introduces the server, explains the architecture, and publishes benchmark results with their measured revisions and conditions.
+The [ktServe website](https://christian-draeger.github.io/ktserve/) explains the architecture and publishes benchmark results with their measured revisions and conditions.
 
 ktServe is licensed under the [Apache License 2.0](LICENSE). Third-party assets retain their accompanying licenses.
 
@@ -35,7 +35,7 @@ Start the application and check it with `curl -fsS http://127.0.0.1:8080/health`
 | A Ktor application with the ktServe engine | [Ktor JVM example](components/ktserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/ktserve/integrations/ktor/README.md) |
 | A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/ktserve/examples/spring-webflux) · [Starter guide](components/ktserve/integrations/spring-boot-starter/README.md) |
 
-ktServe 0.3.0 is qualified as a private HTTP/1.1 origin with one epoll worker on Ubuntu 24.04 Linux x86_64 and ARM64 behind Caddy TLS ingress. [Production deployment](components/ktserve/deployment/PRODUCTION.md) · [Release evidence](https://github.com/christian-draeger/kotlin-native-perf-lab/releases/tag/v0.3.0)
+ktServe 0.3.0 is qualified as a private HTTP/1.1 origin with one epoll worker on Ubuntu 24.04 Linux x86_64 and ARM64 behind Caddy TLS ingress. [Production deployment](components/ktserve/deployment/PRODUCTION.md) · [Release evidence](https://github.com/christian-draeger/ktserve/releases/tag/v0.3.0)
 
 ktServe replaces the NativeServe preview identifiers in packages, build coordinates and configuration. Historical benchmark results remain available. [Upgrade from the preview](components/ktserve/README.md#upgrade-from-the-preview)
 
@@ -43,27 +43,27 @@ ktServe replaces the NativeServe preview identifiers in packages, build coordina
 
 | Directory | Contents |
 | --- | --- |
-| `components/ktserve/` | ktServe and its public Kotlin API, platform implementation and component tests. |
-| `components/` | Project-owned components and their modules or standalone builds. |
-| `competitors/` | Reference implementations for Rust/Axum, the Kotlin server ecosystem, ASP.NET Core, Go, Hono, Elysia and FastAPI. |
+| `components/ktserve/` | Public Kotlin API, platform implementations, integrations, examples and experiments. |
+| `competitors/` | Reference implementations in Rust, Kotlin, Java, C#, Go, JavaScript and Python. |
 | `scripts/` | Shared build, validation, measurement and profiling commands. |
 | `dashboard/` | The benchmark dashboard published to GitHub Pages. |
+| `results/` | Benchmark reports, methodology decisions and tracked local measurements. Hosted raw data is archived on the [`benchmark-data`](https://github.com/christian-draeger/ktserve/tree/benchmark-data/results) branch. |
 
 ## Benchmark dashboard
 
-The [preview scorecard](results/preview-scorecard.md) documents the supported setup, measured trade-offs and the qualification required for a performance claim.
+The [benchmark protocol](BENCHMARK_PROTOCOL.md) documents the workloads, comparable conditions and raw data. The [historical preview scorecard](results/preview-scorecard.md) records the preview's measured trade-offs and performance criteria.
 
-Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/kotlin-native-perf-lab/). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate ktServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
+Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/ktserve/). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate ktServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
-To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 19-configuration `expanded` suite or the quicker four-configuration `core` suite, and three or five trials per server and endpoint. The expanded suite measures ktServe with one and two workers alongside the other stacks in their documented launch configurations. The optional feature label appears in ktServe history. One VM runs each architecture and endpoint pair. Every configuration in that endpoint comparison runs sequentially on the same VM, with a fresh server process per trial. The dashboard groups the endpoints by workflow and architecture while showing the selected endpoint's actual CPU model and raw logs. The load generator shares that VM with each server. CPU models and host conditions can differ between endpoints and workflow runs.
+To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 20-configuration `expanded` suite or the four-configuration `core` suite, and three or five trials per server and endpoint. The expanded suite includes ktServe's Eager default and the fixed one- and two-worker settings. Each architecture and endpoint pair runs on its own GitHub-hosted VM, where configurations run sequentially and the server and load generator share resources. Results link to their runner CPU model and raw logs.
 
-The engine comparisons use one application per framework and change its HTTP engine. They cover Ktor Native on CIO and ktServe, Ktor JVM on CIO, Netty and ktServe, and Spring Boot WebFlux on Reactor Netty and ktServe. Run **Actions → ktServe integration benchmarks** on `main` to collect Linux x86_64 and ARM64 measurements. GitHub Actions publishes the series to the engine comparison view. [Engine comparisons](https://christian-draeger.github.io/kotlin-native-perf-lab/#integration-benchmarks) · [Integration benchmark protocol](BENCHMARK_PROTOCOL.md#compare-framework-engines)
+The engine comparisons use one application per framework and change its HTTP engine. They cover Ktor Native on CIO and ktServe, Ktor JVM on CIO, Netty and ktServe, and Spring Boot WebFlux on Reactor Netty and ktServe. Run **Actions → ktServe integration benchmarks** on `main` to collect Linux x86_64 and ARM64 measurements. GitHub Actions publishes the series to the engine comparison view. [Engine comparisons](https://christian-draeger.github.io/ktserve/#integration-benchmarks) · [Integration benchmark protocol](BENCHMARK_PROTOCOL.md#compare-framework-engines)
 
 For a local preview, build the static files and serve the output directory.
 
 ```bash
-python3 scripts/build-dashboard.py /tmp/perflab-dashboard
-python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/perflab-dashboard
+python3 scripts/build-dashboard.py /tmp/ktserve-dashboard
+python3 -m http.server 8765 --bind 127.0.0.1 --directory /tmp/ktserve-dashboard
 ```
 
 ## Identical API contract
@@ -157,7 +157,7 @@ The command uses JDK Flight Recorder for Ktor/JVM and `perf` for the Native and 
 
 ## Project roadmap
 
-The [roadmap](ROADMAP.md) describes the proposed Kotlin/Native framework, how to validate it, and the delivery milestones. Each implementation issue has prerequisites and acceptance criteria in [GitHub Issues](https://github.com/christian-draeger/kotlin-native-perf-lab/issues). [Phase-0 assignment](CODEX_FIRST_TASK.md)
+The [roadmap](ROADMAP.md) records the framework's design, validation criteria and milestones. Current work is tracked in [GitHub Issues](https://github.com/christian-draeger/ktserve/issues). The [original baseline assignment](CODEX_FIRST_TASK.md) records the project's starting point.
 
 Run the fast local checks with JDK 21, Python 3 and Node.js. Add `--static` to run the shell and dashboard checks alone.
 

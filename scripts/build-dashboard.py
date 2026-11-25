@@ -292,7 +292,7 @@ def read_traffic_run(csv_path, checkout, revision):
 
 def main(destination, ci_checkout):
     notes = json.loads((ASSETS / "run-notes.json").read_text())
-    repo = os.environ.get("GITHUB_REPOSITORY", "christian-draeger/kotlin-native-perf-lab")
+    repo = os.environ.get("GITHUB_REPOSITORY", "christian-draeger/ktserve")
     revision = git(ROOT, "rev-parse", "HEAD").strip()
     runs = list(tracked_runs(ROOT, revision, notes))
     traffic_runs = []

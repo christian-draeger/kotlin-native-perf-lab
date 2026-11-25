@@ -76,7 +76,7 @@ jobs:
           fi
           printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
       - name: Look for tested artifacts from this release commit
-        if: github.event_name == 'release' && github.repository == 'christian-draeger/kotlin-native-perf-lab'
+        if: github.event_name == 'release' && github.repository_id == '1468028252' && github.repository_owner == 'christian-draeger'
         id: reuse
         env:
           GH_TOKEN: ${{ github.token }}
@@ -218,9 +218,10 @@ jobs:
         run: bash scripts/rehearse-ktserve-maven.sh "$RUNNER_TEMP/ktserve-rehearsal" "$RELEASE_VERSION"
 
   publish:
+    # Authorize the canonical repository across renames and keep the publisher bound to its owner.
     if: >-
       ${{ !cancelled() && github.event_name == 'release' &&
-      github.repository == 'christian-draeger/kotlin-native-perf-lab' &&
+      github.repository_id == '1468028252' && github.repository_owner == 'christian-draeger' &&
       needs.plan.result == 'success' &&
       ((needs.plan.outputs.artifact_id != '' && needs.stage.result == 'skipped' && needs.linux-consumer.result == 'skipped') ||
        (needs.stage.result == 'success' && needs.linux-consumer.result == 'success')) }}

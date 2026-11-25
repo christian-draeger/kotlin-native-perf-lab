@@ -12,7 +12,7 @@ repositories { mavenCentral() }
 
 group = "codes.draeger"
 val publicationVersion = providers.gradleProperty("ktserve.version").orNull
-val projectUrl = "https://github.com/christian-draeger/kotlin-native-perf-lab"
+val projectUrl = "https://github.com/christian-draeger/ktserve"
 if (publicationVersion != null) {
     val versionPattern = Regex("[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?")
     require(versionPattern.matches(publicationVersion) && !publicationVersion.endsWith("-SNAPSHOT", ignoreCase = true)) {

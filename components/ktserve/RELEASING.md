@@ -8,11 +8,11 @@ A Kotlin/JVM application on JDK 21 can use the following dependency. In a Kotlin
 repositories { mavenCentral() }
 
 dependencies {
-    implementation("codes.draeger:ktserve:0.2.0-preview.2")
+    implementation("codes.draeger:ktserve:0.3.0")
 }
 ```
 
-Gradle reads the root module metadata and selects JVM, Linux x86_64, Linux ARM64 or macOS ARM64. Native variants include their C interop libraries. For a JVM project with a Maven `pom.xml`, use `codes.draeger:ktserve-jvm` at the same version. The first publication covers the standalone ktServe library. Ktor and WebFlux adapters are still available as checkout integrations.
+Gradle reads the root module metadata and selects JVM, Linux x86_64, Linux ARM64 or macOS ARM64. Native variants include their C interop libraries. For a JVM project with a Maven `pom.xml`, use `codes.draeger:ktserve-jvm` at the same version. Maven Central provides the standalone library. Ktor and WebFlux adapters are available as checkout integrations.
 
 ## Stage and test a version
 
@@ -20,7 +20,7 @@ Use an Apple Silicon macOS host with full Xcode and JDK 21, or run **ktServe Mav
 
 ```sh
 project=components/ktserve
-version=0.2.0-preview.2
+version="${KTSERVE_VERSION:?Set KTSERVE_VERSION to the version you want to stage}"
 "$project/gradlew" -p "$project" "-Pktserve.version=$version" \
   publishAllPublicationsToStagingRepository
 "$project/gradlew" -p "$project/examples/hello-jvm" "-Pktserve.version=$version" run
@@ -37,7 +37,7 @@ To publish a confirmed fix, follow the normal tag workflow with the agreed versi
 ## Publish from GitHub Actions
 
 1. Set [`VERSION`](VERSION) to the next Maven version in the release commit. A push to `main` that changes ktServe starts **ktServe Maven staging** and tests the JVM and all three Native variants. A manual run on `main` can also stage a version.
-2. Publish a GitHub Release from that commit with the matching tag, for example `v0.2.0-preview.3`. The tag supplies the Maven version. The release reuses the successful staging archive for the same commit and version, verifies its SHA-256 digest, and signs the tested files. If staging is in progress, the release waits for it. If no matching archive is available, the release builds and tests the artifacts itself.
+2. Publish a GitHub Release from that commit with a tag consisting of `v` followed by the version. The tag supplies the Maven version. The release reuses the successful staging archive for the same commit and version, verifies its SHA-256 digest, and signs the tested files. If staging is in progress, the release waits for it. If no matching archive is available, the release builds and tests the artifacts itself.
 3. The workflow submits the signed bundle for automatic publication, waits for Central to report `PUBLISHED`, checks the public variants, and runs an independent JVM consumer against `mavenCentral()`. The Actions summary records the staging run, archive digest, and Central deployment ID.
 
 Configure the GitHub `maven-central` environment for release tags matching `v*`. Use these environment secrets, named as in the [Kotlin library template](https://github.com/christian-draeger/kotlin-library-template/blob/main/INITIAL_SETUP.md).
@@ -60,8 +60,9 @@ If only verification fails, rerun the failed jobs to check the same deployment. 
 4. Once Central lists the version, verify the dependency in a fresh JVM project using `mavenCentral()` and check `/health`. Publish an updated version for follow-up changes. [Central version immutability](https://central.sonatype.org/publish/requirements/immutability/)
 
 ```sh
-python3 scripts/package-ktserve-maven.py /path/to/staged-repository 0.2.0-preview.2 \
-  "$RELEASE_KEY_FINGERPRINT" ktserve-0.2.0-preview.2-central.zip
+version="${KTSERVE_VERSION:?Set KTSERVE_VERSION to the version you want to publish}"
+python3 scripts/package-ktserve-maven.py /path/to/staged-repository "$version" \
+  "$RELEASE_KEY_FINGERPRINT" "ktserve-$version-central.zip"
 ```
 
 The staging directory is the one containing `codes/draeger/`. The command checks the full set of versioned JVM and Native artifacts, verifies their checksums, signs the existing files through GnuPG and writes the Central directory layout into the ZIP. GnuPG prompts locally if the key needs a passphrase. The manual Portal upload uses your Portal session.

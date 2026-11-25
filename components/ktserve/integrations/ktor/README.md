@@ -38,4 +38,4 @@ project=components/ktserve/integrations/ktor
 python3 "$project/smoke.py" "$project/build/bin/native/releaseExecutable/ktserve-ktor-example.kexe"
 ```
 
-The JVM suite exercises ktServe, CIO and Netty. The Linux native fixture exercises both ktServe and CIO with routing, typed JSON, an application header, body streaming and application stop. The separate controlled comparisons are tracked in [#39](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/39) and [#42](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/42).
+The JVM suite exercises ktServe, CIO and Netty. The Linux native fixture exercises both ktServe and CIO with routing, typed JSON, an application header, body streaming and application stop. The separate controlled comparisons are tracked in [#39](https://github.com/christian-draeger/ktserve/issues/39) and [#42](https://github.com/christian-draeger/ktserve/issues/42).

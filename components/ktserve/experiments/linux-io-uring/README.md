@@ -29,6 +29,6 @@ The transport uses a single owner thread and limits connections to 1,024. Each c
 
 Closed sockets remain owned by the transport until their target operations complete. The transport drains late completions and closes any accepted socket returned during listener shutdown. There are no multishot operations, fixed files, registered buffers, SQ polling, or zero-copy sends. The shared transport fixture and HTTP suite exercise real sockets including cancellation races, blocked output, limits, coroutine cancellation, and drain.
 
-The smoke run checks correctness. Matching offered load, resource measurements and the epoll comparison are tracked in [#54](https://github.com/christian-draeger/kotlin-native-perf-lab/issues/54).
+The smoke run checks correctness. Matching offered load, resource measurements and the epoll comparison are tracked in [#54](https://github.com/christian-draeger/ktserve/issues/54).
 
 Run the **ktServe Linux io_uring** workflow with `measure=true` for an exploratory comparison. Each Linux worker runs both backends from the same release executable on separate server and load CPU masks within the VM. The workflow alternates backend order and archives raw wrk data, CPU, RSS and summaries for `/json` and `/users/123` at 16 and 64 connections.
