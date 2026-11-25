@@ -241,6 +241,20 @@ class HttpTest {
     }
 
     @Test
+    fun matchesParametersWithoutLosingEmptyLiteralSegments() {
+        val routes = configuredRoutes {
+            get("/{tenant}//inventory/{sku}/") {
+                text("${it.pathParameter("tenant")}:${it.pathParameter("sku")}")
+            }
+        }
+        val valid = Request("GET", "/eu//inventory/caf%C3%A9/", null)
+        assertEquals("eu:caf%C3%A9", routes.respond(valid).body.decodeToString())
+        for (path in listOf("/eu/inventory/x/", "/eu//inventory/x", "/eu//inventory//", "/eu//inventory/x//")) {
+            assertEquals(404, routes.respond(Request("GET", path, null)).status, path)
+        }
+    }
+
+    @Test
     fun jsonWireBytesStayIdenticalAcrossRepeatedResponses() {
         val payload = "{\"id\":123,\"name\":\"Grüße\",\"active\":true}"
         val bodyLength = payload.encodeToByteArray().size

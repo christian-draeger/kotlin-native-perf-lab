@@ -227,23 +227,14 @@ internal class MethodRoutes<Handler> {
     inline fun <Result> resolve(request: Request, action: (Handler, Request) -> Result): Result? {
         exact[request.path]?.let { return action(it, request) }
         if (patterns.isEmpty()) return null
-        val parts = request.path.removePrefix("/").split('/')
         val groups = patternsBySize
-        val candidates = if (groups == null) patterns else groups[parts.size]?.candidates(parts) ?: return null
+        val candidates = if (groups == null) patterns else {
+            val parts = request.path.removePrefix("/").split('/')
+            groups[parts.size]?.candidates(parts) ?: return null
+        }
         for (route in candidates) {
-            if (parts.size != route.shape.size) continue
-            val values = mutableMapOf<String, String>()
-            var matches = true
-            for (index in parts.indices) {
-                val literal = route.shape[index]
-                val value = parts[index]
-                if (literal != null && literal != value || literal == null && value.isEmpty()) {
-                    matches = false
-                    break
-                }
-                route.names[index]?.let { values[it] = value }
-            }
-            if (matches) return action(route.handler, request.withParameters(values))
+            val parameters = route.parameters(request.path) ?: continue
+            return action(route.handler, request.withParameters(parameters))
         }
         return null
     }
@@ -267,4 +258,24 @@ internal data class RoutePattern<Handler>(
     val shape: List<String?>,
     val names: List<String?>,
     val handler: Handler,
-)
+) {
+    fun parameters(path: String): Map<String, String>? {
+        var start = if (path.startsWith('/')) 1 else 0
+        var captured: MutableMap<String, String>? = null
+        for (index in shape.indices) {
+            val separator = path.indexOf('/', start)
+            if ((separator < 0) != (index == shape.lastIndex)) return null
+            val end = if (separator < 0) path.length else separator
+            val literal = shape[index]
+            if (literal == null) {
+                if (end == start) return null
+                val parameters = captured ?: mutableMapOf<String, String>().also { captured = it }
+                parameters[checkNotNull(names[index])] = path.substring(start, end)
+            } else if (end - start != literal.length || !path.regionMatches(start, literal, 0, literal.length)) {
+                return null
+            }
+            start = end + 1
+        }
+        return captured
+    }
+}
