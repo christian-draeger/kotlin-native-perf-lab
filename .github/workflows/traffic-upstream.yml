@@ -12,7 +12,17 @@ on:
       - 'scripts/benchmark-upstream.py'
       - 'scripts/k6-upstream.js'
       - 'scripts/upstream-origin.py'
+      - 'scripts/profile-upstream-client.py'
   workflow_dispatch:
+    inputs:
+      compare_reuse:
+        description: Compare fresh and pooled upstream connections and profile the outbound clients
+        type: boolean
+        default: false
+      clients_only:
+        description: Run only the outbound client measurements and profiles
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,10 +30,11 @@ permissions:
 jobs:
   loopback:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 45
     env:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
+      COMPARE_REUSE: ${{ inputs.compare_reuse || inputs.clients_only }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -42,24 +53,43 @@ jobs:
             sudo apt-get update -qq
             sudo apt-get install -y time
           fi
-          bash scripts/ci-gradle.sh -p competitors/ktor jvmDist linkReleaseExecutableNative
+          if [[ "$COMPARE_REUSE" != true ]]; then
+            bash scripts/ci-gradle.sh -p competitors/ktor jvmDist linkReleaseExecutableNative
+          fi
           bash scripts/ci-gradle.sh -p components/ktserve linkUpstreamProbeReleaseExecutableNative
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo build --release --locked --features upstream --manifest-path competitors/rust-axum/Cargo.toml
           bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
           echo "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
-      - name: Verify endpoint parity and measure
+      - name: Record measurement provenance
         run: |
           output="$RUNNER_TEMP/upstream-traffic"
           mkdir -p "$output"
           printf 'ci_run_id=%s\nci_run_attempt=%s\nci_event=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" > "$output/runner.txt"
           printf 'source_sha=%s\nrunner_image=%s\n' "$GITHUB_SHA" "${ImageVersion:-unknown}" >> "$output/runner.txt"
-          python3 scripts/benchmark-upstream.py "$output/parity" --smoke-only
-          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
-            python3 scripts/benchmark-upstream.py "$output" --rates 800
+      - name: Verify endpoint parity and measure
+        if: ${{ !inputs.clients_only }}
+        run: |
+          output="$RUNNER_TEMP/upstream-traffic"
+          if [[ "$COMPARE_REUSE" == true ]]; then
+            python3 scripts/benchmark-upstream.py "$output/parity" --compare-reuse --smoke-only
+            python3 scripts/benchmark-upstream.py "$output" --compare-reuse
           else
-            python3 scripts/benchmark-upstream.py "$output"
+            python3 scripts/benchmark-upstream.py "$output/parity" --smoke-only
+            python3 scripts/benchmark-upstream.py "$output/reuse-parity" --compare-reuse --smoke-only
+            if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+              python3 scripts/benchmark-upstream.py "$output" --rates 800
+            else
+              python3 scripts/benchmark-upstream.py "$output"
+            fi
           fi
+      - name: Measure and profile outbound clients without a frontend listener
+        if: ${{ !cancelled() && (inputs.compare_reuse || inputs.clients_only) }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y strace linux-tools-generic
+          export PERF_BIN="$(find -L /usr/lib/linux-tools -name perf -type f | sort -V | tail -1)"
+          python3 scripts/profile-upstream-client.py "$RUNNER_TEMP/upstream-traffic/client-only" --strace --perf
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: always()
         with:

@@ -3,6 +3,7 @@
 
 import argparse
 import contextlib
+from collections import Counter
 import csv
 import hashlib
 import http.client
@@ -86,23 +87,56 @@ def origin_stats(port):
     return json.loads(request(port, "/stats")[3])
 
 
-def preflight(front_port, origin_port, log):
+def counter_delta(before, after, group, key):
+    return after[group][key] - before[group][key]
+
+
+def preflight(front_port, origin_port, log, connection_mode=None):
     before = origin_stats(origin_port)
-    for name, (_, expected, body) in (*CASES.items(), ("unknown", (0, 404, "unknown-scenario"))):
+    checks = {**CASES, "unknown": (0, 404, "unknown-scenario")}
+    scenarios = list(checks)
+    if connection_mode:
+        # Exercise healthy reuse before and after each fault on the same frontend.
+        scenarios = ["fast", "slow", "deadline", "fast", "disconnect", "fast", "slow", "unknown"]
+    after_disconnect = None
+    for name in scenarios:
+        _, expected, body = checks[name]
         status, version, headers, payload = request(front_port, f"/upstream/{name}")
         if (status, version, headers.get_content_type(), payload) != (expected, 11, "text/plain", body):
             raise RuntimeError(f"Unexpected {name} response: {status}, HTTP {version}, {payload!r}")
+        if connection_mode and name == "disconnect":
+            after_disconnect = origin_stats(origin_port)
     expires = time.monotonic() + 1
     while time.monotonic() < expires:
         after = origin_stats(origin_port)
-        if sum(after["deadline"][key] - before["deadline"][key] for key in ("peer_closed", "replied")):
+        if sum(counter_delta(before, after, "deadline", key) for key in ("peer_closed", "replied")):
             break
         time.sleep(0.02)
     after = origin_stats(origin_port)
+    snapshots = {"before": before, "after": after}
+    if after_disconnect is not None:
+        snapshots["after_disconnect"] = after_disconnect
+    log.write_text(json.dumps(snapshots, indent=2) + "\n")
+    expected = Counter(scenarios)
     for name in CASES:
-        if after[name]["started"] - before[name]["started"] != 1:
-            raise RuntimeError(f"{name} did not make exactly one upstream request")
-    log.write_text(json.dumps({"before": before, "after": after}, indent=2) + "\n")
+        if counter_delta(before, after, name, "started") != expected[name]:
+            raise RuntimeError(f"{name} did not make exactly one upstream request per call; see {log}")
+    if connection_mode:
+        if (counter_delta(before, after, "deadline", "peer_closed") != 1
+                or counter_delta(before, after, "deadline", "replied") != 0):
+            raise RuntimeError(f"The deadline did not cancel the upstream connection; see {log}")
+        validate_connections(before, after, connection_mode, len(scenarios) - expected["unknown"], log)
+        validate_connections(after_disconnect, after, connection_mode, 2, log)
+
+
+def validate_connections(before, after, mode, expected, log):
+    counts = {key: counter_delta(before, after, "_connections", key)
+              for key in ("accepted", "requests", "reused")}
+    if counts["requests"] != expected or counts["accepted"] + counts["reused"] != expected:
+        raise RuntimeError(f"Origin request counts do not match the frontend: {counts}; see {log}")
+    if (counts["reused"] > 0) != (mode == "keep-alive"):
+        raise RuntimeError(f"Origin did not observe the configured {mode} behavior: {counts}; see {log}")
+    return counts
 
 
 def proc(process):
@@ -144,7 +178,7 @@ def load(port, rate, seconds, cpus, prefix):
     return metrics, valid, dropped, mismatches, requests, generator
 
 
-def measure(args, cpus, origin, origin_port, frontend, front_port, prefix, variant, rate, repetition):
+def measure(args, cpus, origin, origin_port, frontend, front_port, prefix, variant, client, mode, rate, repetition):
     _, _, cold_dropped, cold_mismatches, _, _ = load(
         front_port, rate, args.precondition, cpus, prefix.with_name(prefix.name + "-precondition"),
     )
@@ -158,6 +192,10 @@ def measure(args, cpus, origin, origin_port, frontend, front_port, prefix, varia
     server_end, server_peak, _ = proc(frontend)
     origin_end, origin_peak, _ = proc(origin)
     after = origin_stats(origin_port)
+    origin_log = prefix.with_suffix(".origin.json")
+    origin_log.write_text(json.dumps({"before": before, "after": after}, indent=2) + "\n")
+    matched = sum(int(metrics.get(f"bench_{name}_duration", {}).get("values", {}).get("count", 0)) for name in CASES)
+    cpu_seconds = server_end - server_cpu
     execution = {
         "variant": variant, "offered_rate": rate, "run": repetition, "duration_s": args.duration,
         "valid": int(warmed and valid), "http_requests": requests, "dropped_arrivals": dropped,
@@ -167,7 +205,25 @@ def measure(args, cpus, origin, origin_port, frontend, front_port, prefix, varia
         "server_peak_rss_kib": server_peak, "origin_cpu_seconds": round(origin_end - origin_cpu, 6),
         "origin_peak_rss_kib": origin_peak, **generator,
     }
-    prefix.with_suffix(".origin.json").write_text(json.dumps({"before": before, "after": after}, indent=2) + "\n")
+    if args.compare_reuse:
+        connection_counts = {key: counter_delta(before, after, "_connections", key)
+                             for key in ("accepted", "requests", "reused")}
+        deadline_closed = counter_delta(before, after, "deadline", "peer_closed")
+        deadline_replied = counter_delta(before, after, "deadline", "replied")
+        deadline_starts = counter_delta(before, after, "deadline", "started")
+        try:
+            validate_connections(before, after, mode, matched, origin_log)
+        except RuntimeError as error:
+            print(str(error), flush=True)
+            execution["valid"] = 0
+        if deadline_closed != deadline_starts or deadline_replied:
+            execution["valid"] = 0
+        execution.update(
+            client=client, connection_mode=mode, matched_total=matched,
+            server_cpu_seconds_per_million_matched=round(cpu_seconds * 1_000_000 / matched, 3) if matched else "",
+            origin_new_connections=connection_counts["accepted"], origin_reused_requests=connection_counts["reused"],
+            origin_deadline_closed=deadline_closed, origin_deadline_replied=deadline_replied,
+        )
     for name, (_, expected, _) in CASES.items():
         stats = metrics.get(f"bench_{name}_duration", {}).get("values", {})
         yield {
@@ -181,13 +237,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     parser.add_argument("--smoke-only", action="store_true")
-    parser.add_argument("--variants", nargs="+", choices=VARIANTS, default=list(VARIANTS))
+    parser.add_argument("--variants", nargs="+", choices=VARIANTS)
+    parser.add_argument("--compare-reuse", action="store_true", help="compare fresh and reused upstream TCP connections")
     parser.add_argument("--rates", nargs="+", type=int, default=[200, 800])
     parser.add_argument("--precondition", type=int, default=15)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--duration", type=int, default=8)
     parser.add_argument("--repeats", type=int, default=3)
     args = parser.parse_args()
+    if args.compare_reuse:
+        by_variant = {
+            "ktserve": [("cio", "fresh"), ("socket", "fresh"), ("socket", "keep-alive")],
+            "rust-axum": [("hyper", "fresh"), ("hyper", "keep-alive")],
+        }
+        args.variants = args.variants or list(by_variant)
+        if any(variant not in by_variant for variant in args.variants):
+            parser.error("The reuse experiment compares ktServe and Axum")
+        configs = [(variant, client, mode) for variant in args.variants for client, mode in by_variant[variant]]
+    else:
+        args.variants = args.variants or list(VARIANTS)
+        configs = [(variant, "cio" if variant != "rust-axum" else "hyper", "fresh") for variant in args.variants]
     if (any(rate < 20 or rate % 20 for rate in args.rates)
             or min(args.precondition, args.warmup, args.duration, args.repeats) < 1):
         parser.error("Use positive durations, repetitions and offered rates divisible by 20.")
@@ -207,39 +276,46 @@ def main():
             print(f"rates={args.rates} precondition={args.precondition} warmup={args.warmup} "
                   f"duration={args.duration} repeats={args.repeats}", file=environment)
             print("http_protocol=HTTP/1.1\norigin=loopback on the same host\nfrontend_deadline_ms=150", file=environment)
+            print(f"configurations={configs}", file=environment)
             environment.flush()
             for command in (["git", "rev-parse", "HEAD"], ["lscpu"], ["java", "-version"], ["gradle", "--version"],
                             ["rustc", "--version"], ["k6", "version"], [sys.executable, "--version"]):
                 subprocess.run(command, cwd=ROOT, stdout=environment, stderr=subprocess.STDOUT, check=True)
-            binaries = [
-                PROBE,
-                ROOT / "competitors/rust-axum/target/release/axum-baseline",
-                ROOT / "competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe",
-                *sorted((ROOT / "competitors/ktor/build/jvmDist").rglob("*.jar")),
-            ]
+            binaries = {
+                "ktserve": [PROBE],
+                "rust-axum": [ROOT / "competitors/rust-axum/target/release/axum-baseline"],
+                "ktor-native": [ROOT / "competitors/ktor/build/bin/native/releaseExecutable/ktor-baselines.kexe"],
+                "ktor-jvm": sorted((ROOT / "competitors/ktor/build/jvmDist").rglob("*.jar")),
+            }
+            binaries = [binary for variant in args.variants for binary in binaries[variant]]
             for binary in binaries:
                 with binary.open("rb") as source:
                     digest = hashlib.file_digest(source, "sha256").hexdigest()
                 print(f"{digest}  {binary.relative_to(ROOT)}", file=environment)
     origin_port = open_port()
     all_valid = True
-    with launch([sys.executable, str(SCRIPTS / "upstream-origin.py"), str(origin_port)], origin_cpus,
-                args.output / "origin.log") as origin:
+    origin_command = [sys.executable, str(SCRIPTS / "upstream-origin.py"), str(origin_port)]
+    if args.compare_reuse:
+        origin_command.append("--keep-alive")
+    with launch(origin_command, origin_cpus, args.output / "origin.log") as origin:
         ready(origin, origin_port, "/stats")
         for repetition in range(1, (1 if args.smoke_only else args.repeats) + 1):
             for rate in ([0] if args.smoke_only else args.rates):
-                for index in range(len(args.variants)):
-                    variant = args.variants[(index + repetition - 1) % len(args.variants)]
-                    prefix = args.output / f"{variant}-{rate}-{repetition}"
+                for index in range(len(configs)):
+                    variant, client, mode = configs[(index + repetition - 1) % len(configs)]
+                    name = f"{variant}-{client}-{mode}" if args.compare_reuse else variant
+                    prefix = args.output / f"{name}-{rate}-{repetition}"
                     front_port = open_port()
                     with launch(VARIANTS[variant], server_cpus, prefix.with_suffix(".server.log"), PORT=str(front_port),
                                 BIND_HOST="127.0.0.1", BENCHMARK_SUITE="application-upstream",
-                                BENCHMARK_UPSTREAM_PORT=str(origin_port)) as frontend:
+                                BENCHMARK_UPSTREAM_PORT=str(origin_port), UPSTREAM_CONNECTION_MODE=mode,
+                                UPSTREAM_CLIENT=client) as frontend:
                         ready(frontend, front_port, "/health")
-                        preflight(front_port, origin_port, prefix.with_suffix(".parity.json"))
+                        preflight(front_port, origin_port, prefix.with_suffix(".parity.json"),
+                                  mode if args.compare_reuse else None)
                         if not args.smoke_only:
                             rows = list(measure(args, load_cpus, origin, origin_port, frontend, front_port,
-                                                prefix, variant, rate, repetition))
+                                                prefix, variant, client, mode, rate, repetition))
                             append = results.exists()
                             with results.open("a", newline="") as output:
                                 writer = csv.DictWriter(output, fieldnames=rows[0])

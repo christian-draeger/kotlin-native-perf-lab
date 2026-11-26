@@ -22,3 +22,16 @@ cargo build --release --locked --features upstream --manifest-path competitors/r
 python3 scripts/benchmark-upstream.py /tmp/ktserve-upstream --smoke-only
 python3 scripts/benchmark-upstream.py /tmp/ktserve-upstream
 ```
+
+## Compare upstream connection reuse
+
+Run **ktServe upstream traffic pilot** with **Compare fresh and pooled upstream connections and profile the outbound clients** selected. The additional matrix compares Native ktServe with CIO on fresh connections, the same ktServe releases with a benchmark-only Kotlin socket client in fresh and pooled modes, and Axum with Hyper in fresh and pooled modes. The client-only probes call the same origin without binding a frontend listener. They collect uninstrumented timing and CPU/RSS data. `strace` and `perf` are separate diagnostic runs.
+
+Ktor 3.6.1 CIO on Kotlin/Native uses dedicated request connections and does not implement its connection pipeline. The Kotlin socket client is scoped to this experiment. It uses bounded HTTP/1.1 keep-alive for the known origin contract. This gives a within-client comparison for reuse. [CIO endpoint selection](https://github.com/ktorio/ktor/blob/3.6.1/ktor-client/ktor-client-cio/common/src/io/ktor/client/engine/cio/Endpoint.kt) · [Native CIO pipeline](https://github.com/ktorio/ktor/blob/3.6.1/ktor-client/ktor-client-cio/nonJvm/src/io/ktor/client/engine/cio/ConnectionPipeline.nonJvm.kt)
+
+The additional parity checks send healthy requests before and after an origin deadline and an injected disconnect. The origin counts new connections and requests on already used connections. The timed trials include those counters, frontend CPU per million matched responses, and origin cancellations. The previous four-framework fresh-connection matrix remains independently runnable.
+
+```bash
+python3 scripts/benchmark-upstream.py /tmp/ktserve-upstream-reuse --compare-reuse
+python3 scripts/profile-upstream-client.py /tmp/ktserve-upstream-clients --strace --perf
+```

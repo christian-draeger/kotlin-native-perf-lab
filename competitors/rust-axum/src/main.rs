@@ -103,14 +103,19 @@ async fn main() {
         _ => app,
     };
     #[cfg(feature = "upstream")]
-    let app = if std::env::var("BENCHMARK_SUITE").as_deref() == Ok("application-upstream") {
-        let origin = std::env::var("BENCHMARK_UPSTREAM_PORT")
-            .expect("Missing upstream port")
-            .parse::<u16>()
-            .expect("Invalid upstream port");
-        upstream::routes(app, origin)
-    } else {
-        app
+    let app = {
+        let client_only = std::env::var("UPSTREAM_CLIENT_ONLY").as_deref() == Ok("1");
+        let serve_upstream = std::env::var("BENCHMARK_SUITE").as_deref() == Ok("application-upstream");
+        if client_only || serve_upstream {
+            let client = upstream::UpstreamClient::from_env();
+            if client_only {
+                client.run_client_only().await;
+                return;
+            }
+            upstream::routes(app, client)
+        } else {
+            app
+        }
     };
 
     let listener = tokio::net::TcpListener::bind((host.as_str(), port))
