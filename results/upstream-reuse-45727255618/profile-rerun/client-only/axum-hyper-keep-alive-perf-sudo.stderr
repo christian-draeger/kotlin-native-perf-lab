@@ -1,0 +1,2 @@
+[ perf record: Woken up 1 times to write data ]
+[ perf record: Captured and wrote 0.095 MB /home/runner/work/_temp/upstream-traffic/client-only/axum-hyper-keep-alive-perf-sudo.data (19 samples) ]

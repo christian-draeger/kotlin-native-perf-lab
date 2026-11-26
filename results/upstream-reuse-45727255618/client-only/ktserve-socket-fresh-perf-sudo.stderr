@@ -1,0 +1,2 @@
+[ perf record: Woken up 5 times to write data ]
+[ perf record: Captured and wrote 1.240 MB /home/runner/work/_temp/upstream-traffic/client-only/ktserve-socket-fresh-perf-sudo.data (283 samples) ]

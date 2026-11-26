@@ -1,0 +1,56 @@
+{
+  "before": {
+    "fast": {
+      "started": 323713,
+      "replied": 323713,
+      "peer_closed": 0
+    },
+    "slow": {
+      "started": 92584,
+      "replied": 92584,
+      "peer_closed": 0
+    },
+    "deadline": {
+      "started": 23225,
+      "replied": 0,
+      "peer_closed": 23225
+    },
+    "disconnect": {
+      "started": 23225,
+      "replied": 0,
+      "peer_closed": 0
+    },
+    "_connections": {
+      "accepted": 284493,
+      "requests": 462747,
+      "reused": 178254
+    }
+  },
+  "after": {
+    "fast": {
+      "started": 328194,
+      "replied": 328194,
+      "peer_closed": 0
+    },
+    "slow": {
+      "started": 93865,
+      "replied": 93865,
+      "peer_closed": 0
+    },
+    "deadline": {
+      "started": 23546,
+      "replied": 0,
+      "peer_closed": 23546
+    },
+    "disconnect": {
+      "started": 23546,
+      "replied": 0,
+      "peer_closed": 0
+    },
+    "_connections": {
+      "accepted": 290897,
+      "requests": 469151,
+      "reused": 178254
+    }
+  }
+}

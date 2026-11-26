@@ -1,0 +1,122 @@
+{
+  "ktserve-cio-fresh": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 400,
+        "read_write": 5228,
+        "wait_wake": 46466,
+        "virtual_memory": 413,
+        "other": 4040
+      },
+      "system_seconds": {
+        "connect": 0.020781,
+        "read_write": 0.103464,
+        "wait_wake": 8.765838,
+        "virtual_memory": 0.028722,
+        "other": 0.098871
+      }
+    },
+    "perf": {
+      "status": "unavailable",
+      "reason": "CPU-clock sampling failed; see perf attempt logs"
+    }
+  },
+  "ktserve-socket-fresh": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 400,
+        "read_write": 4808,
+        "wait_wake": 29792,
+        "virtual_memory": 295,
+        "other": 3839
+      },
+      "system_seconds": {
+        "connect": 0.024952,
+        "read_write": 0.087883,
+        "wait_wake": 5.137129,
+        "virtual_memory": 0.020422,
+        "other": 0.084485
+      }
+    },
+    "perf": {
+      "status": "unavailable",
+      "reason": "CPU-clock sampling failed; see perf attempt logs"
+    }
+  },
+  "ktserve-socket-keep-alive": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 1,
+        "read_write": 2420,
+        "wait_wake": 11191,
+        "virtual_memory": 219,
+        "other": 213
+      },
+      "system_seconds": {
+        "connect": 0.000133,
+        "read_write": 0.058686,
+        "wait_wake": 1.652239,
+        "virtual_memory": 0.019299,
+        "other": 0.005022
+      }
+    },
+    "perf": {
+      "status": "unavailable",
+      "reason": "CPU-clock sampling failed; see perf attempt logs"
+    }
+  },
+  "axum-hyper-fresh": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 400,
+        "read_write": 1392,
+        "wait_wake": 6146,
+        "virtual_memory": 46,
+        "other": 1688
+      },
+      "system_seconds": {
+        "connect": 0.024643,
+        "read_write": 0.029113,
+        "wait_wake": 0.33996,
+        "virtual_memory": 0.000598,
+        "other": 0.050677
+      }
+    },
+    "perf": {
+      "status": "unavailable",
+      "reason": "CPU-clock sampling failed; see perf attempt logs"
+    }
+  },
+  "axum-hyper-keep-alive": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 1,
+        "read_write": 844,
+        "wait_wake": 4310,
+        "virtual_memory": 46,
+        "other": 91
+      },
+      "system_seconds": {
+        "connect": 0.000101,
+        "read_write": 0.020867,
+        "wait_wake": 0.248494,
+        "virtual_memory": 0.000704,
+        "other": 0.001041
+      }
+    },
+    "perf": {
+      "status": "unavailable",
+      "reason": "CPU-clock sampling failed; see perf attempt logs"
+    }
+  }
+}

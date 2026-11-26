@@ -1,0 +1,127 @@
+{
+  "ktserve-cio-fresh": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 400,
+        "read_write": 5234,
+        "wait_wake": 46118,
+        "virtual_memory": 411,
+        "other": 4049
+      },
+      "system_seconds": {
+        "connect": 0.01704,
+        "read_write": 0.079162,
+        "wait_wake": 6.824795,
+        "virtual_memory": 0.034641,
+        "other": 0.077674
+      }
+    },
+    "perf": {
+      "status": "ok",
+      "requests": 400,
+      "method": "sudo"
+    }
+  },
+  "ktserve-socket-fresh": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 400,
+        "read_write": 4806,
+        "wait_wake": 29096,
+        "virtual_memory": 303,
+        "other": 3849
+      },
+      "system_seconds": {
+        "connect": 0.018998,
+        "read_write": 0.069846,
+        "wait_wake": 4.012079,
+        "virtual_memory": 0.01907,
+        "other": 0.065762
+      }
+    },
+    "perf": {
+      "status": "ok",
+      "requests": 400,
+      "method": "sudo"
+    }
+  },
+  "ktserve-socket-keep-alive": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 1,
+        "read_write": 2420,
+        "wait_wake": 11387,
+        "virtual_memory": 222,
+        "other": 215
+      },
+      "system_seconds": {
+        "connect": 6.8e-05,
+        "read_write": 0.035908,
+        "wait_wake": 0.94365,
+        "virtual_memory": 0.011391,
+        "other": 0.00228
+      }
+    },
+    "perf": {
+      "status": "ok",
+      "requests": 400,
+      "method": "sudo"
+    }
+  },
+  "axum-hyper-fresh": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 400,
+        "read_write": 1384,
+        "wait_wake": 6201,
+        "virtual_memory": 46,
+        "other": 1688
+      },
+      "system_seconds": {
+        "connect": 0.014252,
+        "read_write": 0.018688,
+        "wait_wake": 0.228448,
+        "virtual_memory": 0.000598,
+        "other": 0.032193
+      }
+    },
+    "perf": {
+      "status": "ok",
+      "requests": 400,
+      "method": "sudo"
+    }
+  },
+  "axum-hyper-keep-alive": {
+    "strace": {
+      "status": "ok",
+      "requests": 400,
+      "calls": {
+        "connect": 1,
+        "read_write": 832,
+        "wait_wake": 4362,
+        "virtual_memory": 46,
+        "other": 91
+      },
+      "system_seconds": {
+        "connect": 5.4e-05,
+        "read_write": 0.009669,
+        "wait_wake": 0.132232,
+        "virtual_memory": 0.000507,
+        "other": 0.000879
+      }
+    },
+    "perf": {
+      "status": "ok",
+      "requests": 400,
+      "method": "sudo"
+    }
+  }
+}
