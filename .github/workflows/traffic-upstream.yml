@@ -19,6 +19,10 @@ on:
         description: Compare fresh and pooled upstream connections and profile the outbound clients
         type: boolean
         default: false
+      clients_only:
+        description: Run only the outbound client measurements and profiles
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,7 +34,7 @@ jobs:
     env:
       LC_ALL: C
       RUSTUP_TOOLCHAIN: '1.100.0'
-      COMPARE_REUSE: ${{ inputs.compare_reuse }}
+      COMPARE_REUSE: ${{ inputs.compare_reuse || inputs.clients_only }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -57,12 +61,16 @@ jobs:
           cargo build --release --locked --features upstream --manifest-path competitors/rust-axum/Cargo.toml
           bash scripts/install-k6.sh "$RUNNER_TEMP/k6"
           echo "$RUNNER_TEMP/k6" >> "$GITHUB_PATH"
-      - name: Verify endpoint parity and measure
+      - name: Record measurement provenance
         run: |
           output="$RUNNER_TEMP/upstream-traffic"
           mkdir -p "$output"
           printf 'ci_run_id=%s\nci_run_attempt=%s\nci_event=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_EVENT_NAME" > "$output/runner.txt"
           printf 'source_sha=%s\nrunner_image=%s\n' "$GITHUB_SHA" "${ImageVersion:-unknown}" >> "$output/runner.txt"
+      - name: Verify endpoint parity and measure
+        if: ${{ !inputs.clients_only }}
+        run: |
+          output="$RUNNER_TEMP/upstream-traffic"
           if [[ "$COMPARE_REUSE" == true ]]; then
             python3 scripts/benchmark-upstream.py "$output/parity" --compare-reuse --smoke-only
             python3 scripts/benchmark-upstream.py "$output" --compare-reuse
@@ -76,7 +84,7 @@ jobs:
             fi
           fi
       - name: Measure and profile outbound clients without a frontend listener
-        if: ${{ !cancelled() && inputs.compare_reuse }}
+        if: ${{ !cancelled() && (inputs.compare_reuse || inputs.clients_only) }}
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y strace linux-tools-generic

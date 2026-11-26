@@ -173,7 +173,7 @@ def perf_client(cell, env, path, cpus, requests):
         report = attempt.with_suffix(".report.txt")
         with report.open("w") as output:
             result = subprocess.run(
-                [*prefix, perf, "report", "--stdio", "--sort", "dso,symbol", "-i", str(data)],
+                [perf, "report", "--stdio", "--sort", "dso,symbol", "-i", str(data)],
                 stdout=output, stderr=subprocess.STDOUT, timeout=60, check=False,
             )
         if result.returncode == 0:
