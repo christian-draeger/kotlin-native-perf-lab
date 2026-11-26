@@ -14,7 +14,7 @@ Add the standalone library to a Kotlin/JVM Gradle project on JDK 21. Kotlin Mult
 repositories { mavenCentral() }
 
 dependencies {
-    implementation("codes.draeger:ktserve:0.3.0")
+    implementation("codes.draeger:ktserve:0.4.0")
 }
 ```
 
@@ -35,7 +35,7 @@ Start the application and check it with `curl -fsS http://127.0.0.1:8080/health`
 | A Ktor application with the ktServe engine | [Ktor JVM example](components/ktserve/examples/ktor-jvm) · [Engine guide for JVM and Kotlin/Native](components/ktserve/integrations/ktor/README.md) |
 | A Spring Boot WebFlux application on ktServe | [Spring Boot example](components/ktserve/examples/spring-webflux) · [Starter guide](components/ktserve/integrations/spring-boot-starter/README.md) |
 
-ktServe 0.3.0 is qualified as a private HTTP/1.1 origin with one epoll worker on Ubuntu 24.04 Linux x86_64 and ARM64 behind Caddy TLS ingress. [Production deployment](components/ktserve/deployment/PRODUCTION.md) · [Release evidence](https://github.com/christian-draeger/ktserve/releases/tag/v0.3.0)
+ktServe 0.4.0 is qualified as a private HTTP/1.1 origin with one epoll worker on Ubuntu 24.04 Linux x86_64 and ARM64 behind Caddy TLS ingress. [Production deployment](components/ktserve/deployment/PRODUCTION.md) · [Release evidence](https://github.com/christian-draeger/ktserve/releases/tag/v0.4.0)
 
 ktServe replaces the NativeServe preview identifiers in packages, build coordinates and configuration. Historical benchmark results remain available. [Upgrade from the preview](components/ktserve/README.md#upgrade-from-the-preview)
 

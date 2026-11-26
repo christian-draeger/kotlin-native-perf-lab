@@ -8,7 +8,7 @@ A Kotlin/JVM application on JDK 21 can use the following dependency. In a Kotlin
 repositories { mavenCentral() }
 
 dependencies {
-    implementation("codes.draeger:ktserve:0.3.0")
+    implementation("codes.draeger:ktserve:0.4.0")
 }
 ```
 
