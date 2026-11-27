@@ -12,7 +12,7 @@
   const start = command.hasAttribute("data-cli-install-only")
     ? ""
     : " &&\n./ktserve serve - <<<'{\"status\":\"ok\"}'";
-  const release = "cli-preview-0.1.6";
+  const release = "cli-preview-0.1.7";
   const releaseUrl = `https://github.com/christian-draeger/ktserve/releases/download/${release}`;
   const groups = [
     ["HTTP", [
