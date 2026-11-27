@@ -89,31 +89,39 @@ dependencies {
         <div class="cli-guide">
           <section class="docs-stack" aria-labelledby="cli-install">
             <h3 id="cli-install">Install it</h3>
+            <p>Download an archive and extract it into a new directory, or download and extract it in one step from the terminal.</p>
             <div class="docs-grid">
               <div class="docs-stack">
                 <h4>HTTP</h4>
-                <div class="integration-links">
-                  <a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz">Linux x86-64 <span aria-hidden="true">↓</span></a>
-                  <a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64.tar.gz">Linux ARM64 <span aria-hidden="true">↓</span></a>
-                  <a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-macos-arm64.tar.gz">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
+                <div class="cli-downloads" data-cli-downloads="HTTP">
+                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz">Linux x86-64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64.tar.gz">Linux ARM64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-macos-arm64.tar.gz">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>macOS may ask you to approve the ad hoc signed executable on first launch. <a class="text-link" href="https://support.apple.com/en-us/102445">Apple’s first-launch guidance <span aria-hidden="true">↗</span></a></p>
               </div>
               <div class="docs-stack">
                 <h4 id="direct-https">Direct HTTPS</h4>
-                <div class="integration-links">
-                  <a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64-https.tar.gz">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
-                  <a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64-https.tar.gz">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
+                <div class="cli-downloads" data-cli-downloads="Direct HTTPS">
+                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64-https.tar.gz">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64-https.tar.gz">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>The HTTPS downloads use the system’s OpenSSL 3 libraries. On Ubuntu 24.04, install <code>libssl3t64</code> if needed. They can also serve plain HTTP.</p>
               </div>
             </div>
             <p><a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.2">Release notes and SHA-256 checksums <span aria-hidden="true">↗</span></a></p>
-            <p>In your download directory, use the filename of the archive you downloaded.</p>
-            <div class="code-window">
-              <pre tabindex="0" aria-label="Extract the downloaded CLI"><code>mkdir -p ktserve-cli-preview
-tar -xzf ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz -C ktserve-cli-preview
-cd ktserve-cli-preview</code></pre>
+            <div class="docs-stack">
+              <h4>Download from the terminal</h4>
+              <p>Run this in an empty directory to create <code>./ktserve</code> and the sample <code>public/</code> folder.</p>
+              <div class="cli-terminal-controls" hidden>
+                <label for="cli-terminal-target">Archive</label>
+                <select id="cli-terminal-target"></select>
+                <button class="button button-secondary" id="cli-copy" type="button" hidden>Copy command</button>
+                <span id="cli-copy-status" role="status"></span>
+              </div>
+              <div class="code-window cli-terminal-command">
+                <pre tabindex="0" aria-label="Download and extract ktServe"><code id="cli-install-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz | tar -xzf -</code></pre>
+              </div>
             </div>
           </section>
           <section class="docs-stack" aria-labelledby="cli-run">
@@ -238,5 +246,48 @@ cd ktserve-cli-preview</code></pre>
       </nav>
     </div>
   </footer>
+
+  <script>
+    (() => {
+      const target = document.querySelector("#cli-terminal-target");
+      const command = document.querySelector("#cli-install-command");
+      const copy = document.querySelector("#cli-copy");
+      const status = document.querySelector("#cli-copy-status");
+      for (const downloads of document.querySelectorAll("[data-cli-downloads]")) {
+        const group = document.createElement("optgroup");
+        group.label = downloads.dataset.cliDownloads;
+        for (const link of downloads.querySelectorAll("a[href]")) {
+          const label = link.firstChild.textContent.trim();
+          group.append(new Option(label, link.href));
+        }
+        target.append(group);
+      }
+
+      function showCommand() {
+        command.textContent = `curl -fsSL ${target.value} | tar -xzf -`;
+        status.textContent = "";
+      }
+
+      if (location.hash === "#direct-https") {
+        const https = target.querySelector('optgroup[label="Direct HTTPS"] option');
+        target.value = https.value;
+      }
+      target.addEventListener("change", showCommand);
+      showCommand();
+      target.parentElement.hidden = false;
+
+      if (navigator.clipboard?.writeText) {
+        copy.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(command.textContent);
+            status.textContent = "Copied.";
+          } catch {
+            status.textContent = "Select the command to copy it.";
+          }
+        });
+        copy.hidden = false;
+      }
+    })();
+  </script>
 </body>
 </html>

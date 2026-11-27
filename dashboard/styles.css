@@ -420,6 +420,18 @@ tbody tr:hover { background-color: #ffffff0c; }
 .cli-guide { display: grid; gap: 32px; margin-top: 30px; }
 .cli-guide :is(.docs-grid, .integration-links) { margin-top: 0; }
 .cli-guide h4 { margin: 0; color: var(--subtle); font-size: .95rem; }
+.cli-downloads, .cli-terminal-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cli-terminal-controls label, .cli-terminal-controls [role="status"] { color: var(--subtle); font-size: .875rem; }
+.cli-terminal-controls select {
+  max-width: 100%;
+  min-height: 45px;
+  padding: 8px 10px;
+  border: 1px solid var(--edge-light);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+}
+.cli-terminal-command pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .docs-disclosure { min-width: 0; }
 .docs-disclosure summary { width: fit-content; cursor: pointer; font-weight: 650; }
 .docs-disclosure[open] > :not(summary) { margin-top: 12px; }
