@@ -1,10 +1,25 @@
 # ktServe CLI experiment
 
-Use `serve` to publish a directory over HTTP or `run` to compile and start an application from a Kotlin file. Both commands use the ktServe Native server and bind to loopback in the examples below.
+Use `serve` to publish JSON or a directory over HTTP. Use `run` to compile and start an application from a Kotlin file. Both commands use the ktServe Native server and bind to loopback in the examples below.
+
+## Serve JSON from stdin
+
+Download the standalone executable for your platform. This example uses Linux x86-64.
+
+```sh
+curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64 -o ktserve && chmod +x ktserve
+printf '%s\n' '{"status":"ok"}' | ./ktserve serve -
+```
+
+```sh
+curl -fsS http://127.0.0.1:8080/
+```
+
+Supply valid UTF-8 JSON. The CLI reads up to 1 MiB from stdin to EOF at startup and serves those bytes verbatim at `/` with `Content-Type: application/json`.
 
 ## Serve a directory
 
-Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.2). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
+Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.3). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
 
 ### Build from source
 

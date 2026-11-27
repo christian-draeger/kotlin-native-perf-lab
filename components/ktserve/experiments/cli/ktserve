@@ -5,6 +5,7 @@ usage() {
   printf '%s\n' 'Usage: ktserve serve [<directory>] [--mount <prefix> <directory>]...' \
     '                     [--cache-control <value>] [--access-log]' \
     '                     [--tls-cert <chain.pem> --tls-key <key.pem>]' \
+    '       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]' \
     '       ktserve run <App.kt> [app arguments...]'
 }
 

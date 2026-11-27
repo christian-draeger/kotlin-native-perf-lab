@@ -7,17 +7,27 @@ import codes.draeger.ktserve.ServerLimits
 import codes.draeger.ktserve.cli.signals.ktserve_cli_install_signals
 import codes.draeger.ktserve.cli.signals.ktserve_cli_restore_signals
 import codes.draeger.ktserve.cli.signals.ktserve_cli_stop_requested
+import codes.draeger.ktserve.response
 import codes.draeger.ktserve.serve
 import codes.draeger.ktserve.staticFiles
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.toKString
+import kotlinx.cinterop.usePinned
 import platform.posix.errno
 import platform.posix.exit
+import platform.posix.ferror
 import platform.posix.fputs
+import platform.posix.fread
 import platform.posix.getenv
 import platform.posix.stderr
+import platform.posix.stdin
+import kotlin.text.CharacterCodingException
 
 private const val USAGE = "Usage: ktserve serve [<directory>] [--mount <prefix> <directory>]... " +
-    "[--cache-control <value>] [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]"
+    "[--cache-control <value>] [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
+    "       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]"
+private const val CLI_BODY_LIMIT = 1024 * 1024
 
 fun main(args: Array<String>) {
     if (args.size == 1 && args[0] == "--help") {
@@ -36,14 +46,16 @@ fun main(args: Array<String>) {
         require(port != null && port in 1..65535) { "PORT must be an integer between 1 and 65535" }
         val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
         val scheme = if (options.tls == null) "http" else "https"
+        val stdinResponse = if (options.serveStdin) response(readStdin(), contentType = "application/json") else null
         check(ktserve_cli_install_signals() == 0) { "Could not install signal handlers (errno $errno)" }
         try {
             println("ktserve: starting at $scheme://$host:$port")
-            val limits = ServerLimits(responseBodyBytes = 1024 * 1024)
+            val limits = ServerLimits(responseBodyBytes = CLI_BODY_LIMIT)
             val stopRequested = { ktserve_cli_stop_requested() != 0 }
             withAccessLog(options.accessLog) { observer ->
                 val configure: Routes.() -> Unit = {
                     if (observer != null) observe(observer)
+                    if (stdinResponse != null) get("/") { stdinResponse }
                     for ((at, directory, cacheControl) in options.mounts) staticFiles(directory, at, cacheControl)
                 }
                 val tls = options.tls
@@ -62,11 +74,28 @@ fun main(args: Array<String>) {
     }
 }
 
+private fun readStdin(): ByteArray {
+    val input = ByteArray(CLI_BODY_LIMIT + 1)
+    // fread borrows the pinned buffer only for this synchronous startup read.
+    val length = input.usePinned { pinned ->
+        fread(pinned.addressOf(0), 1.convert(), input.size.convert(), stdin).toInt()
+    }
+    check(ferror(stdin) == 0) { "Could not read stdin (errno $errno)" }
+    require(length <= CLI_BODY_LIMIT) { "stdin exceeds $CLI_BODY_LIMIT bytes" }
+    val text = try {
+        input.decodeToString(endIndex = length, throwOnInvalidSequence = true)
+    } catch (_: CharacterCodingException) {
+        throw IllegalArgumentException("stdin must be UTF-8")
+    }
+    require(text.isNotBlank()) { "stdin is empty. Pipe a JSON document into ktserve serve -" }
+    return input.copyOf(length)
+}
+
 private data class Mount(val at: String, val directory: String, val cacheControl: String? = null)
 
 internal data class TlsFiles(val certificate: String, val key: String)
 
-private data class Options(val mounts: List<Mount>, val accessLog: Boolean, val tls: TlsFiles?)
+private data class Options(val mounts: List<Mount>, val accessLog: Boolean, val tls: TlsFiles?, val serveStdin: Boolean)
 
 private fun parseOptions(args: List<String>): Options? {
     val mounts = mutableListOf<Mount>()
@@ -74,9 +103,14 @@ private fun parseOptions(args: List<String>): Options? {
     var key: String? = null
     var accessLog = false
     var rootDirectory = false
+    var serveStdin = false
     var index = 0
     while (index < args.size) {
         when (val argument = args[index++]) {
+            "-" -> {
+                if (serveStdin) return null
+                serveStdin = true
+            }
             "--mount" -> {
                 if (index + 1 >= args.size) return null
                 mounts.add(Mount(args[index], args[index + 1]))
@@ -102,7 +136,7 @@ private fun parseOptions(args: List<String>): Options? {
             }
         }
     }
-    if (mounts.isEmpty() || (certificate == null) != (key == null)) return null
+    if (serveStdin == mounts.isNotEmpty() || (certificate == null) != (key == null)) return null
     val tls = if (certificate == null) null else TlsFiles(certificate, checkNotNull(key))
-    return Options(mounts, accessLog, tls)
+    return Options(mounts, accessLog, tls, serveStdin)
 }

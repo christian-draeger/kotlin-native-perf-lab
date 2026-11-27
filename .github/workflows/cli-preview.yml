@@ -115,6 +115,19 @@ jobs:
           archive="ktserve-$GITHUB_REF_NAME-linux-$TARGET_ARCH-https.tar.gz"
           ./scripts/package-ktserve.sh "$binary" "$GITHUB_REF_NAME" "$package" --cli-https
           tar -xOzf "$package/$archive" ktserve | cmp "$binary" -
+      - name: Export standalone CLI executables
+        run: |
+          cd "$RUNNER_TEMP/cli-release"
+          for archive in *.tar.gz; do
+            executable="${archive%.tar.gz}"
+            tar -xOzf "$archive" ktserve > "$executable"
+            chmod 755 "$executable"
+            if [[ "$TARGET_PLATFORM" == linux ]]; then
+              sha256sum "$executable" > "$executable.sha256"
+            else
+              shasum -a 256 "$executable" > "$executable.sha256"
+            fi
+          done
       - name: Test the downloadable CLI
         if: matrix.arch != 'aarch64'
         run: |
@@ -166,7 +179,7 @@ jobs:
           pattern: cli-preview-*
           path: ${{ runner.temp }}/cli-release
           merge-multiple: true
-      - name: Publish the verified archives
+      - name: Publish the verified downloads
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -175,21 +188,33 @@ jobs:
           cd "$RUNNER_TEMP/cli-release"
           assets=()
           for target in linux-x86_64 linux-aarch64 macos-arm64 linux-x86_64-https linux-aarch64-https; do
-            archive="ktserve-$GITHUB_REF_NAME-$target.tar.gz"
-            test -s "$archive"
-            sha256sum --strict -c "$archive.sha256"
-            assets+=("$archive" "$archive.sha256")
+            executable="ktserve-$GITHUB_REF_NAME-$target"
+            for asset in "$executable" "$executable.tar.gz"; do
+              test -s "$asset"
+              sha256sum --strict -c "$asset.sha256"
+              assets+=("$asset" "$asset.sha256")
+            done
           done
           cat > release-notes.md <<'EOF'
-          Preview of the native ktServe CLI for serving static directories over HTTP. Download and unpack the archive for your platform, then run:
+          Download the standalone ktServe binary for your platform and save it as `ktserve`.
+          Make it executable and pipe a JSON document into it:
+
+          ```sh
+          chmod +x ktserve
+          printf '%s\n' '{"status":"ok"}' | ./ktserve serve -
+          ```
+
+          Test it with `curl -fsS http://127.0.0.1:8080/` in a second terminal.
+
+          The `.tar.gz` downloads include a sample site. Extract the archive and serve the directory:
 
           ```sh
           ./ktserve serve ./public
           ```
 
-          Open http://127.0.0.1:8080/ to try the included site. Each archive has a SHA-256 checksum.
+          Open http://127.0.0.1:8080/ to try the included site. Every download has a SHA-256 checksum.
 
-          Choose an archive ending in `-https.tar.gz` for direct HTTPS on Linux x86-64 or ARM64.
+          Choose an HTTPS binary or archive for direct HTTPS on Linux x86-64 or ARM64.
           These builds use the system OpenSSL 3 libraries (`libssl3t64` on Ubuntu 24.04).
           Use your PEM certificate chain and its matching unencrypted key:
 
@@ -200,6 +225,8 @@ jobs:
           [CLI documentation](https://christian-draeger.github.io/ktserve/docs.html#static-files)
           EOF
           printf '\n[Source commit](https://github.com/%s/tree/%s/components/ktserve/experiments/cli)\n' \
+            "$GITHUB_REPOSITORY" "$source_commit" >> release-notes.md
+          printf '\n[Apache 2.0 license](https://github.com/%s/blob/%s/LICENSE)\n' \
             "$GITHUB_REPOSITORY" "$source_commit" >> release-notes.md
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --prerelease --latest=false --title "ktServe CLI Preview ${GITHUB_REF_NAME#cli-preview-}" \

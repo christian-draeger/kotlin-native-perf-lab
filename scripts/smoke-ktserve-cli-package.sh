@@ -4,13 +4,14 @@ set -euo pipefail
 archive="${1:?Usage: smoke-ktserve-cli-package.sh ARCHIVE}"
 package="$(cd "$(dirname "$archive")" && pwd)"
 archive="$(basename "$archive")"
+executable="${archive%.tar.gz}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 smoke="$root/components/ktserve/experiments/cli/static"
 
 if [[ "$(uname -s)" == Linux ]]; then
-  (cd "$package" && sha256sum --strict -c "$archive.sha256")
+  (cd "$package" && sha256sum --strict -c "$archive.sha256" "$executable.sha256")
 else
-  (cd "$package" && shasum -a 256 -c "$archive.sha256")
+  (cd "$package" && shasum -a 256 -c "$archive.sha256" "$executable.sha256")
 fi
 
 unpacked="$(mktemp -d)"
@@ -27,6 +28,9 @@ trap cleanup EXIT
 tar -xzf "$package/$archive" -C "$unpacked"
 cd "$unpacked"
 cmp "$root/LICENSE" LICENSE
+cmp "$package/$executable" ktserve
+install -m 0755 "$package/$executable" ktserve-standalone
+python3 -B "$smoke/stdin_smoke.py" ./ktserve-standalone
 export BIND_HOST=127.0.0.1
 if [[ "$archive" == *-https.tar.gz ]]; then
   python3 "$smoke/https_smoke.py" ./ktserve
