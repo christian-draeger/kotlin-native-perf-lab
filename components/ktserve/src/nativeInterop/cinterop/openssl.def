@@ -1,0 +1,5 @@
+headers = ktserve_tls.h
+headerFilter = ktserve_tls.h
+package = codes.draeger.ktserve.openssl
+# Resolve the OpenSSL shared libraries' own glibc references on the target Linux distribution.
+linkerOpts = --allow-shlib-undefined -lssl -lcrypto

@@ -87,6 +87,8 @@ class HttpTest {
             get("/users/{id}") { matched ->
                 assertEquals(123, matched.pathInt("id"))
                 assertEquals("first", matched.header("x-tag"))
+                assertEquals(listOf("first", "second"), matched.headerValues("X-TAG"))
+                assertEquals(emptyList(), matched.headerValues("missing"))
                 assertEquals(
                     listOf(HttpField("Host", "example"), HttpField("X-Tag", "first"), HttpField("x-tag", "second")),
                     matched.headers(),
@@ -97,6 +99,15 @@ class HttpTest {
         buffer.consume(buffer.size)
         buffer.add("GET /new HTTP/1.1\r\nHost: elsewhere\r\n\r\n")
         assertEquals(200, routes.respond(request).status)
+    }
+
+    @Test
+    fun targetedHeaderLookupSupportsDecodedFields() {
+        val request = Request(
+            "GET", "/", null,
+            decodedFields = listOf(HttpField("X-Value", "\tfirst "), HttpField("x-value", "second")),
+        )
+        assertEquals(listOf("first", "second"), request.headerValues("X-VALUE"))
     }
 
     @Test

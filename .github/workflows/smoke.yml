@@ -39,6 +39,9 @@ jobs:
           java-version: '21'
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
       - run: ./components/ktserve/gradlew -p components/ktserve jvmTest
+      - name: Test optional ktServe extensions on the JVM
+        if: matrix.arch == 'x86_64'
+        run: ./components/ktserve/gradlew -p components/ktserve/extensions jvmTest
       - name: Verify a separate JVM consumer
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}

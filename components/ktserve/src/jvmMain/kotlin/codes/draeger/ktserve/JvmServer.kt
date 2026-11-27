@@ -23,12 +23,14 @@ fun serve(
     val backend = System.getenv("KTSERVE_BACKEND") ?: "nio"
     require(backend == "nio") { "Unsupported ktServe backend: $backend" }
     val routes = configuredRoutes(configure)
-    val transport = openNioTransport(host, port, limits.connections)
-    try {
-        println("ktServe backend=$backend tcp=ipv4")
-        onListening()
-        HttpServer(transport, routes, limits).run(stopRequested)
-    } finally {
-        transport.close()
+    routes.withServerExtensions {
+        val transport = openNioTransport(host, port, limits.connections)
+        try {
+            println("ktServe backend=$backend tcp=ipv4")
+            onListening()
+            HttpServer(transport, routes, limits).run(stopRequested)
+        } finally {
+            transport.close()
+        }
     }
 }
