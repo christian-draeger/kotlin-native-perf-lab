@@ -115,35 +115,37 @@ internal fun serveEpoll(
         }
         require(!handoff || routes.observer == null) { "The handoff pilot requires unobserved connections" }
     }
-    if (mode != null) {
-        val canStartSecond = limits.connections >= 2 && canRunTwoEpollWorkers()
-        if (mode != EpollWorkerMode.COLD) println("ktServe adaptive worker_policy=${mode.name.lowercase()}")
-        if (mode == EpollWorkerMode.EAGER) println("ktServe worker_policy=eager workers=${if (canStartSecond) 2 else 1}")
-        if (canStartSecond) {
-            if (mode == EpollWorkerMode.EAGER) {
-                runEpollWorkers(host, port, 2, limits, routes, stopRequested, onListening, eager = true)
-            } else {
-                runAdaptiveEpollWorkers(
-                    host, port, limits, routes, stopRequested, onListening,
-                    handoffEnabled = (handoff || mode == EpollWorkerMode.STANDBY) && routes.observer == null,
-                    standby = mode == EpollWorkerMode.STANDBY,
-                )
+    routes.withServerExtensions {
+        if (mode != null) {
+            val canStartSecond = limits.connections >= 2 && canRunTwoEpollWorkers()
+            if (mode != EpollWorkerMode.COLD) println("ktServe adaptive worker_policy=${mode.name.lowercase()}")
+            if (mode == EpollWorkerMode.EAGER) println("ktServe worker_policy=eager workers=${if (canStartSecond) 2 else 1}")
+            if (canStartSecond) {
+                if (mode == EpollWorkerMode.EAGER) {
+                    runEpollWorkers(host, port, 2, limits, routes, stopRequested, onListening, eager = true)
+                } else {
+                    runAdaptiveEpollWorkers(
+                        host, port, limits, routes, stopRequested, onListening,
+                        handoffEnabled = (handoff || mode == EpollWorkerMode.STANDBY) && routes.observer == null,
+                        standby = mode == EpollWorkerMode.STANDBY,
+                    )
+                }
+                return@withServerExtensions
             }
-            return@memScoped
+            println("ktServe adaptive max_workers=1 reason=budget")
+            println("ktServe adaptive active_workers=1 elapsed_ms=0")
         }
-        println("ktServe adaptive max_workers=1 reason=budget")
-        println("ktServe adaptive active_workers=1 elapsed_ms=0")
-    }
-    if (workers > 1) {
-        runEpollWorkers(host, port, workers, limits, routes, stopRequested, onListening)
-        return@memScoped
-    }
-    val transport = openPlatformTransport(host, port, limits.connections)
-    try {
-        println("ktServe backend=$backend tcp=ipv4")
-        onListening()
-        HttpServer(transport, routes, limits).run(stopRequested)
-    } finally {
-        transport.close()
+        if (workers > 1) {
+            runEpollWorkers(host, port, workers, limits, routes, stopRequested, onListening)
+            return@withServerExtensions
+        }
+        val transport = openPlatformTransport(host, port, limits.connections)
+        try {
+            println("ktServe backend=$backend tcp=ipv4")
+            onListening()
+            HttpServer(transport, routes, limits).run(stopRequested)
+        } finally {
+            transport.close()
+        }
     }
 }

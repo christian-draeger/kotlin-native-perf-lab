@@ -1,15 +1,19 @@
 package codes.draeger.ktserve
 
 import java.io.BufferedInputStream
+import java.io.IOException
 import java.net.BindException
 import java.net.ServerSocket
 import java.net.Socket
+import java.nio.file.Files
+import java.nio.file.SecureDirectoryStream
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.serialization.Serializable
 import kotlin.concurrent.thread
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -19,6 +23,77 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class JvmServerTest {
+    @Serializable
+    private data class TypedUser(val name: String)
+
+    @Test
+    fun emptyServerDoesNotPublishFixtureEndpoints() {
+        withServer(ServerLimits(), fixtureHealth = false) { port, _ ->
+            for (path in listOf("/health", "/json")) {
+                assertEquals("", request(port, path, status = 404))
+            }
+        }
+    }
+
+    @Test
+    fun staticFilesSnapshotMultipleMountedDirectories() {
+        val fixture = Files.createTempDirectory("ktserve-static")
+        try {
+            val publicDir = Files.createDirectory(fixture.resolve("public"))
+            val assetsDir = Files.createDirectory(fixture.resolve("assets"))
+            Files.newDirectoryStream(fixture).use { stream ->
+                if (stream !is SecureDirectoryStream<*>) {
+                    val failure = assertFailsWith<IllegalStateException> { Routes().staticFiles(publicDir.toString()) }
+                    assertTrue(failure.message.orEmpty().contains("SecureDirectoryStream"))
+                    return
+                }
+            }
+            val index = Files.writeString(publicDir.resolve("index.html"), "home")
+            val api = Files.createDirectory(publicDir.resolve("api"))
+            Files.writeString(api.resolve("status.json"), """{"ok":true}""")
+            Files.writeString(assetsDir.resolve("index.html"), "assets")
+            Files.writeString(assetsDir.resolve("release notes.txt"), "data")
+            Files.writeString(publicDir.resolve(".hidden"), "private")
+            val guides = Files.createDirectory(publicDir.resolve("guides"))
+            Files.writeString(guides.resolve("index.html"), "guides")
+            val privateFile = Files.writeString(fixture.resolve("private.txt"), "private")
+            Files.createSymbolicLink(publicDir.resolve("external.txt"), privateFile)
+            Files.createSymbolicLink(publicDir.resolve("linked-assets"), assetsDir)
+            val linkedRoot = Files.createSymbolicLink(fixture.resolve("linked-root"), publicDir)
+            assertFailsWith<IOException> { Routes().staticFiles(linkedRoot.toString()) }
+
+            withServer(ServerLimits(), fixtureHealth = false, routes = {
+                get("/guides") { text("before") }
+                staticFiles(publicDir.toString())
+                staticFiles(assetsDir.toString(), at = "/assets")
+                get("/assets") { text("after") }
+                get("/custom") { text("custom") }
+            }) { port, _ ->
+                assertEquals("home", request(port, "/"))
+                assertEquals("""{"ok":true}""", request(port, "/api/status.json?version=1"))
+                assertEquals("assets", request(port, "/assets/"))
+                assertEquals("after", request(port, "/assets"))
+                assertEquals("before", request(port, "/guides"))
+                assertEquals("guides", request(port, "/guides/"))
+                assertEquals("data", request(port, "/assets/release%20notes.txt"))
+                assertEquals("custom", request(port, "/custom"))
+                for (path in listOf("/missing", "/.hidden", "/external.txt", "/linked-assets/index.html")) {
+                    assertEquals("", request(port, path, status = 404))
+                }
+                client(port).use { socket ->
+                    socket.send("HEAD /assets/index.html HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    val input = socket.getInputStream().buffered()
+                    assertEquals(6, input.responseLength(200))
+                    assertEquals(-1, input.read())
+                }
+                Files.writeString(index, "changed")
+                assertEquals("home", request(port, "/"))
+            }
+        } finally {
+            Files.walk(fixture).use { entries -> entries.sorted(Comparator.reverseOrder()).forEach(Files::delete) }
+        }
+    }
+
     @Test
     fun responseDeadlineCancelsAStalledProducerAndLeavesOtherConnectionsUsable() {
         val cancelled = CompletableFuture<Unit>()
@@ -136,6 +211,34 @@ class JvmServerTest {
                 assertEquals(-1, input.read())
                 assertEquals(1, updates.get())
             }
+        }
+    }
+
+    @Test
+    fun typedJsonPostUsesTheExistingFixedAndChunkedRequestLimits() {
+        val accepted = AtomicInteger()
+        withServer(ServerLimits(requestBodyBytes = 16), routes = {
+            api("/v1") {
+                post("/users", status = 201) { input: TypedUser ->
+                    accepted.incrementAndGet()
+                    input
+                }
+            }
+        }) { port, _ ->
+            fun post(framing: String, body: String, status: Int): String = client(port).use { socket ->
+                socket.send(
+                    "POST /v1/users HTTP/1.1\r\nHost: localhost\r\nContent-Type: application/json\r\n" +
+                        "Connection: close\r\n$framing\r\n\r\n$body",
+                )
+                socket.getInputStream().buffered().response(status = status)
+            }
+
+            val payload = """{"name":"Ada"}"""
+            val chunks = payload.chunked(4).joinToString("") { "${it.length}\r\n$it\r\n" }
+            assertEquals(payload, post("Transfer-Encoding: chunked", chunks + "0\r\n\r\n", 201))
+            assertEquals("", post("Content-Length: 17", "", 413))
+            assertEquals("", post("Transfer-Encoding: chunked", "11\r\n${"x".repeat(17)}\r\n0\r\n\r\n", 413))
+            assertEquals(1, accepted.get())
         }
     }
 
@@ -462,6 +565,7 @@ class JvmServerTest {
 
     private fun <T> withServer(
         limits: ServerLimits,
+        fixtureHealth: Boolean = true,
         routes: Routes.() -> Unit = {},
         test: (Int, AtomicBoolean) -> T,
     ): T {
@@ -472,7 +576,7 @@ class JvmServerTest {
             try {
                 serve(port = port, limits = limits, stopRequested = stop::get) {
                     routes()
-                    if (applicationHandler == null) get("/health") { text("ok") }
+                    if (fixtureHealth && applicationHandler == null) get("/health") { text("ok") }
                 }
                 finished.complete(Unit)
             } catch (cause: Throwable) {
@@ -487,7 +591,8 @@ class JvmServerTest {
                     client(port).use { probe ->
                         probe.send("GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
                         val input = probe.getInputStream().buffered()
-                        assertEquals("ok", input.response())
+                        val status = if (fixtureHealth) 200 else 404
+                        assertEquals(if (fixtureHealth) "ok" else "", input.response(status))
                         assertEquals(-1, input.read())
                     }
                     break
@@ -505,6 +610,11 @@ class JvmServerTest {
     }
 
     private fun client(port: Int): Socket = Socket("127.0.0.1", port).apply { soTimeout = 5_000 }
+
+    private fun request(port: Int, path: String, status: Int = 200): String = client(port).use { socket ->
+        socket.send("GET $path HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+        socket.getInputStream().buffered().response(status)
+    }
 
     private fun Socket.send(value: String) {
         getOutputStream().write(value.encodeToByteArray())

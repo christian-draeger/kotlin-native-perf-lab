@@ -1,0 +1,3 @@
+headers = ktserve_static_files.h
+headerFilter = ktserve_static_files.h
+package = codes.draeger.ktserve.staticfiles.interop

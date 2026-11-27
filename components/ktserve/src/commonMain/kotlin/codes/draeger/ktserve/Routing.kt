@@ -3,12 +3,13 @@ package codes.draeger.ktserve
 internal fun configuredRoutes(configure: Routes.() -> Unit): Routes =
     Routes().apply(configure).also(Routes::prepare)
 
+@KtServeRoutingDsl
 class Routes {
     private val gets = MethodRoutes<GetHandler>()
     private val posts = MethodRoutes<(Request) -> RequestBodySink>()
     private var requestRoutes: MutableMap<String, MethodRoutes<RequestHandler>>? = null
     internal val hasRequestRoutes: Boolean get() = requestRoutes != null
-    internal var hasRequestExtensions = false
+    internal var hasLegacyRequestDispatch = false
         private set
     internal var requestPolicy: ((Request) -> Response?)? = null
         private set
@@ -20,11 +21,122 @@ class Routes {
         private set
     internal var observer: ServerObserver? = null
         private set
+    private var extensions: MutableMap<String, ServerExtension>? = null
+    private var typedPreparations: MutableList<(List<BodyValidationResolver>) -> Unit>? = null
+    private var typedMetadata: MutableMap<Any, TypedRouteMetadata>? = null
+    private var extensionStarts: List<() -> AutoCloseable> = emptyList()
+    private var prepared = false
+    internal var hasManagedServerExtensions: Boolean = false
+        private set
+    internal var extensionHooks: RequestHooks? = null
+        private set
 
     internal fun prepare() {
+        prepared = true
+        val extensionScope = extensions?.let { installed ->
+            ExtensionScope().also { scope -> installed.values.forEach { it.install(scope) } }
+        }
+        typedPreparations?.let { preparations ->
+            val validators = extensionScope?.bodyValidators().orEmpty()
+            for (prepare in preparations) prepare(validators)
+        }
+        extensionScope?.let { scope ->
+            scope.startWith { ExtensionStartup(registeredRoutes(), ::registerExtensionGet) }
+            extensionStarts = scope.serverStartHooks()
+            hasManagedServerExtensions = extensionStarts.isNotEmpty() || scope.hasServerObservers
+            observer = scope.prepareObserver(observer)
+            extensionHooks = scope.prepare()
+        }
+        extensions = null
+        typedPreparations = null
+        typedMetadata = null
         gets.prepare()
         posts.prepare()
         requestRoutes?.values?.forEach { it.prepare() }
+    }
+
+    internal inline fun <T> withServerExtensions(serve: () -> T): T {
+        if (extensionStarts.isEmpty()) return serve()
+        val resources = ArrayList<AutoCloseable>(extensionStarts.size)
+        var failure: Throwable? = null
+        try {
+            for (start in extensionStarts) resources.add(start())
+            return serve()
+        } catch (cause: Throwable) {
+            failure = cause
+            throw cause
+        } finally {
+            closeServerExtensions(resources, failure)
+        }
+    }
+
+    private fun closeServerExtensions(resources: List<AutoCloseable>, failure: Throwable?) {
+        var closingFailure = failure
+        for (index in resources.indices.reversed()) {
+            try {
+                resources[index].close()
+            } catch (cause: Throwable) {
+                if (closingFailure == null) closingFailure = cause
+                else if (closingFailure !== cause) closingFailure.addSuppressed(cause)
+            }
+        }
+        if (failure == null && closingFailure != null) throw closingFailure
+    }
+
+    private fun registeredRoutes(): List<RegisteredRoute> = buildList {
+        val seen = mutableSetOf<Pair<String, String>>()
+        val register: (RegisteredRoute) -> Unit = { route ->
+            if (seen.add(route.method to route.template)) add(route)
+        }
+        val metadata = typedMetadata.orEmpty()
+        requestRoutes?.forEach { (method, routes) -> routes.visitRegistrations(method, metadata, register) }
+        gets.visitRegistrations("GET", metadata, register)
+        posts.visitRegistrations("POST", metadata, register)
+    }
+
+    private fun registerExtensionGet(path: String, handler: (Request) -> Response) {
+        require('{' !in path && '}' !in path) { "Extension endpoints require a literal path" }
+        check(!gets.hasExact(path) && requestRoutes?.get("GET")?.matches(Request("GET", path, null)) != true) {
+            "Extension endpoint conflicts with an existing GET route: $path"
+        }
+        get(path, handler)
+    }
+
+    /** Register an extension by its unique ID. Hooks are prepared once at server startup. */
+    fun install(extension: ServerExtension) {
+        checkConfiguring()
+        val id = extension.id
+        require(id.isNotBlank()) { "An extension ID must not be blank" }
+        val installed = extensions ?: linkedMapOf<String, ServerExtension>().also { extensions = it }
+        check(id !in installed) { "An extension with ID '$id' is already installed" }
+        installed[id] = extension
+    }
+
+    /** Configure typed routes with an optional path prefix and scoped body validation. */
+    fun api(prefix: String = "", configure: ApiRoutes.() -> Unit) {
+        checkConfiguring()
+        ApiRoutes(this, prefix = apiPrefix(prefix)).apply(configure)
+    }
+
+    internal fun checkConfiguring() {
+        check(!prepared) { "This operation requires server configuration before startup" }
+    }
+
+    internal fun prepareTypedRoute(prepare: (List<BodyValidationResolver>) -> Unit) {
+        val preparations = typedPreparations ?: mutableListOf<(List<BodyValidationResolver>) -> Unit>()
+            .also { typedPreparations = it }
+        preparations.add(prepare)
+    }
+
+    internal fun recordTypedRoute(handler: Any, route: TypedRouteMetadata) {
+        val metadata = typedMetadata ?: mutableMapOf<Any, TypedRouteMetadata>().also { typedMetadata = it }
+        metadata[handler] = route
+    }
+
+    internal fun typedGet(path: String, handler: GetHandler) {
+        require(applicationHandler == null) { "A standalone application owns all routes" }
+        gets.add(path, handler)
+        if (handler is GetHandler.Suspending) hasSuspendingGets = true
     }
 
     /** Install the event sink for this HTTP/1.x listener. */
@@ -36,6 +148,10 @@ class Routes {
     fun get(path: String, handler: (Request) -> Response) {
         require(applicationHandler == null) { "A standalone application owns all routes" }
         gets.add(path, GetHandler.Immediate(handler))
+    }
+
+    internal fun fallbackGet(path: String, handler: (Request) -> Response) {
+        gets.addExactFallback(path, GetHandler.Immediate(handler))
     }
 
     /**
@@ -75,7 +191,7 @@ class Routes {
         }
         val routes = requestRoutes ?: linkedMapOf<String, MethodRoutes<RequestHandler>>().also { requestRoutes = it }
         routes.getOrPut(method) { MethodRoutes() }.add(path, handler)
-        hasRequestExtensions = true
+        hasLegacyRequestDispatch = true
     }
 
     /**
@@ -85,16 +201,22 @@ class Routes {
     fun beforeEach(policy: (Request) -> Response?) {
         val previous = requestPolicy
         requestPolicy = if (previous == null) policy else { request -> previous(request) ?: policy(request) }
-        hasRequestExtensions = true
+        hasLegacyRequestDispatch = true
     }
 
     internal fun dispatchRequestRoute(
         request: Request,
-        action: (RequestHandler, Request) -> Boolean,
+        action: (RequestHandler, Request, String, String) -> Boolean,
     ): Boolean? {
         val routes = requestRoutes ?: return null
-        return routes[request.method]?.resolve(request, action)
-            ?: if (request.method == "HEAD") routes["GET"]?.resolve(request, action) else null
+        val method = request.method
+        return routes[method]?.resolveMatched(request) { handler, matched, template ->
+            action(handler, matched, method, template)
+        } ?: if (method == "HEAD") {
+            routes["GET"]?.resolveMatched(request) { handler, matched, template ->
+                action(handler, matched, "GET", template)
+            }
+        } else null
     }
 
     /**
@@ -110,6 +232,11 @@ class Routes {
 
     internal inline fun dispatchGet(request: Request, action: (GetHandler, Request) -> Response): Response? =
         gets.resolve(request, action)
+
+    internal inline fun dispatchMatchedGet(
+        request: Request,
+        action: (GetHandler, Request, String) -> Response,
+    ): Response? = gets.resolveMatched(request, action)
 
     internal fun respond(request: Request): Response = try {
         val response = if (request.method == "GET") {
@@ -132,10 +259,17 @@ class Routes {
         } else methodNotAllowed(allowed)
     }
 
-    internal fun openPost(request: Request, http1Methods: Boolean = false): PostBody = try {
-        val sink = posts.resolve(request) { handler, matched -> handler(matched) }
-        if (sink != null) {
-            PostBody.Open(sink)
+    internal fun openPost(
+        request: Request,
+        http1Methods: Boolean = false,
+        exchange: ExtensionExchange? = null,
+    ): PostBody = try {
+        val post = posts.resolveMatched(request) { handler, matched, template ->
+            val rejection = exchange?.beforeRoute(matched, "POST", template)
+            if (rejection == null) PostBody.Open(handler(matched)) else PostBody.Rejected(rejection)
+        }
+        if (post != null) {
+            post
         } else if (http1Methods) {
             PostBody.Rejected(allowedMethods(request)?.let(::methodNotAllowed) ?: emptyResponse(404))
         } else {
@@ -182,8 +316,9 @@ internal sealed interface PostBody {
     class Rejected(val response: Response) : PostBody
 }
 
-internal class MethodRoutes<Handler> {
+internal class MethodRoutes<Handler : Any> {
     private val exact = mutableMapOf<String, Handler>()
+    private var exactFallbacks: MutableSet<String>? = null
     private val patterns = mutableListOf<RoutePattern<Handler>>()
     private var patternsBySize: Map<Int, PatternGroup<Handler>>? = null
 
@@ -203,15 +338,22 @@ internal class MethodRoutes<Handler> {
         }
         val parameters = names.filterNotNull()
         if (parameters.isEmpty()) {
-            require(path !in exact) { "Duplicate route $path" }
+            require(path !in exact || exactFallbacks?.remove(path) == true) { "Duplicate route $path" }
             exact[path] = handler
             return
         }
         require(parameters.size == parameters.toSet().size) { "Repeated parameter in $path" }
         val shape = parts.mapIndexed { index, part -> part.takeIf { names[index] == null } }
         require(patterns.none { it.shape == shape }) { "Duplicate route pattern $path" }
-        patterns.add(RoutePattern(shape, names, handler))
+        patterns.add(RoutePattern(shape, names, handler, path))
         patternsBySize = null
+    }
+
+    fun addExactFallback(path: String, handler: Handler) {
+        if (path in exact) return
+        exact[path] = handler
+        val fallbacks = exactFallbacks ?: mutableSetOf<String>().also { exactFallbacks = it }
+        fallbacks.add(path)
     }
 
     fun prepare() {
@@ -222,10 +364,25 @@ internal class MethodRoutes<Handler> {
 
     fun isEmpty(): Boolean = exact.isEmpty() && patterns.isEmpty()
 
+    fun hasExact(path: String): Boolean = path in exact
+
+    fun visitRegistrations(method: String, metadata: Map<Any, TypedRouteMetadata>, visit: (RegisteredRoute) -> Unit) {
+        for ((path, handler) in exact) {
+            if (exactFallbacks?.contains(path) != true) visit(RegisteredRoute(method, path, emptyList(), metadata[handler]))
+        }
+        for (pattern in patterns) {
+            val parameters = buildList { for (name in pattern.names) if (name != null) add(name) }
+            visit(RegisteredRoute(method, pattern.template, parameters, metadata[pattern.handler]))
+        }
+    }
+
     fun matches(request: Request): Boolean = resolve(request) { _, _ -> true } == true
 
-    inline fun <Result> resolve(request: Request, action: (Handler, Request) -> Result): Result? {
-        exact[request.path]?.let { return action(it, request) }
+    inline fun <Result> resolve(request: Request, action: (Handler, Request) -> Result): Result? =
+        resolveMatched(request) { handler, matched, _ -> action(handler, matched) }
+
+    inline fun <Result> resolveMatched(request: Request, action: (Handler, Request, String) -> Result): Result? {
+        exact[request.path]?.let { return action(it, request, request.path) }
         if (patterns.isEmpty()) return null
         val groups = patternsBySize
         val candidates = if (groups == null) patterns else {
@@ -234,7 +391,7 @@ internal class MethodRoutes<Handler> {
         }
         for (route in candidates) {
             val parameters = route.parameters(request.path) ?: continue
-            return action(route.handler, request.withParameters(parameters))
+            return action(route.handler, request.withParameters(parameters), route.template)
         }
         return null
     }
@@ -258,6 +415,7 @@ internal data class RoutePattern<Handler>(
     val shape: List<String?>,
     val names: List<String?>,
     val handler: Handler,
+    val template: String,
 ) {
     fun parameters(path: String): Map<String, String>? {
         var start = if (path.startsWith('/')) 1 else 0

@@ -73,8 +73,10 @@ private fun serveH2cWithSocketOptions(
 ): Unit = memScoped {
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     val routes = configuredRoutes(configure)
-    require(routes.applicationHandler == null && !routes.hasRequestExtensions) {
-        "The h2c experiment supports legacy routes without HTTP/1.x request policies"
+    require(routes.applicationHandler == null && !routes.hasLegacyRequestDispatch &&
+        routes.extensionHooks == null && !routes.hasManagedServerExtensions
+    ) {
+        "The h2c experiment supports legacy routes without HTTP/1.x request policies or managed server extensions"
     }
     val transport = openEpollTransport(host, port, limits.connections, tcpNoDelay)
     try {

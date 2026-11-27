@@ -18,11 +18,13 @@ fun serve(
     val backend = getenv("KTSERVE_BACKEND")?.toKString() ?: "kqueue"
     require(backend == "kqueue") { "Unsupported ktServe backend: $backend" }
     val routes = configuredRoutes(configure)
-    val transport = openPlatformTransport(host, port, limits.connections)
-    try {
-        println("ktServe backend=$backend tcp=ipv4")
-        HttpServer(transport, routes, limits).run(stopRequested)
-    } finally {
-        transport.close()
+    routes.withServerExtensions {
+        val transport = openPlatformTransport(host, port, limits.connections)
+        try {
+            println("ktServe backend=$backend tcp=ipv4")
+            HttpServer(transport, routes, limits).run(stopRequested)
+        } finally {
+            transport.close()
+        }
     }
 }

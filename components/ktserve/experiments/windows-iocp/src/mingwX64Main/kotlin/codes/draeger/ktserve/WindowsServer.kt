@@ -17,11 +17,13 @@ fun serve(
     val backend = ns_backend_environment()?.toKString() ?: "iocp"
     require(backend == "iocp") { "Unsupported ktServe backend: $backend" }
     val routes = configuredRoutes(configure)
-    val transport = openIocpTransport(host, port, limits.connections)
-    try {
-        println("ktServe backend=$backend tcp=ipv4")
-        HttpServer(transport, routes, limits).run(stopRequested)
-    } finally {
-        transport.close()
+    routes.withServerExtensions {
+        val transport = openIocpTransport(host, port, limits.connections)
+        try {
+            println("ktServe backend=$backend tcp=ipv4")
+            HttpServer(transport, routes, limits).run(stopRequested)
+        } finally {
+            transport.close()
+        }
     }
 }

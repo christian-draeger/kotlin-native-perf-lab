@@ -11,12 +11,14 @@ fun main(args: Array<String>) {
     val stop = AtomicBoolean()
     val stopped = CountDownLatch(1)
     val telemetry = if (System.getenv("KTSERVE_OBSERVE") == "1") ConsoleObserver() else null
+    val addApplicationHeader = System.getenv("KTSERVE_SAMPLE_HEADERS") == "1"
     Runtime.getRuntime().addShutdownHook(Thread {
         stop.set(true)
         stopped.await(3, TimeUnit.SECONDS)
     })
     try {
         serve(port = port, stopRequested = stop::get) {
+            if (addApplicationHeader) install(applicationHeader)
             if (telemetry != null) {
                 observe(telemetry)
                 get("/ready") {

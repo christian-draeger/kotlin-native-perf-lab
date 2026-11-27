@@ -316,7 +316,8 @@ def main(destination, ci_checkout):
     }
     destination.mkdir(parents=True, exist_ok=True)
     for asset in (
-        "index.html", "docs.html", "benchmarks.html", "architecture.html", "styles.css", "app.js", "cli-preview.js",
+        "index.html", "docs.html", "extensions.html", "benchmarks.html", "architecture.html",
+        "styles.css", "app.js", "cli-preview.js",
     ):
         shutil.copyfile(ASSETS / asset, destination / asset)
     if (ASSETS / "assets").is_dir():

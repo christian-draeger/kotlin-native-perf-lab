@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf '%s\n' 'Usage: ktserve serve [<directory>] [--mount <prefix> <directory>]...' \
+    '                     [--cache-control <value>] [--access-log]' \
+    '                     [--tls-cert <chain.pem> --tls-key <key.pem>]' \
+    '       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]' \
+    '       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... <App.kt> [app arguments...]' \
+    '       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... -' \
+    '       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... --app -' \
+    '       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... --source - [app arguments...]'
+}
+
+cli_dir="$(cd "$(dirname "$0")" && pwd)"
+
+case "${1:-}" in
+  serve)
+    binary="$cli_dir/static/build/bin/native/releaseExecutable/ktserve.kexe"
+    if [[ ! -x "$binary" ]]; then
+      printf 'Build the static CLI first. See %s/README.md.\n' "$cli_dir" >&2
+      exit 1
+    fi
+    exec "$binary" "$@"
+    ;;
+  run)
+    shift
+    exec "$cli_dir/run/run.sh" "$@"
+    ;;
+  -h|--help)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

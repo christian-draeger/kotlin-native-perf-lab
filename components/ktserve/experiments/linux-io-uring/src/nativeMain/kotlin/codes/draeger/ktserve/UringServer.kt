@@ -18,16 +18,18 @@ fun serve(
     require(port in 1..65535) { "Port must be between 1 and 65535" }
     val routes = configuredRoutes(configure)
     val backend = getenv("KTSERVE_BACKEND")?.toKString() ?: "io_uring"
-    val transport = when (backend) {
-        "io_uring" -> openUringTransport(host, port, limits.connections)
-        "epoll" -> openPlatformTransport(host, port, limits.connections).also {
-            println("ktServe backend=epoll tcp=ipv4")
+    routes.withServerExtensions {
+        val transport = when (backend) {
+            "io_uring" -> openUringTransport(host, port, limits.connections)
+            "epoll" -> openPlatformTransport(host, port, limits.connections).also {
+                println("ktServe backend=epoll tcp=ipv4")
+            }
+            else -> error("Unsupported ktServe backend: $backend")
         }
-        else -> error("Unsupported ktServe backend: $backend")
-    }
-    try {
-        HttpServer(transport, routes, limits).run(stopRequested)
-    } finally {
-        transport.close()
+        try {
+            HttpServer(transport, routes, limits).run(stopRequested)
+        } finally {
+            transport.close()
+        }
     }
 }
