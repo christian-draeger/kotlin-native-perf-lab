@@ -132,7 +132,7 @@ KOTLIN
 else
     cp "$source_file" "$source_dir/App.kt"
 fi
-cp "$here/settings.gradle.kts" "$here/build.gradle.kts" "$work/"
+cp "$here/settings.gradle.kts" "$here/build.gradle.kts" "$here/gradle.properties" "$work/"
 if (( ${#dependencies[@]} > 0 )); then
     printf '%s\n' "${dependencies[@]}" > "$work/dependencies.txt"
 fi

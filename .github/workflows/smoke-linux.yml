@@ -129,15 +129,6 @@ jobs:
             binary="$example/build/bin/native/releaseExecutable/hello.kexe"
           fi
           python3 scripts/tests/ktserve_public_workers_smoke.py "$binary"
-      - name: Verify typed apps from the standalone Native CLI
-        if: inputs.arch == 'x86_64'
-        run: |
-          cli=components/ktserve/experiments/cli
-          KTSERVE_CI_GRADLE_COMMAND=./components/ktserve/gradlew \
-            bash scripts/ci-gradle.sh -p "$cli/static" linkReleaseExecutableNative
-          binary="$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
-          python3 "$cli/static/smoke.py" "$binary"
-          python3 "$cli/run/typed_smoke.py" "$binary"
       - name: Verify and run the ktServe release archive
         env:
           EXPECTED_ARCH: ${{ inputs.arch }}

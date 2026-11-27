@@ -27,6 +27,7 @@ val runKit = tasks.register<Tar>("runKit") {
         include(
             "gradlew", "gradle/wrapper/**", "gradle.properties", "settings.gradle.kts", "build.gradle.kts", "src/**",
             "experiments/cli/run/run.sh", "experiments/cli/run/build.gradle.kts", "experiments/cli/run/settings.gradle.kts",
+            "experiments/cli/run/gradle.properties",
             "extensions/build.gradle.kts", "extensions/settings.gradle.kts", "extensions/*/build.gradle.kts",
             "extensions/openapi/src/commonMain/**", "extensions/validation/src/commonMain/**",
             "extensions/validation/src/jvmMain/**", "extensions/validation/src/nativeMain/**",
