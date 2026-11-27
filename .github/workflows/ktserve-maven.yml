@@ -228,7 +228,10 @@ jobs:
             grep -Fq '<name>Apache License, Version 2.0</name>' "$pom"
           done
           for jar in "$extensions/$group"/*/"$KTSERVE_VERSION"/*.jar; do
-            unzip -p "$jar" META-INF/LICENSE | cmp - LICENSE
+            unzip -p "$jar" META-INF/LICENSE | cmp - LICENSE || {
+              echo "Missing or incorrect license in $jar" >&2
+              exit 1
+            }
           done
           cp -R "$extensions/$group/." "$project/$group"
       - name: Resolve and run the independent JVM and macOS consumers
