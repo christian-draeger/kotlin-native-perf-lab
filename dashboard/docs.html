@@ -31,7 +31,7 @@
         </div>
         <nav class="hero-actions" aria-label="On this page">
           <a class="button button-primary" href="#standalone">Standalone Kotlin</a>
-          <a class="button button-secondary" href="#static-files">Static files</a>
+          <a class="button button-secondary" href="#static-files">Command line</a>
           <a class="button button-secondary" href="#integrations">Framework integrations</a>
           <a class="button button-secondary" href="#deploy">Deployment</a>
         </nav>
@@ -83,59 +83,77 @@ dependencies {
     <section class="product-section" id="static-files" aria-labelledby="static-files-title">
       <div class="shell">
         <div class="section-heading">
-          <h2 id="static-files-title">Serve a directory from the terminal</h2>
-          <p>Each native CLI preview archive includes <code>ktserve</code> and a sample <code>public/</code> directory. Extract it and start serving files without a build step or a JVM.</p>
+          <h2 id="static-files-title">Serve JSON from the terminal</h2>
+          <p>Download the native CLI and serve a JSON response from standard input.</p>
         </div>
         <div class="cli-guide">
           <section class="docs-stack" aria-labelledby="cli-install">
             <h3 id="cli-install">Install it</h3>
-            <p>Download an archive and extract it into a new directory, or download and extract it in one step from the terminal.</p>
+            <p>Choose a download for your platform or use the terminal commands below.</p>
             <div class="docs-grid">
               <div class="docs-stack">
                 <h4>HTTP</h4>
                 <div class="cli-downloads" data-cli-downloads="HTTP">
-                  <a class="button button-secondary" data-cli-target="linux-x86_64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz">Linux x86-64 <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" data-cli-target="linux-aarch64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64.tar.gz">Linux ARM64 <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" data-cli-target="macos-arm64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-macos-arm64.tar.gz">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-x86_64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64">Linux x86-64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-aarch64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-aarch64">Linux ARM64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="macos-arm64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-macos-arm64">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>macOS may ask you to approve the ad hoc signed executable on first launch. <a class="text-link" href="https://support.apple.com/en-us/102445">Apple’s first-launch guidance <span aria-hidden="true">↗</span></a></p>
               </div>
               <div class="docs-stack">
                 <h4 id="direct-https">Direct HTTPS</h4>
                 <div class="cli-downloads" data-cli-downloads="Direct HTTPS">
-                  <a class="button button-secondary" data-cli-target="linux-x86_64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64-https.tar.gz">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" data-cli-target="linux-aarch64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64-https.tar.gz">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-x86_64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64-https">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-aarch64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-aarch64-https">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>The HTTPS downloads use the system’s OpenSSL 3 libraries. On Ubuntu 24.04, install <code>libssl3t64</code> if needed. They can also serve plain HTTP.</p>
               </div>
             </div>
-            <p><a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.2">Release notes and SHA-256 checksums <span aria-hidden="true">↗</span></a></p>
-            <div class="docs-stack">
-              <h4>Download from the terminal</h4>
-              <p>Run this in an empty directory to create <code>./ktserve</code> and the sample <code>public/</code> folder.</p>
-              <div class="cli-terminal-controls" hidden>
-                <label for="cli-terminal-target">Archive</label>
-                <select id="cli-terminal-target">
-                  <option value="" disabled selected>Choose an archive</option>
-                </select>
-                <button class="button button-secondary" id="cli-copy" type="button" hidden>Copy command</button>
-                <span id="cli-copy-status" role="status"></span>
-              </div>
-              <noscript><p>The terminal command below is for Linux x86-64. Use the buttons above to download any archive.</p></noscript>
-              <div class="code-window cli-terminal-command">
-                <pre tabindex="0" aria-label="Download and extract ktServe"><code id="cli-install-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz | tar -xzf -</code></pre>
-              </div>
-            </div>
+            <p><a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.3">Release notes and SHA-256 checksums <span aria-hidden="true">↗</span></a></p>
           </section>
           <section class="docs-stack" aria-labelledby="cli-run">
             <h3 id="cli-run">Run it</h3>
+            <p>Paste both lines into Bash or zsh in an empty directory. They download <code>./ktserve</code> and serve the status JSON at <code>/</code>.</p>
+            <div class="docs-stack">
+              <div class="cli-terminal-controls" hidden>
+                <label for="cli-terminal-target">Platform</label>
+                <select id="cli-terminal-target">
+                  <option value="" disabled selected>Choose a platform</option>
+                </select>
+                <button class="button button-secondary" id="cli-copy" type="button" hidden>Copy both lines</button>
+                <span id="cli-copy-status" role="status"></span>
+              </div>
+              <noscript><p>The terminal example uses Linux x86-64. Use the buttons above to download any executable.</p></noscript>
+              <div class="code-window cli-terminal-command">
+                <pre tabindex="0" aria-label="Download and start ktServe"><code id="cli-install-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64 -o ktserve &amp;&amp; chmod +x ktserve &amp;&amp;
+./ktserve serve - &lt;&lt;&lt;'{"status":"ok"}'</code></pre>
+              </div>
+              <p>After a browser download, name the file <code>ktserve</code>, run <code>chmod +x ktserve</code> and use the second line.</p>
+              <p>In a POSIX shell, use <code>printf '%s\n' '{"status":"ok"}' | ./ktserve serve -</code> as the second line.</p>
+            </div>
+          </section>
+          <section class="docs-stack" aria-labelledby="cli-test">
+            <h3 id="cli-test">Test it</h3>
+            <p>Request the response from a second terminal.</p>
+            <div class="code-window">
+              <pre tabindex="0" aria-label="Request the JSON response"><code>curl -fsS http://127.0.0.1:8080/</code></pre>
+            </div>
+          </section>
+          <details class="docs-disclosure" id="cli-directory">
+            <summary>Serve a directory or configure HTTPS</summary>
+            <p>Use your own <code>public/</code> directory or extract the sample archive in an empty directory. The archive command uses the platform selected above.</p>
+            <div class="code-window cli-terminal-command">
+              <pre tabindex="0" aria-label="Download the CLI archive and sample site"><code id="cli-archive-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64.tar.gz | tar -xzf -</code></pre>
+            </div>
             <div class="docs-grid">
               <div class="docs-stack">
                 <h4>HTTP</h4>
                 <div class="code-window">
                   <pre tabindex="0" aria-label="Start the HTTP CLI"><code>./ktserve serve ./public</code></pre>
                 </div>
-                <p>The server listens on <code>127.0.0.1:8080</code> by default.</p>
+                <div class="code-window">
+                  <pre tabindex="0" aria-label="Request the sample over HTTP"><code>curl -fsS http://127.0.0.1:8080/api/status.json</code></pre>
+                </div>
               </div>
               <div class="docs-stack">
                 <h4>HTTPS on Linux</h4>
@@ -155,22 +173,6 @@ dependencies {
                   <pre tabindex="0" aria-label="Start the HTTPS CLI"><code>PORT=8443 ./ktserve serve ./public \
   --tls-cert localhost.pem --tls-key localhost.key</code></pre>
                 </div>
-              </div>
-            </div>
-          </section>
-          <section class="docs-stack" aria-labelledby="cli-test">
-            <h3 id="cli-test">Test it</h3>
-            <p>Request the sample JSON file from a second terminal.</p>
-            <div class="docs-grid">
-              <div class="docs-stack">
-                <h4>HTTP</h4>
-                <div class="code-window">
-                  <pre tabindex="0" aria-label="Request the sample over HTTP"><code>curl -fsS http://127.0.0.1:8080/api/status.json</code></pre>
-                </div>
-                <p>Or open the sample site in your browser. <a class="text-link" href="http://127.0.0.1:8080/">http://127.0.0.1:8080/ <span aria-hidden="true">↗</span></a></p>
-              </div>
-              <div class="docs-stack">
-                <h4>HTTPS</h4>
                 <div class="code-window">
                   <pre tabindex="0" aria-label="Request the sample over HTTPS"><code>curl -fsS --cacert localhost.pem \
   https://localhost:8443/api/status.json</code></pre>
@@ -178,8 +180,8 @@ dependencies {
                 <p>Run this from the extracted directory. <code>--cacert</code> trusts the localhost certificate for this request.</p>
               </div>
             </div>
-            <p class="docs-note">Pass your own directory to <code>serve</code>. Use <code>--mount /assets ./assets</code> to serve a second directory or <code>--access-log</code> to log requests. Restart the process to refresh the file snapshot.</p>
-          </section>
+            <p class="docs-note">Use <code>--mount /assets ./assets</code> to serve a second directory or <code>--access-log</code> to log requests. Restart the process to refresh the file snapshot.</p>
+          </details>
           <details class="docs-disclosure">
             <summary>Build from source</summary>
             <p>The CLI source includes instructions for building with Kotlin/Native and running a Kotlin file with <code>ktserve run</code>. It also shows how to mount files next to API routes with <code>staticFiles("public")</code>.</p>
@@ -254,6 +256,7 @@ dependencies {
     (() => {
       const target = document.querySelector("#cli-terminal-target");
       const command = document.querySelector("#cli-install-command");
+      const archiveCommand = document.querySelector("#cli-archive-command");
       const copy = document.querySelector("#cli-copy");
       const status = document.querySelector("#cli-copy-status");
       const links = new Map();
@@ -282,8 +285,12 @@ dependencies {
           if (link === selected) link.setAttribute("aria-current", "true");
           else link.removeAttribute("aria-current");
         }
-        command.textContent = selected ? `curl -fsSL ${selected.href} | tar -xzf -` : "";
+        command.textContent = selected
+          ? `curl -fsSL ${selected.href} -o ktserve && chmod +x ktserve &&\n./ktserve serve - <<<'{"status":"ok"}'`
+          : "";
         command.closest(".cli-terminal-command").hidden = !selected;
+        archiveCommand.textContent = selected ? `curl -fsSL ${selected.href}.tar.gz | tar -xzf -` : "";
+        archiveCommand.closest(".cli-terminal-command").hidden = !selected;
         copy.hidden = !canCopy || !selected;
         status.textContent = "";
       }
@@ -319,6 +326,7 @@ dependencies {
       target.addEventListener("change", showCommand);
       showCommand();
       target.parentElement.hidden = false;
+      if (location.hash === "#direct-https") document.querySelector("#cli-directory").open = true;
       detectTarget().then(key => {
         if (!key || target.value) return;
         const preferred = location.hash === "#direct-https" ? `${key}-https` : key;
