@@ -1,0 +1,165 @@
+@file:OptIn(kotlinx.cinterop.ExperimentalForeignApi::class)
+
+package codes.draeger.ktserve.cli.staticfiles
+
+import codes.draeger.ktserve.Routes
+import codes.draeger.ktserve.ServerLimits
+import codes.draeger.ktserve.accesslog.accessLog
+import codes.draeger.ktserve.cli.signals.ktserve_cli_install_signals
+import codes.draeger.ktserve.cli.signals.ktserve_cli_restore_signals
+import codes.draeger.ktserve.cli.signals.ktserve_cli_stop_requested
+import codes.draeger.ktserve.response
+import codes.draeger.ktserve.serve
+import codes.draeger.ktserve.staticFiles
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.convert
+import kotlinx.cinterop.toKString
+import kotlinx.cinterop.usePinned
+import platform.posix.SIG_ERR
+import platform.posix.SIG_IGN
+import platform.posix.SIGPIPE
+import platform.posix.errno
+import platform.posix.exit
+import platform.posix.ferror
+import platform.posix.fputs
+import platform.posix.fread
+import platform.posix.getenv
+import platform.posix.signal
+import platform.posix.stderr
+import platform.posix.stdin
+import kotlin.text.CharacterCodingException
+
+private const val USAGE = "Usage: ktserve serve [<directory>] [--mount <prefix> <directory>]... " +
+    "[--cache-control <value>] [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
+    "       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
+    "       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... <App.kt> [app arguments...]\n" +
+    "       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... -\n" +
+    "       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... --app -\n" +
+    "       ktserve run [--dependency <group:artifact:version>]... [--extension <name>]... --source - [app arguments...]"
+private const val CLI_BODY_LIMIT = 1024 * 1024
+
+fun main(args: Array<String>) {
+    if (args.size == 1 && args[0] == "--help") {
+        println(USAGE)
+        return
+    }
+    try {
+        if (args.firstOrNull() == "run") runKotlinApp(args.drop(1))
+        val options = if (args.firstOrNull() == "serve") parseOptions(args.drop(1)) else null
+        if (options == null) {
+            fputs("$USAGE\n", stderr)
+            exit(2)
+            return
+        }
+        val configuredPort = getenv("PORT")?.toKString() ?: "8080"
+        val port = configuredPort.toIntOrNull()
+        require(port != null && port in 1..65535) { "PORT must be an integer between 1 and 65535" }
+        val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
+        val scheme = if (options.tls == null) "http" else "https"
+        val stdinResponse = if (options.serveStdin) response(readStdin(), contentType = "application/json") else null
+        check(ktserve_cli_install_signals() == 0) { "Could not install signal handlers (errno $errno)" }
+        try {
+            println("ktserve: starting at $scheme://$host:$port")
+            val limits = ServerLimits(responseBodyBytes = CLI_BODY_LIMIT)
+            val stopRequested = { ktserve_cli_stop_requested() != 0 }
+            withAccessLogSignals(options.accessLog) {
+                val configure: Routes.() -> Unit = {
+                    if (options.accessLog) install(accessLog())
+                    if (stdinResponse != null) get("/") { stdinResponse }
+                    for ((at, directory, cacheControl) in options.mounts) staticFiles(directory, at, cacheControl)
+                }
+                val tls = options.tls
+                if (tls == null) {
+                    serve(port = port, host = host, limits = limits, stopRequested = stopRequested, configure = configure)
+                } else {
+                    serveWithHttps(port, host, tls, limits, stopRequested, configure)
+                }
+            }
+        } finally {
+            ktserve_cli_restore_signals()
+        }
+    } catch (failure: Exception) {
+        fputs("ktserve: ${failure.message}\n", stderr)
+        exit(1)
+    }
+}
+
+private inline fun withAccessLogSignals(enabled: Boolean, serve: () -> Unit) {
+    if (!enabled) {
+        serve()
+        return
+    }
+    val previous = signal(SIGPIPE, SIG_IGN)
+    try {
+        serve()
+    } finally {
+        if (previous != SIG_ERR) signal(SIGPIPE, previous)
+    }
+}
+
+private fun readStdin(): ByteArray {
+    val input = ByteArray(CLI_BODY_LIMIT + 1)
+    // fread borrows the pinned buffer only for this synchronous startup read.
+    val length = input.usePinned { pinned ->
+        fread(pinned.addressOf(0), 1.convert(), input.size.convert(), stdin).toInt()
+    }
+    check(ferror(stdin) == 0) { "Could not read stdin (errno $errno)" }
+    require(length <= CLI_BODY_LIMIT) { "stdin exceeds $CLI_BODY_LIMIT bytes" }
+    val text = try {
+        input.decodeToString(endIndex = length, throwOnInvalidSequence = true)
+    } catch (_: CharacterCodingException) {
+        throw IllegalArgumentException("stdin must be UTF-8")
+    }
+    require(text.isNotBlank()) { "stdin is empty. Pipe a JSON document into ktserve serve -" }
+    return input.copyOf(length)
+}
+
+private data class Mount(val at: String, val directory: String, val cacheControl: String? = null)
+
+internal data class TlsFiles(val certificate: String, val key: String)
+
+private data class Options(val mounts: List<Mount>, val accessLog: Boolean, val tls: TlsFiles?, val serveStdin: Boolean)
+
+private fun parseOptions(args: List<String>): Options? {
+    val mounts = mutableListOf<Mount>()
+    var certificate: String? = null
+    var key: String? = null
+    var accessLog = false
+    var rootDirectory = false
+    var serveStdin = false
+    var index = 0
+    while (index < args.size) {
+        when (val argument = args[index++]) {
+            "-" -> {
+                if (serveStdin) return null
+                serveStdin = true
+            }
+            "--mount" -> {
+                if (index + 1 >= args.size) return null
+                mounts.add(Mount(args[index], args[index + 1]))
+                index += 2
+            }
+            "--cache-control" -> {
+                if (index == args.size || mounts.isEmpty() || mounts.last().cacheControl != null) return null
+                mounts[mounts.lastIndex] = mounts.last().copy(cacheControl = args[index++])
+            }
+            "--access-log" -> accessLog = true
+            "--tls-cert" -> {
+                if (certificate != null || index == args.size || args[index].startsWith("--")) return null
+                certificate = args[index++]
+            }
+            "--tls-key" -> {
+                if (key != null || index == args.size || args[index].startsWith("--")) return null
+                key = args[index++]
+            }
+            else -> {
+                if (rootDirectory || argument.startsWith('-')) return null
+                mounts.add(Mount("/", argument))
+                rootDirectory = true
+            }
+        }
+    }
+    if (serveStdin == mounts.isNotEmpty() || (certificate == null) != (key == null)) return null
+    val tls = if (certificate == null) null else TlsFiles(certificate, checkNotNull(key))
+    return Options(mounts, accessLog, tls, serveStdin)
+}

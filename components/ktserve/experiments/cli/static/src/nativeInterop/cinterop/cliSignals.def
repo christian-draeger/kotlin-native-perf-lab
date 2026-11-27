@@ -1,0 +1,3 @@
+headers = ktserve_cli_signals.h
+headerFilter = ktserve_cli_signals.h
+package = codes.draeger.ktserve.cli.signals

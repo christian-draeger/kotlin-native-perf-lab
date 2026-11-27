@@ -1,0 +1,124 @@
+# ktServe CLI experiment
+
+Use `serve` to publish a directory over HTTP or `run` to compile and start an application from a Kotlin file. Both commands use the ktServe Native server and bind to loopback in the examples below.
+
+## Serve a directory
+
+Build the executable from the repository root. Use JDK 21 for Gradle.
+
+```sh
+# Linux x86_64 or ARM64
+./components/ktserve/gradlew -p components/ktserve/experiments/cli/static linkReleaseExecutableNative
+
+# Apple Silicon macOS with full Xcode
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  ./components/ktserve/gradlew -p components/ktserve/experiments/cli/static \
+  -Pbenchmark.targetOs=macos linkReleaseExecutableNative
+```
+
+```sh
+cd components/ktserve/experiments/cli
+PORT=8080 ./ktserve serve ./public
+```
+
+```sh
+curl -fsS http://127.0.0.1:8080/
+curl -fsS http://127.0.0.1:8080/api/status.json
+```
+
+Repeat `--mount <prefix> <directory>` to serve additional directories. A positional directory mounts at `/` and can be omitted when using `--mount`. For example, this command mounts `public` at `/demo/`.
+
+```sh
+./ktserve serve --mount /demo ./public
+```
+
+Set `--cache-control` after the directory or mount it applies to. Enable `--access-log` to write method, status, duration, and outcome to stderr. The CLI installs the same [access-log extension](../../extensions/#access-logging) as a Kotlin app. Each I/O loop records exchanges in its own preallocated ring buffer. A background writer formats batches into reusable UTF-8 storage and writes them to stderr. A full ring drops log entries while serving continues. When the server returns normally, the writer drains the rings and reports any drops.
+
+Use the [fixed-rate benchmark](../../../../scripts/benchmark-access-log.md) to compare either logging on and off with one binary or two binaries with logging active, and verify log delivery.
+
+```sh
+./ktserve serve ./public --cache-control no-cache \
+  --mount /demo ./public --cache-control 'public, max-age=600' --access-log
+```
+
+The launcher starts `static/build/bin/native/releaseExecutable/ktserve.kexe`. You can run that executable directly with `serve <directory>` on the matching operating system and architecture. It needs no JVM at runtime.
+
+The command uses the same [static-file API](../../README.md#serve-static-files) as a Kotlin application. It snapshots each directory at startup and serves `index.html` at directory URLs ending in `/`. Restart the process to pick up file changes.
+
+## Serve HTTPS directly on Linux
+
+Build the HTTPS variant with OpenSSL 3 development headers and libraries for the target architecture. On Debian or Ubuntu with `libssl-dev` installed:
+
+```sh
+./components/ktserve/gradlew -p components/ktserve/experiments/cli/static \
+  -Pktserve.opensslRoot=/usr linkReleaseExecutableNative
+```
+
+The resulting executable needs the OpenSSL 3 shared libraries at runtime. Build against OpenSSL for the target Linux distribution and architecture so its glibc dependencies match the deployment. The standard CLI build omits this dependency. Supply both a PEM certificate chain, with the leaf certificate first, and its matching unencrypted PEM private key. Restart to reload the certificate.
+
+```sh
+cd components/ktserve/experiments/cli
+PORT=8443 ./ktserve serve ./public \
+  --tls-cert /path/to/fullchain.pem --tls-key /path/to/key.pem --access-log
+curl --cacert /path/to/ca.pem https://localhost:8443/
+```
+
+The TLS transport serves HTTP/1.1 over TLS 1.2 and newer on one Linux epoll worker. Mounts, range responses and access logs work over either listener. Pending handshakes count toward the connection limit and time out after ten seconds. The CLI defaults to IPv4 loopback. Set `BIND_HOST` to the numeric IPv4 address of a specific interface to accept remote requests. SIGINT and SIGTERM initiate shutdown and flush queued access logs.
+
+Verify the HTTPS executable with Python and the OpenSSL command-line tool:
+
+```sh
+python3 components/ktserve/experiments/cli/static/https_smoke.py \
+  components/ktserve/experiments/cli/static/build/bin/native/releaseExecutable/ktserve.kexe
+```
+
+## Run a Kotlin application
+
+Run a single `.kt` file that declares `main` in the default package and uses the ktServe Kotlin API. The launcher uses JDK 21, Gradle, and Kotlin/Native to compile the file, then starts the native executable. On Apple Silicon, set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` if the system has Command Line Tools selected.
+
+```sh
+cd components/ktserve/experiments/cli
+./ktserve run ./run/App.kt 8080
+```
+
+```sh
+curl -fsS http://127.0.0.1:8080/users/123
+```
+
+Gradle resolves ktServe from this checkout as an included build. [Gradle composite builds](https://docs.gradle.org/current/userguide/composite_builds.html) · [Kotlin/Native executables](https://kotlinlang.org/docs/multiplatform/multiplatform-build-native-binaries.html)
+
+Each invocation builds in a private directory. The checkout launcher keeps executables in `run/build/apps/`. The standalone binary uses the `ktserve/run` directory under `XDG_CACHE_HOME` or `~/.cache`. You can start the compiled executables directly.
+
+Use `run -` for route snippets and `run --app -` for a complete `serve { … }` block. Use `run --source -` for a complete Kotlin source file with imports, types, and a `main` function. Pass Maven Central libraries with a repeatable `--dependency group:artifact:version` before the input. The runner applies the Kotlin Serialization plugin so your `@Serializable` classes work in each mode.
+
+The build kit includes the optional Validation and OpenAPI modules. Select them when compiling the [typed app example](run/TypedApp.kt).
+
+```sh
+./ktserve run --extension validation --extension openapi ./run/TypedApp.kt
+```
+
+Run the same app from stdin.
+
+```sh
+./ktserve run --extension validation --extension openapi --source - < ./run/TypedApp.kt
+```
+
+```sh
+curl -i http://127.0.0.1:8080/api/users/42
+curl -i http://127.0.0.1:8080/api/users \
+  -H 'Content-Type: application/json' -d '{"name":"A"}'
+curl -fsS http://127.0.0.1:8080/openapi.json
+```
+
+The GET returns a user as JSON, the POST returns a `422` validation problem, and the OpenAPI document describes the name length rule. This example uses the Native CLI built from this checkout.
+
+## Smoke checks
+
+After building the static executable, run both checks from the repository root.
+
+```sh
+cli=components/ktserve/experiments/cli
+python3 "$cli/static/smoke.py" "$cli/ktserve"
+python3 "$cli/run/smoke.py"
+python3 "$cli/run/typed_smoke.py" "$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
+```
