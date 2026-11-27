@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-binary="${1:?Usage: package-ktserve.sh EXECUTABLE VERSION OUTPUT_DIRECTORY [--cli]}"
+usage='Usage: package-ktserve.sh EXECUTABLE VERSION OUTPUT_DIRECTORY [--cli | --cli-https]'
+binary="${1:?$usage}"
 version="${2:?Missing version}"
 output="${3:?Missing output directory}"
 mode="${4:-}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export LC_ALL=C
 
-if [[ "$#" -gt 4 || ( -n "$mode" && "$mode" != --cli ) ]]; then
-  echo 'Usage: package-ktserve.sh EXECUTABLE VERSION OUTPUT_DIRECTORY [--cli]' >&2
+if [[ "$#" -gt 4 || ( -n "$mode" && "$mode" != --cli && "$mode" != --cli-https ) ]]; then
+  echo "$usage" >&2
   exit 2
 fi
 if [[ ! "$version" =~ ^[0-9A-Za-z][0-9A-Za-z.+-]*$ ]]; then
@@ -42,10 +43,27 @@ case "$(uname -s)" in
   *) echo "Packaging requires Linux or macOS." >&2; exit 1 ;;
 esac
 
+archive_suffix=
+if [[ "$mode" == --cli-https ]]; then
+  if [[ "$platform" != linux ]]; then
+    echo 'Packaging the HTTPS CLI requires Linux.' >&2
+    exit 1
+  fi
+  if ! readelf -dW "$binary" | awk '
+    /\(NEEDED\).*\[libssl\.so\.3\]/ { ssl = 1 }
+    /\(NEEDED\).*\[libcrypto\.so\.3\]/ { crypto = 1 }
+    END { exit !(ssl && crypto) }
+  '; then
+    echo 'The HTTPS CLI must link to libssl.so.3 and libcrypto.so.3.' >&2
+    exit 1
+  fi
+  archive_suffix=-https
+fi
+
 mkdir -p "$output"
 stage="$(mktemp -d "$output/.ktserve.XXXXXXXX")"
 trap 'rm -rf "$stage"' EXIT
-archive="ktserve-$version-$platform-$arch.tar.gz"
+archive="ktserve-$version-$platform-$arch$archive_suffix.tar.gz"
 install -m 0755 "$binary" "$stage/ktserve"
 install -m 0644 "$root/LICENSE" "$stage/LICENSE"
 cat > "$stage/compatibility.txt" <<EOF
@@ -55,11 +73,26 @@ $compatibility
 CI smoke target: $smoke_target
 
 EOF
-if [[ "$mode" == --cli ]]; then
+if [[ -n "$mode" ]]; then
   cp -pR "$root/components/ktserve/experiments/cli/public" "$stage/"
+fi
+if [[ "$mode" == --cli ]]; then
   cat >> "$stage/compatibility.txt" <<'EOF'
 This archive contains the ktServe CLI preview for serving files over HTTP.
 Run ./ktserve serve ./public and open http://127.0.0.1:8080/.
+The sample JSON file is available at /api/status.json.
+Set PORT or BIND_HOST to change the port or IPv4 address.
+EOF
+elif [[ "$mode" == --cli-https ]]; then
+  cat >> "$stage/compatibility.txt" <<'EOF'
+This archive contains the ktServe CLI preview for serving files directly over HTTPS.
+It requires the OpenSSL 3 runtime libraries libssl.so.3 and libcrypto.so.3.
+On Ubuntu 24.04 these libraries are provided by libssl3t64.
+
+Supply a PEM certificate chain and its matching unencrypted PEM private key:
+PORT=8443 ./ktserve serve ./public --tls-cert fullchain.pem --tls-key key.pem
+
+Open https://localhost:8443/ with a certificate valid for that hostname and trusted by your client.
 The sample JSON file is available at /api/status.json.
 Set PORT or BIND_HOST to change the port or IPv4 address.
 EOF
@@ -74,7 +107,7 @@ chmod 0644 "$stage/compatibility.txt"
 (
   cd "$stage"
   entries=(LICENSE compatibility.txt ktserve)
-  if [[ "$mode" == --cli ]]; then
+  if [[ -n "$mode" ]]; then
     while IFS= read -r -d '' entry; do
       entries+=("$entry")
     done < <(find public -print0 | sort -z)

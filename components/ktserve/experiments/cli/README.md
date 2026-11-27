@@ -4,7 +4,7 @@ Use `serve` to publish a directory over HTTP or `run` to compile and start an ap
 
 ## Serve a directory
 
-Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.1). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
+Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.2). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
 
 ### Build from source
 
@@ -53,23 +53,31 @@ The command uses the same [static-file API](../../README.md#serve-static-files) 
 
 ## Serve HTTPS directly on Linux
 
-Build the HTTPS variant with OpenSSL 3 development headers and libraries for the target architecture. On Debian or Ubuntu with `libssl-dev` installed:
+Download the `-https.tar.gz` archive for Linux x86-64 or ARM64 and extract it. These builds use the OpenSSL 3 runtime libraries, provided by `libssl3t64` on Ubuntu 24.04. Run the CLI from the extracted directory and supply both a PEM certificate chain, with the leaf certificate first, and its matching unencrypted PEM private key. Restart to reload the certificate.
+
+```sh
+PORT=8443 ./ktserve serve ./public \
+  --tls-cert /path/to/fullchain.pem --tls-key /path/to/key.pem --access-log
+```
+
+Use the certificate's hostname. For a private CA, pass its root certificate to curl.
+
+```sh
+curl --cacert /path/to/ca.pem https://localhost:8443/
+```
+
+The TLS transport serves HTTP/1.1 over TLS 1.2 and newer on one Linux epoll worker. Mounts, range responses and access logs work over either listener. Pending handshakes count toward the connection limit and time out after ten seconds. The CLI defaults to IPv4 loopback. Set `BIND_HOST` to the numeric IPv4 address of a specific interface to accept remote requests. SIGINT and SIGTERM initiate shutdown and flush queued access logs.
+
+### Build with HTTPS from source
+
+Build against OpenSSL for the target Linux distribution and architecture so its glibc dependencies match the deployment. With `libssl-dev` installed on a Linux x86-64 build host, run:
 
 ```sh
 ./components/ktserve/gradlew -p components/ktserve/experiments/cli/static \
   -Pktserve.opensslRoot=/usr linkReleaseExecutableNative
 ```
 
-The resulting executable needs the OpenSSL 3 shared libraries at runtime. Build against OpenSSL for the target Linux distribution and architecture so its glibc dependencies match the deployment. The standard CLI build omits this dependency. Supply both a PEM certificate chain, with the leaf certificate first, and its matching unencrypted PEM private key. Restart to reload the certificate.
-
-```sh
-cd components/ktserve/experiments/cli
-PORT=8443 ./ktserve serve ./public \
-  --tls-cert /path/to/fullchain.pem --tls-key /path/to/key.pem --access-log
-curl --cacert /path/to/ca.pem https://localhost:8443/
-```
-
-The TLS transport serves HTTP/1.1 over TLS 1.2 and newer on one Linux epoll worker. Mounts, range responses and access logs work over either listener. Pending handshakes count toward the connection limit and time out after ten seconds. The CLI defaults to IPv4 loopback. Set `BIND_HOST` to the numeric IPv4 address of a specific interface to accept remote requests. SIGINT and SIGTERM initiate shutdown and flush queued access logs.
+The source launcher in this directory starts the resulting executable.
 
 Verify the HTTPS executable with Python and the OpenSSL command-line tool:
 

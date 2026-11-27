@@ -15,8 +15,28 @@ concurrency:
   group: ktserve-cli-preview-${{ github.ref }}
 
 jobs:
+  arm_openssl:
+    name: Fetch the Ubuntu ARM64 OpenSSL SDK
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - name: Download the signed distribution packages
+        run: |
+          test "$(dpkg --print-architecture)" = arm64
+          sudo apt-get update -qq
+          mkdir "$RUNNER_TEMP/arm-openssl"
+          cd "$RUNNER_TEMP/arm-openssl"
+          apt-get download libssl-dev libssl3t64
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: arm-openssl
+          path: ${{ runner.temp }}/arm-openssl/*.deb
+          if-no-files-found: error
+          overwrite: true
+
   package:
     name: Build CLI preview (${{ matrix.platform }} ${{ matrix.arch }})
+    needs: arm_openssl
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -65,6 +85,43 @@ jobs:
           archive="ktserve-$GITHUB_REF_NAME-$TARGET_PLATFORM-$TARGET_ARCH.tar.gz"
           ./scripts/package-ktserve.sh "$binary" "$GITHUB_REF_NAME" "$package" --cli
           tar -xOzf "$package/$archive" ktserve | cmp "$binary" -
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        if: matrix.arch == 'aarch64'
+        with:
+          name: arm-openssl
+          path: ${{ runner.temp }}/arm-openssl
+      - name: Build and package the Linux HTTPS CLI
+        if: matrix.platform == 'linux'
+        run: |
+          if [[ "$TARGET_ARCH" == aarch64 ]]; then
+            sdk="$RUNNER_TEMP/arm-openssl"
+            for package in "$sdk"/*_arm64.deb; do
+              test "$(dpkg-deb -f "$package" Architecture)" = arm64
+              dpkg-deb -x "$package" "$sdk"
+            done
+            openssl_root="$sdk/usr"
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y libssl-dev
+            openssl_root=/usr
+          fi
+
+          project=components/ktserve
+          cli="$project/experiments/cli/static"
+          "$project/gradlew" -p "$cli" "-Pbenchmark.targetArch=$TARGET_ARCH" \
+            "-Pktserve.opensslRoot=$openssl_root" linkReleaseExecutableNative
+          binary="$cli/build/bin/native/releaseExecutable/ktserve.kexe"
+          package="$RUNNER_TEMP/cli-release"
+          archive="ktserve-$GITHUB_REF_NAME-linux-$TARGET_ARCH-https.tar.gz"
+          ./scripts/package-ktserve.sh "$binary" "$GITHUB_REF_NAME" "$package" --cli-https
+          tar -xOzf "$package/$archive" ktserve | cmp "$binary" -
+      - name: Test the downloadable CLI
+        if: matrix.arch != 'aarch64'
+        run: |
+          test "$(uname -m)" = "$TARGET_ARCH"
+          for archive in "$RUNNER_TEMP/cli-release/"*.tar.gz; do
+            bash scripts/smoke-ktserve-cli-package.sh "$archive"
+          done
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
@@ -72,65 +129,29 @@ jobs:
           if-no-files-found: error
           overwrite: true
 
-  verify:
-    name: Test CLI preview (${{ matrix.platform }} ${{ matrix.arch }})
+  verify_arm:
+    name: Test CLI preview on Linux ARM64
     needs: package
-    runs-on: ${{ matrix.runner }}
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: linux
-            arch: x86_64
-            runner: ubuntu-24.04
-          - platform: linux
-            arch: aarch64
-            runner: ubuntu-24.04-arm
-          - platform: macos
-            arch: arm64
-            runner: macos-15
-    env:
-      TARGET_PLATFORM: ${{ matrix.platform }}
-      TARGET_ARCH: ${{ matrix.arch }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
+          name: cli-preview-linux-aarch64
           path: ${{ runner.temp }}/cli-release
-      - name: Test the downloadable CLI on the target machine
+      - name: Test the downloadable HTTP and HTTPS CLIs
         run: |
-          test "$(uname -m)" = "$TARGET_ARCH"
-          cli=components/ktserve/experiments/cli
-          package="$RUNNER_TEMP/cli-release"
-          archive="ktserve-$GITHUB_REF_NAME-$TARGET_PLATFORM-$TARGET_ARCH.tar.gz"
-          if [[ "$TARGET_PLATFORM" == linux ]]; then
-            (cd "$package" && sha256sum --strict -c "$archive.sha256")
-          else
-            (cd "$package" && shasum -a 256 -c "$archive.sha256")
-          fi
-
-          unpacked="$RUNNER_TEMP/cli-unpacked"
-          mkdir "$unpacked"
-          tar -xzf "$package/$archive" -C "$unpacked"
-          cmp LICENSE "$unpacked/LICENSE"
-          python3 "$cli/static/smoke.py" "$unpacked/ktserve"
-
-          cd "$unpacked"
-          export BIND_HOST=127.0.0.1 PORT=18081
-          ./ktserve serve ./public > "$RUNNER_TEMP/cli-startup.log" 2>&1 &
-          pid=$!
-          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
-          curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 \
-            "http://127.0.0.1:$PORT/api/status.json" -o "$RUNNER_TEMP/cli-response.json"
-          cmp public/api/status.json "$RUNNER_TEMP/cli-response.json"
+          test "$(uname -m)" = aarch64
+          for archive in "$RUNNER_TEMP/cli-release/"*.tar.gz; do
+            bash scripts/smoke-ktserve-cli-package.sh "$archive"
+          done
 
   publish:
     name: Publish the CLI prerelease
-    needs: verify
+    needs: verify_arm
     if: github.repository_id == '1468028252' && github.repository_owner == 'christian-draeger'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -153,7 +174,7 @@ jobs:
           source_commit="$(git rev-parse HEAD)"
           cd "$RUNNER_TEMP/cli-release"
           assets=()
-          for target in linux-x86_64 linux-aarch64 macos-arm64; do
+          for target in linux-x86_64 linux-aarch64 macos-arm64 linux-x86_64-https linux-aarch64-https; do
             archive="ktserve-$GITHUB_REF_NAME-$target.tar.gz"
             test -s "$archive"
             sha256sum --strict -c "$archive.sha256"
@@ -167,6 +188,14 @@ jobs:
           ```
 
           Open http://127.0.0.1:8080/ to try the included site. Each archive has a SHA-256 checksum.
+
+          Choose an archive ending in `-https.tar.gz` for direct HTTPS on Linux x86-64 or ARM64.
+          These builds use the system OpenSSL 3 libraries (`libssl3t64` on Ubuntu 24.04).
+          Use your PEM certificate chain and its matching unencrypted key:
+
+          ```sh
+          PORT=8443 ./ktserve serve ./public --tls-cert fullchain.pem --tls-key key.pem
+          ```
 
           [CLI documentation](https://christian-draeger.github.io/ktserve/docs.html#static-files)
           EOF
