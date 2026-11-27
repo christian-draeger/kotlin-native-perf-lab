@@ -315,7 +315,7 @@ def main(destination, ci_checkout):
         "traffic_runs": traffic_runs,
     }
     destination.mkdir(parents=True, exist_ok=True)
-    for asset in ("index.html", "styles.css", "app.js"):
+    for asset in ("index.html", "docs.html", "benchmarks.html", "architecture.html", "styles.css", "app.js"):
         shutil.copyfile(ASSETS / asset, destination / asset)
     if (ASSETS / "assets").is_dir():
         shutil.copytree(ASSETS / "assets", destination / "assets", dirs_exist_ok=True)

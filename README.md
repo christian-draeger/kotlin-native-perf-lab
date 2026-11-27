@@ -2,7 +2,7 @@
 
 ktServe is an HTTP server for Kotlin/Native and the JVM. Use its Kotlin routing API in a standalone service, select it as a Ktor engine, or enable it in a Spring Boot WebFlux application.
 
-The [ktServe website](https://christian-draeger.github.io/ktserve/) explains the architecture and publishes benchmark results with their measured revisions and conditions.
+The [ktServe website](https://christian-draeger.github.io/ktserve/) provides quickstarts for the library, CLI preview and framework integrations, alongside its architecture and benchmark results.
 
 ktServe is licensed under the [Apache License 2.0](LICENSE). Third-party assets retain their accompanying licenses.
 
@@ -46,18 +46,18 @@ ktServe replaces the NativeServe preview identifiers in packages, build coordina
 | `components/ktserve/` | Public Kotlin API, platform implementations, integrations, examples and experiments. |
 | `competitors/` | Reference implementations in Rust, Kotlin, Java, C#, Go, JavaScript and Python. |
 | `scripts/` | Shared build, validation, measurement and profiling commands. |
-| `dashboard/` | The benchmark dashboard published to GitHub Pages. |
+| `dashboard/` | Product site, documentation and benchmark dashboard published to GitHub Pages. |
 | `results/` | Benchmark reports, methodology decisions and tracked local measurements. Hosted raw data is archived on the [`benchmark-data`](https://github.com/christian-draeger/ktserve/tree/benchmark-data/results) branch. |
 
 ## Benchmark dashboard
 
 The [benchmark protocol](BENCHMARK_PROTOCOL.md) documents the workloads, comparable conditions and raw data. The [historical preview scorecard](results/preview-scorecard.md) records the preview's measured trade-offs and performance criteria.
 
-Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint on [GitHub Pages](https://christian-draeger.github.io/ktserve/). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate ktServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
+Browse throughput, latency, CPU cost and peak RSS by measurement series and endpoint in the [benchmark lab](https://christian-draeger.github.io/ktserve/benchmarks.html). The overview opens the latest complete expanded comparison, with Core runs available in the same picker. Framework history charts medians at the same recorded architecture, CPU model and load settings. Use the legend to show individual stacks and the run values to inspect exact numbers and raw logs. The separate ktServe chart shows trial ranges and links each run to its measured commit. New committed measurements under `results/<UTC timestamp>/results.csv` appear after the Pages workflow runs on `main`. Optional notes and links for a series go in `dashboard/run-notes.json`.
 
 To collect hosted Linux series, open **Actions → Benchmark dashboard → Run workflow** on `main` with **Run the Ubuntu x86_64 and ARM64 benchmarks before publishing** enabled. Choose the 20-configuration `expanded` suite or the four-configuration `core` suite, and three or five trials per server and endpoint. The expanded suite includes ktServe's Eager default and the fixed one- and two-worker settings. Each architecture and endpoint pair runs on its own GitHub-hosted VM, where configurations run sequentially and the server and load generator share resources. Results link to their runner CPU model and raw logs.
 
-The engine comparisons use one application per framework and change its HTTP engine. They cover Ktor Native on CIO and ktServe, Ktor JVM on CIO, Netty and ktServe, and Spring Boot WebFlux on Reactor Netty and ktServe. Run **Actions → ktServe integration benchmarks** on `main` to collect Linux x86_64 and ARM64 measurements. GitHub Actions publishes the series to the engine comparison view. [Engine comparisons](https://christian-draeger.github.io/ktserve/#integration-benchmarks) · [Integration benchmark protocol](BENCHMARK_PROTOCOL.md#compare-framework-engines)
+The engine comparisons use one application per framework and change its HTTP engine. They cover Ktor Native on CIO and ktServe, Ktor JVM on CIO, Netty and ktServe, and Spring Boot WebFlux on Reactor Netty and ktServe. Run **Actions → ktServe integration benchmarks** on `main` to collect Linux x86_64 and ARM64 measurements. GitHub Actions publishes the series to the engine comparison view. [Engine comparisons](https://christian-draeger.github.io/ktserve/benchmarks.html#integration-benchmarks) · [Integration benchmark protocol](BENCHMARK_PROTOCOL.md#compare-framework-engines)
 
 For a local preview, build the static files and serve the output directory.
 

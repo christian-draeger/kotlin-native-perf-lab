@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Build a Kotlin HTTP service with ktServe, serve static files from the terminal, or use ktServe in Ktor and Spring Boot WebFlux.">
+  <meta name="theme-color" content="#101019">
+  <title>Documentation — ktServe</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="wordmark" href="./index.html"><span class="mark" aria-hidden="true"></span>ktServe</a>
+      <nav aria-label="Main navigation">
+        <a href="./docs.html" aria-current="page">Docs</a>
+        <a href="./benchmarks.html">Benchmarks</a>
+        <a href="./architecture.html">Architecture</a>
+        <a class="repository-link" href="https://github.com/christian-draeger/ktserve">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="docs-page">
+    <section class="product-section docs-intro" aria-labelledby="docs-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h1 id="docs-title">Get started with ktServe</h1>
+          <p>Build a standalone HTTP service, publish a directory, or run your existing Kotlin application on ktServe.</p>
+        </div>
+        <nav class="hero-actions" aria-label="On this page">
+          <a class="button button-primary" href="#standalone">Standalone Kotlin</a>
+          <a class="button button-secondary" href="#static-files">Static files</a>
+          <a class="button button-secondary" href="#integrations">Framework integrations</a>
+          <a class="button button-secondary" href="#deploy">Deployment</a>
+        </nav>
+      </div>
+    </section>
+
+    <section class="product-section" id="standalone" aria-labelledby="standalone-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h2 id="standalone-title">Build a Kotlin HTTP service</h2>
+          <p>Add ktServe to a Kotlin/JVM app on JDK 21, or to a Kotlin Multiplatform source set targeting Linux x86-64, Linux ARM64 or Apple Silicon macOS.</p>
+        </div>
+        <div class="docs-grid">
+          <div class="docs-stack">
+            <h3>Add the Gradle dependency</h3>
+            <div class="code-window">
+              <pre><code>repositories { mavenCentral() }
+
+dependencies {
+    implementation(<span class="code-string">"codes.draeger:ktserve:0.4.0"</span>)
+}</code></pre>
+            </div>
+            <p><a class="text-link" href="https://central.sonatype.com/artifact/codes.draeger/ktserve">Maven Central <span aria-hidden="true">↗</span></a></p>
+          </div>
+          <div class="docs-stack">
+            <h3>Register a JSON route</h3>
+            <div class="code-window">
+              <pre><code><span class="code-keyword">import</span> codes.draeger.ktserve.json
+<span class="code-keyword">import</span> codes.draeger.ktserve.serve
+
+<span class="code-keyword">fun</span> <span class="code-function">main</span>() = serve(port = <span class="code-value">8080</span>) {
+    get(<span class="code-string">"/status"</span>) { json(mapOf(<span class="code-string">"status"</span> to <span class="code-string">"ok"</span>)) }
+}</code></pre>
+            </div>
+            <p>Start your application, then check the response from another terminal.</p>
+            <div class="code-window">
+              <pre><code>curl -fsS http://127.0.0.1:8080/status</code></pre>
+            </div>
+          </div>
+        </div>
+        <div class="integration-links">
+          <a class="text-link" href="https://github.com/christian-draeger/ktserve/blob/main/components/ktserve/README.md#write-a-handler">Routing and JSON <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="https://github.com/christian-draeger/ktserve/blob/main/components/ktserve/README.md#standalone-rest-routes">REST routes and request bodies <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="https://github.com/christian-draeger/ktserve/tree/main/components/ktserve/examples/hello-jvm">Runnable JVM example <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="product-section" id="static-files" aria-labelledby="static-files-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h2 id="static-files-title">Serve a directory from the terminal</h2>
+          <p>The native CLI for local sites, demos and static assets is a development preview. The examples below require a development checkout that includes the CLI, JDK 21 and the Kotlin/Native toolchain.</p>
+        </div>
+        <div class="docs-grid">
+          <div class="docs-stack">
+            <h3>Build and serve on Linux</h3>
+            <p>From the repository root, build the CLI and start it with the included sample directory.</p>
+            <div class="code-window">
+              <pre><code>./components/ktserve/gradlew \
+  -p components/ktserve/experiments/cli/static \
+  linkReleaseExecutableNative
+cd components/ktserve/experiments/cli
+./ktserve serve ./public --access-log</code></pre>
+            </div>
+            <p>Open <code>http://127.0.0.1:8080/</code>. Add <code>--mount /assets ./assets</code> to serve a second directory. Access logging writes method, status, duration and outcome to stderr. Restart the process to refresh the file snapshot.</p>
+          </div>
+          <div class="docs-stack">
+            <h3 id="direct-https">Use your own HTTPS certificate</h3>
+            <p>Install <code>libssl-dev</code> on Debian or Ubuntu and build from the repository root. The HTTPS preview uses OpenSSL 3 and a PEM chain with its matching unencrypted key.</p>
+            <div class="code-window">
+              <pre><code>./components/ktserve/gradlew \
+  -p components/ktserve/experiments/cli/static \
+  -Pktserve.opensslRoot=/usr linkReleaseExecutableNative
+cd components/ktserve/experiments/cli
+PORT=8443 ./ktserve serve ./public \
+  --tls-cert fullchain.pem --tls-key key.pem</code></pre>
+            </div>
+            <p>Use <code>https://localhost:8443/</code> with a certificate valid for that hostname and trusted by your client.</p>
+          </div>
+        </div>
+        <p class="docs-note">On Apple Silicon, build the HTTP variant with full Xcode and <code>-Pbenchmark.targetOs=macos</code>. From the CLI directory, <code>./ktserve run ./run/App.kt 8080</code> builds and starts a Kotlin application.</p>
+        <p class="docs-note">In a development checkout with static-file support, call <code>staticFiles("public")</code> inside <code>serve { }</code> to put assets and API routes on the same listener. Published native archives start the bundled server example.</p>
+      </div>
+    </section>
+
+    <section class="product-section integrations-section" id="integrations" aria-labelledby="integrations-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h2 id="integrations-title">Use your existing framework</h2>
+          <p>Try ktServe as the HTTP engine for an existing app. Both adapters have runnable examples in the source checkout.</p>
+        </div>
+        <div class="integration-grid">
+          <article class="integration-card">
+            <h3>Ktor</h3>
+            <p>Pass the <code>KtServe</code> engine factory to <code>embeddedServer</code> and keep your Ktor application module. The adapter supports Linux Native and JVM HTTP/1.x.</p>
+            <div class="integration-links">
+              <a class="text-link" href="https://github.com/christian-draeger/ktserve/tree/main/components/ktserve/integrations/ktor">Ktor engine guide <span aria-hidden="true">↗</span></a>
+              <a class="text-link" href="https://github.com/christian-draeger/ktserve/tree/main/components/ktserve/examples/ktor-jvm">JVM example <span aria-hidden="true">↗</span></a>
+            </div>
+          </article>
+          <article class="integration-card">
+            <h3>Spring Boot WebFlux</h3>
+            <p>Enable <code>ktserve.enabled=true</code> with the checkout starter on the JVM. Keep your reactive controllers and functional routes.</p>
+            <div class="integration-links">
+              <a class="text-link" href="https://github.com/christian-draeger/ktserve/tree/main/components/ktserve/integrations/spring-boot-starter">WebFlux starter guide <span aria-hidden="true">↗</span></a>
+              <a class="text-link" href="https://github.com/christian-draeger/ktserve/tree/main/components/ktserve/examples/spring-webflux">Boot example <span aria-hidden="true">↗</span></a>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="product-section" id="deploy" aria-labelledby="deploy-title">
+      <div class="shell">
+        <div class="section-heading">
+          <h2 id="deploy-title">Run and deploy ktServe</h2>
+          <p>The qualified production profile uses ktServe as a private HTTP/1.1 origin with one epoll worker on Ubuntu 24.04 Linux x86-64 or ARM64, behind Caddy TLS ingress.</p>
+        </div>
+        <div class="docs-grid">
+          <div class="docs-stack">
+            <h3>Try a native download</h3>
+            <p>Download the archive and checksum for your platform from the release. Verify the archive, extract it and run <code>./ktserve</code> to start the bundled example. The executable needs no JVM.</p>
+            <a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/tag/v0.4.0">Release downloads <span aria-hidden="true">↗</span></a>
+          </div>
+          <div class="docs-stack">
+            <h3>Set bounds and observe traffic</h3>
+            <p>Use <code>ServerLimits</code> to set connection, header, body and time limits. Attach a server observer to track readiness, admission and exchange outcomes.</p>
+            <a class="text-link" href="https://github.com/christian-draeger/ktserve/blob/main/components/ktserve/deployment/PRODUCTION.md">Production deployment <span aria-hidden="true">↗</span></a>
+            <a class="text-link" href="https://github.com/christian-draeger/ktserve/blob/main/components/ktserve/README.md#observe-an-http1x-server">Server observation <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <a class="wordmark" href="./index.html"><span class="mark" aria-hidden="true"></span>ktServe</a>
+      <nav aria-label="Project links">
+        <a href="./benchmarks.html">Benchmarks</a>
+        <a href="./architecture.html">Architecture</a>
+        <a href="https://github.com/christian-draeger/ktserve/blob/main/LICENSE">Apache 2.0 <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
