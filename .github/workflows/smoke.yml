@@ -84,6 +84,7 @@ jobs:
           bash scripts/ci-gradle.sh -p "$cli/static" linkReleaseExecutableNative
           binary="$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
           python3 "$cli/static/smoke.py" "$binary"
+          python3 "$cli/static/stdin_smoke.py" "$binary"
           python3 "$cli/run/typed_smoke.py" "$binary"
 
   x86_smoke:
