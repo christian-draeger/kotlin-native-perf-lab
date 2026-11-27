@@ -129,13 +129,8 @@ section[id], h3[id] { scroll-margin-top: 22px; }
 }
 .hero-example-tabs button:hover { color: var(--text); }
 .hero-example-tabs button[aria-selected="true"] { background: #382b50; color: #eadbff; }
-.hero-terminal-body { display: grid; gap: 12px; padding: 16px; }
-.hero-terminal-body select { width: auto; }
-.hero-terminal-body p { font-size: .875rem; }
-.hero-terminal-body .cli-terminal-command { min-width: 0; border: 1px solid var(--edge); border-radius: 7px; background: var(--bg); }
-.hero-terminal-body pre { padding: 13px; }
+.hero-terminal pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .hero-terminal .code-window-footer { flex-wrap: wrap; gap: 8px 12px; }
-.hero-terminal .code-window-footer code { overflow-wrap: anywhere; }
 .hero-visual::before {
   position: absolute;
   z-index: -1;
@@ -392,8 +387,10 @@ tbody tr:hover { background-color: #ffffff0c; }
 .product-home .hero h1 { white-space: normal; }
 .quickstart { padding-block: 22px; border-bottom: 1px solid var(--edge); background: var(--panel); }
 .quickstart summary { cursor: pointer; font-weight: 650; }
+.quickstart details + details { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--edge); }
 .quickstart .docs-grid { margin-top: 20px; scroll-margin-top: 24px; }
 .quickstart .docs-stack h2 { font-size: 1.2rem; letter-spacing: -.025em; }
+.quickstart .cli-terminal-controls select { width: auto; }
 .product-home .use-cases { padding-block: clamp(46px, 5vw, 70px); }
 .product-home .use-cases h2 { font-size: clamp(2rem, 3.2vw, 3.2rem); }
 .use-case-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 25px; }

@@ -95,22 +95,22 @@ dependencies {
               <div class="docs-stack">
                 <h4>HTTP</h4>
                 <div class="cli-downloads">
-                  <a class="button button-secondary" data-cli-target="linux-x86_64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-x86_64">Linux x86-64 <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" data-cli-target="linux-aarch64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-aarch64">Linux ARM64 <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" data-cli-target="macos-arm64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-macos-arm64">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-x86_64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-x86_64">Linux x86-64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-aarch64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-aarch64">Linux ARM64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="macos-arm64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-macos-arm64">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>macOS may ask you to approve the ad hoc signed executable on first launch. <a class="text-link" href="https://support.apple.com/en-us/102445">Apple’s first-launch guidance <span aria-hidden="true">↗</span></a></p>
               </div>
               <div class="docs-stack">
                 <h4 id="direct-https">Direct HTTPS</h4>
                 <div class="cli-downloads">
-                  <a class="button button-secondary" data-cli-target="linux-x86_64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-x86_64-https">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" data-cli-target="linux-aarch64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-aarch64-https">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-x86_64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-x86_64-https">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-aarch64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-aarch64-https">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>The HTTPS downloads use the system’s OpenSSL 3 libraries. On Ubuntu 24.04, install <code>libssl3t64</code> if needed. They can also serve plain HTTP.</p>
               </div>
             </div>
-            <p><a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.4">Release notes and SHA-256 checksums <span aria-hidden="true">↗</span></a></p>
+            <p><a class="text-link" href="https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.5">Release notes and SHA-256 checksums <span aria-hidden="true">↗</span></a></p>
           </section>
           <section class="docs-stack" aria-labelledby="cli-run">
             <h3 id="cli-run">Run it</h3>
@@ -126,7 +126,7 @@ dependencies {
               </div>
               <noscript><p>The terminal example uses Linux x86-64. Use the buttons above to download any executable.</p></noscript>
               <div class="code-window cli-terminal-command">
-                <pre tabindex="0" aria-label="Download and start ktServe"><code id="cli-install-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-x86_64 -o ktserve &amp;&amp; chmod +x ktserve &amp;&amp;
+                <pre tabindex="0" aria-label="Download and start ktServe"><code id="cli-install-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-x86_64 -o ktserve &amp;&amp; chmod +x ktserve &amp;&amp;
 ./ktserve serve - &lt;&lt;&lt;'{"status":"ok"}'</code></pre>
               </div>
               <p>After a browser download, name the file <code>ktserve</code>, run <code>chmod +x ktserve</code> and use the second line.</p>
@@ -150,13 +150,33 @@ dependencies {
             <div class="code-window">
               <pre tabindex="0" aria-label="Request the Kotlin health endpoint"><code>curl -fsS http://127.0.0.1:8080/health</code></pre>
             </div>
-            <p>If port 8080 is in use, prefix the run command with <code>PORT=8081</code> and use that port for the test. On Linux ARM64, use the JSON and file-serving commands.</p>
+            <p>If port 8080 is in use, prefix the short form with <code>PORT=8081</code> and use that port for the test. On Linux ARM64, use the JSON and file-serving commands.</p>
+            <h4>Configure the server in Kotlin</h4>
+            <p>Use <code>run --app -</code> to pass the full <code>serve</code> call with its own host, port, or <code>ServerLimits</code>.</p>
+            <div class="code-window">
+              <pre tabindex="0" aria-label="Run a configured Kotlin server from standard input"><code>./ktserve run --app - &lt;&lt;'KOTLIN'
+serve(port = 8081, host = "127.0.0.1") {
+    get("/health") { text("ok") }
+    get("/ready") { text("ready") }
+}
+KOTLIN</code></pre>
+            </div>
+            <div class="code-window">
+              <pre tabindex="0" aria-label="Request both configured endpoints"><code>curl -fsS http://127.0.0.1:8081/health
+curl -fsS http://127.0.0.1:8081/ready</code></pre>
+            </div>
+            <h4>Run a complete Kotlin file</h4>
+            <p>Pass an <code>App.kt</code> with its own <code>main</code> function. Arguments after the filename are passed to the compiled app.</p>
+            <div class="code-window">
+              <pre tabindex="0" aria-label="Run a Kotlin application file"><code>./ktserve run App.kt</code></pre>
+            </div>
+            <p>The bundled Gradle project declares ktServe in <code>nativeMain</code>. If an import references a library outside the compile classpath, the compiler reports an unresolved reference. For additional libraries, use a Kotlin Multiplatform Gradle project and declare dependencies that publish variants for your Native target. <a class="text-link" href="https://kotlinlang.org/docs/multiplatform/multiplatform-add-dependencies.html">Kotlin Multiplatform dependencies <span aria-hidden="true">↗</span></a></p>
           </section>
           <details class="docs-disclosure" id="cli-directory">
             <summary>Serve a directory or configure HTTPS</summary>
             <p>Use your own <code>public/</code> directory or extract the sample archive in an empty directory. The archive command uses the platform selected above.</p>
             <div class="code-window cli-terminal-command">
-              <pre tabindex="0" aria-label="Download the CLI archive and sample site"><code id="cli-archive-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-x86_64.tar.gz | tar -xzf -</code></pre>
+              <pre tabindex="0" aria-label="Download the CLI archive and sample site"><code id="cli-archive-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-x86_64.tar.gz | tar -xzf -</code></pre>
             </div>
             <div class="docs-grid">
               <div class="docs-stack">

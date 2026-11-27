@@ -8,8 +8,11 @@
   const status = document.querySelector("#cli-copy-status");
   const directory = document.querySelector("#cli-directory");
   const links = document.querySelectorAll("[data-cli-target]");
-  const canCopy = Boolean(navigator.clipboard?.writeText);
-  const release = "cli-preview-0.1.4";
+  const canCopy = Boolean(copy && status && navigator.clipboard?.writeText);
+  const start = command.hasAttribute("data-cli-install-only")
+    ? ""
+    : " &&\n./ktserve serve - <<<'{\"status\":\"ok\"}'";
+  const release = "cli-preview-0.1.5";
   const releaseUrl = `https://github.com/christian-draeger/ktserve/releases/download/${release}`;
   const groups = [
     ["HTTP", [
@@ -52,16 +55,14 @@
       if (selected) link.setAttribute("aria-current", "true");
       else link.removeAttribute("aria-current");
     }
-    command.textContent = url
-      ? `curl -fsSL ${url} -o ktserve && chmod +x ktserve &&\n./ktserve serve - <<<'{"status":"ok"}'`
-      : "";
+    command.textContent = url ? `curl -fsSL ${url} -o ktserve && chmod +x ktserve${start}` : "";
     command.closest(".cli-terminal-command").hidden = !url;
     if (archiveCommand) {
       archiveCommand.textContent = url ? `curl -fsSL ${url}.tar.gz | tar -xzf -` : "";
       archiveCommand.closest(".cli-terminal-command").hidden = !url;
     }
-    copy.hidden = !canCopy || !url;
-    status.textContent = "";
+    if (copy) copy.hidden = !canCopy || !url;
+    if (status) status.textContent = "";
   }
 
   async function detectTarget() {
