@@ -9,7 +9,7 @@
   const directory = document.querySelector("#cli-directory");
   const links = document.querySelectorAll("[data-cli-target]");
   const canCopy = Boolean(navigator.clipboard?.writeText);
-  const release = "cli-preview-0.1.3";
+  const release = "cli-preview-0.1.4";
   const releaseUrl = `https://github.com/christian-draeger/ktserve/releases/download/${release}`;
   const groups = [
     ["HTTP", [
