@@ -108,6 +108,34 @@ section[id], h3[id] { scroll-margin-top: 22px; }
 .button-secondary:hover { border-color: var(--kotlin-accent); }
 
 .hero-visual { position: relative; min-width: 0; }
+.hero-example-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 12px;
+  border: 1px solid var(--edge-light);
+  border-radius: 9px;
+  background: var(--panel);
+}
+.hero-example-tabs button {
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--subtle);
+  font-size: .875rem;
+  font-weight: 650;
+}
+.hero-example-tabs button:hover { color: var(--text); }
+.hero-example-tabs button[aria-selected="true"] { background: #382b50; color: #eadbff; }
+.hero-terminal-body { display: grid; gap: 12px; padding: 16px; }
+.hero-terminal-body select { width: auto; }
+.hero-terminal-body p { font-size: .875rem; }
+.hero-terminal-body .cli-terminal-command { min-width: 0; border: 1px solid var(--edge); border-radius: 7px; background: var(--bg); }
+.hero-terminal-body pre { padding: 13px; }
+.hero-terminal .code-window-footer { flex-wrap: wrap; gap: 8px 12px; }
+.hero-terminal .code-window-footer code { overflow-wrap: anywhere; }
 .hero-visual::before {
   position: absolute;
   z-index: -1;

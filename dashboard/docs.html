@@ -93,7 +93,7 @@ dependencies {
             <div class="docs-grid">
               <div class="docs-stack">
                 <h4>HTTP</h4>
-                <div class="cli-downloads" data-cli-downloads="HTTP">
+                <div class="cli-downloads">
                   <a class="button button-secondary" data-cli-target="linux-x86_64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64">Linux x86-64 <span aria-hidden="true">↓</span></a>
                   <a class="button button-secondary" data-cli-target="linux-aarch64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-aarch64">Linux ARM64 <span aria-hidden="true">↓</span></a>
                   <a class="button button-secondary" data-cli-target="macos-arm64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-macos-arm64">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
@@ -102,7 +102,7 @@ dependencies {
               </div>
               <div class="docs-stack">
                 <h4 id="direct-https">Direct HTTPS</h4>
-                <div class="cli-downloads" data-cli-downloads="Direct HTTPS">
+                <div class="cli-downloads">
                   <a class="button button-secondary" data-cli-target="linux-x86_64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64-https">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
                   <a class="button button-secondary" data-cli-target="linux-aarch64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-aarch64-https">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
                 </div>
@@ -252,101 +252,6 @@ dependencies {
     </div>
   </footer>
 
-  <script>
-    (() => {
-      const target = document.querySelector("#cli-terminal-target");
-      const command = document.querySelector("#cli-install-command");
-      const archiveCommand = document.querySelector("#cli-archive-command");
-      const copy = document.querySelector("#cli-copy");
-      const status = document.querySelector("#cli-copy-status");
-      const links = new Map();
-      const canCopy = Boolean(navigator.clipboard?.writeText);
-      for (const downloads of document.querySelectorAll("[data-cli-downloads]")) {
-        const group = document.createElement("optgroup");
-        group.label = downloads.dataset.cliDownloads;
-        for (const link of downloads.querySelectorAll("[data-cli-target]")) {
-          const key = link.dataset.cliTarget;
-          const label = link.firstChild.textContent.trim();
-          links.set(key, link);
-          group.append(new Option(label, key));
-          link.addEventListener("click", () => {
-            target.value = key;
-            showCommand();
-          });
-        }
-        target.append(group);
-      }
-
-      function showCommand() {
-        const selected = links.get(target.value);
-        for (const link of links.values()) {
-          link.classList.toggle("button-primary", link === selected);
-          link.classList.toggle("button-secondary", link !== selected);
-          if (link === selected) link.setAttribute("aria-current", "true");
-          else link.removeAttribute("aria-current");
-        }
-        command.textContent = selected
-          ? `curl -fsSL ${selected.href} -o ktserve && chmod +x ktserve &&\n./ktserve serve - <<<'{"status":"ok"}'`
-          : "";
-        command.closest(".cli-terminal-command").hidden = !selected;
-        archiveCommand.textContent = selected ? `curl -fsSL ${selected.href}.tar.gz | tar -xzf -` : "";
-        archiveCommand.closest(".cli-terminal-command").hidden = !selected;
-        copy.hidden = !canCopy || !selected;
-        status.textContent = "";
-      }
-
-      async function detectTarget() {
-        const ua = navigator.userAgentData;
-        if (ua?.mobile || (ua?.platform && !["Linux", "macOS"].includes(ua.platform))) return "";
-        if (ua?.getHighEntropyValues) {
-          try {
-            const { platform, architecture, bitness } = await ua.getHighEntropyValues(["architecture", "bitness"]);
-            if (architecture && bitness) {
-              if (bitness !== "64") return "";
-              if (platform === "Linux" && architecture === "x86") return "linux-x86_64";
-              if (platform === "Linux" && architecture === "arm") return "linux-aarch64";
-              if (platform === "macOS" && architecture === "arm") return "macos-arm64";
-              return "";
-            }
-          } catch {
-            // Some browsers block architecture hints.
-          }
-        }
-
-        const agent = navigator.userAgent;
-        if (/\b(Android|CrOS|Mobile)\b/i.test(agent)) return "";
-        if (/\bLinux (?:aarch64|arm64)\b/i.test(agent)) return "linux-aarch64";
-        // Reduced Chromium user agents use Linux x86_64 on other architectures too.
-        if (/\bLinux (?:x86_64|amd64)\b/i.test(agent) && !/\b(?:Chrome|Chromium)\//.test(agent)) {
-          return "linux-x86_64";
-        }
-        return "";
-      }
-
-      target.addEventListener("change", showCommand);
-      showCommand();
-      target.parentElement.hidden = false;
-      if (location.hash === "#direct-https") document.querySelector("#cli-directory").open = true;
-      detectTarget().then(key => {
-        if (!key || target.value) return;
-        const preferred = location.hash === "#direct-https" ? `${key}-https` : key;
-        if (links.has(preferred)) {
-          target.value = preferred;
-          showCommand();
-        }
-      });
-
-      if (canCopy) {
-        copy.addEventListener("click", async () => {
-          try {
-            await navigator.clipboard.writeText(command.textContent);
-            status.textContent = "Copied.";
-          } catch {
-            status.textContent = "Select the command to copy it.";
-          }
-        });
-      }
-    })();
-  </script>
+  <script src="./cli-preview.js" defer></script>
 </body>
 </html>

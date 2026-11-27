@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#101019">
   <title>ktServe — HTTP serving, built in Kotlin</title>
   <link rel="stylesheet" href="./styles.css">
+  <script src="./cli-preview.js" defer></script>
   <script>
     const legacyPages = new Map([
       ["#architecture", "architecture"],
@@ -51,7 +52,11 @@
           </div>
         </div>
         <div class="hero-visual">
-          <div class="code-window">
+          <div class="hero-example-tabs" role="tablist" aria-label="Ways to try ktServe" hidden>
+            <button type="button" role="tab" id="kotlin-example-tab" aria-controls="kotlin-example" aria-selected="true">Kotlin</button>
+            <button type="button" role="tab" id="terminal-example-tab" aria-controls="terminal" aria-selected="false" tabindex="-1">Terminal</button>
+          </div>
+          <div class="code-window" id="kotlin-example" role="tabpanel" aria-labelledby="kotlin-example-tab">
             <div class="code-window-title"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Application.kt</span><span class="code-language">Kotlin</span></div>
             <pre tabindex="0" aria-label="Kotlin HTTP server example"><code><span class="code-keyword">import</span> codes.draeger.ktserve.*
 
@@ -61,6 +66,30 @@
     }
 }</code></pre>
             <div class="code-window-footer"><span><i aria-hidden="true"></i>GET /health</span><span class="code-response">200 OK</span></div>
+          </div>
+          <div class="code-window hero-terminal" id="terminal" role="tabpanel" aria-labelledby="terminal-example-tab" hidden>
+            <div class="code-window-title">
+              <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+              <span>Download and start</span><span class="code-language">Bash / zsh</span>
+            </div>
+            <div class="hero-terminal-body">
+              <div class="cli-terminal-controls" hidden>
+                <label for="cli-terminal-target">Platform</label>
+                <select id="cli-terminal-target">
+                  <option value="" disabled selected>Choose a platform</option>
+                </select>
+                <button class="button button-secondary" id="cli-copy" type="button" hidden>Copy both lines</button>
+                <span id="cli-copy-status" role="status"></span>
+              </div>
+              <p>Paste both lines in an empty directory.</p>
+              <div class="cli-terminal-command" hidden>
+                <pre tabindex="0" aria-label="Download and start ktServe"><code id="cli-install-command"></code></pre>
+              </div>
+            </div>
+            <div class="code-window-footer">
+              <code>curl -fsS http://127.0.0.1:8080/</code>
+              <a class="text-link" href="./docs.html#static-files">CLI guide <span aria-hidden="true">↗</span></a>
+            </div>
           </div>
         </div>
       </div>
@@ -245,6 +274,37 @@ dependencies {
     </div>
   </footer>
   <script>
+    const exampleTabs = Array.from(document.querySelectorAll(".hero-example-tabs [role='tab']"));
+    function showExample(selected) {
+      for (const tab of exampleTabs) {
+        const active = tab === selected;
+        tab.setAttribute("aria-selected", String(active));
+        tab.tabIndex = active ? 0 : -1;
+        document.getElementById(tab.getAttribute("aria-controls")).hidden = !active;
+      }
+    }
+    for (const tab of exampleTabs) {
+      tab.addEventListener("click", () => showExample(tab));
+      tab.addEventListener("keydown", event => {
+        const other = exampleTabs.find(candidate => candidate !== tab);
+        const destinations = new Map([
+          ["Home", exampleTabs[0]], ["End", exampleTabs[1]],
+          ["ArrowLeft", other], ["ArrowRight", other],
+        ]);
+        const selected = destinations.get(event.key);
+        if (!selected) return;
+        event.preventDefault();
+        showExample(selected);
+        selected.focus();
+      });
+    }
+    function showLinkedExample() {
+      if (location.hash === "#terminal") showExample(exampleTabs[1]);
+    }
+    showLinkedExample();
+    window.addEventListener("hashchange", showLinkedExample);
+    document.querySelector(".hero-example-tabs").hidden = false;
+
     const snapshotTable = document.querySelector(".snapshot-table");
     const snapshotRows = snapshotTable.tBodies[0];
     for (const button of snapshotTable.querySelectorAll("thead button")) {
