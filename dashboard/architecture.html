@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="How ktServe shares a Kotlin HTTP core across Linux epoll, macOS kqueue and JVM NIO.">
+  <meta name="theme-color" content="#101019">
+  <title>Architecture · ktServe</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header" id="top">
+    <div class="shell header-inner">
+      <a class="wordmark" href="./index.html"><span class="mark" aria-hidden="true"></span>ktServe</a>
+      <nav aria-label="Main navigation">
+        <a href="./docs.html">Docs</a>
+        <a href="./benchmarks.html">Benchmarks</a>
+        <a href="./architecture.html" aria-current="page">Architecture</a>
+        <a class="repository-link" id="repository" href="https://github.com/christian-draeger/ktserve">GitHub <span aria-hidden="true">↗</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="product-section" id="architecture" aria-labelledby="architecture-title">
+      <div class="shell architecture-grid">
+        <div class="section-copy">
+          <h1 id="architecture-title">One HTTP core.<br>Three transports.</h1>
+          <p>ktServe keeps HTTP parsing, connection state, routing and body streaming in a shared Kotlin core. A small transport interface handles socket reads, writes and readiness on each platform.</p>
+          <a class="text-link" href="https://github.com/christian-draeger/ktserve/blob/main/components/ktserve/TRANSPORT.md">Read the transport design <span aria-hidden="true">↗</span></a>
+        </div>
+        <figure class="architecture-diagram" aria-label="An HTTP request flows through a platform transport, the shared Kotlin HTTP core, and an application">
+          <div class="diagram-entry"><span class="request-pulse" aria-hidden="true"></span>HTTP/1.x request</div>
+          <div class="diagram-arrow" aria-hidden="true"></div>
+          <div class="diagram-transports" aria-label="Platform transports">
+            <div><span>Linux</span><strong>epoll</strong></div>
+            <div><span>Apple Silicon</span><strong>kqueue</strong></div>
+            <div><span>JVM</span><strong>JDK NIO</strong></div>
+          </div>
+          <div class="diagram-arrow" aria-hidden="true"></div>
+          <div class="diagram-core"><strong>ktServe HTTP core</strong><span>Parsing · connection state · streaming</span></div>
+          <div class="diagram-arrow" aria-hidden="true"></div>
+          <div class="diagram-apps" aria-label="Application entry points">
+            <span>ktServe routing</span><span>Ktor engine</span><span>WebFlux adapter</span>
+          </div>
+          <figcaption>Request path. The response returns through the same transport.</figcaption>
+        </figure>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <a class="wordmark" href="./index.html"><span class="mark" aria-hidden="true"></span>ktServe</a>
+      <nav aria-label="Project links">
+        <a href="./docs.html">Docs</a>
+        <a href="https://github.com/christian-draeger/ktserve">Source code ↗</a>
+        <a href="https://github.com/christian-draeger/ktserve/blob/main/LICENSE">Apache 2.0 ↗</a>
+        <a href="https://github.com/christian-draeger/ktserve/milestones">Milestones ↗</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>
