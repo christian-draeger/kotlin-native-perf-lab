@@ -135,6 +135,8 @@ jobs:
           for archive in "$RUNNER_TEMP/cli-release/"*.tar.gz; do
             bash scripts/smoke-ktserve-cli-package.sh "$archive"
           done
+          python3 -B components/ktserve/experiments/cli/static/run_preview_smoke.py \
+            "$RUNNER_TEMP/cli-release/ktserve-$GITHUB_REF_NAME-$TARGET_PLATFORM-$TARGET_ARCH"
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
@@ -161,6 +163,8 @@ jobs:
           for archive in "$RUNNER_TEMP/cli-release/"*.tar.gz; do
             bash scripts/smoke-ktserve-cli-package.sh "$archive"
           done
+          python3 -B components/ktserve/experiments/cli/static/run_preview_smoke.py \
+            "$RUNNER_TEMP/cli-release/ktserve-$GITHUB_REF_NAME-linux-aarch64"
 
   publish:
     name: Publish the CLI prerelease
@@ -205,6 +209,17 @@ jobs:
           ```
 
           Test it with `curl -fsS http://127.0.0.1:8080/` in a second terminal.
+
+          To try a Kotlin route from stdin, use:
+
+          ```sh
+          ./ktserve run - <<<'get("/health") { text("ok") }'
+          ```
+
+          Test it with `curl -fsS http://127.0.0.1:8080/health`.
+          The CLI bundles the project inputs and compiles the app locally with the Gradle wrapper.
+          The preview is tested with JDK 21 on Linux x86-64 and Apple Silicon macOS with full Xcode.
+          [Kotlin stdin quickstart](https://christian-draeger.github.io/ktserve/docs.html#cli-kotlin)
 
           The `.tar.gz` downloads include a sample site. Extract the archive and serve the directory:
 

@@ -6,7 +6,8 @@ usage() {
     '                     [--cache-control <value>] [--access-log]' \
     '                     [--tls-cert <chain.pem> --tls-key <key.pem>]' \
     '       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]' \
-    '       ktserve run <App.kt> [app arguments...]'
+    '       ktserve run <App.kt> [app arguments...]' \
+    '       ktserve run -'
 }
 
 cli_dir="$(cd "$(dirname "$0")" && pwd)"

@@ -1,13 +1,13 @@
 # ktServe CLI experiment
 
-Use `serve` to publish JSON or a directory over HTTP. Use `run` to compile and start an application from a Kotlin file. Both commands use the ktServe Native server and bind to loopback in the examples below.
+Use `serve` to publish JSON or a directory over HTTP. Use `run` to compile and start a Kotlin route or application. Both commands use the ktServe Native server and bind to loopback in the examples below.
 
 ## Serve JSON from stdin
 
 Download the standalone executable for your platform. This example uses Linux x86-64.
 
 ```sh
-curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.3/ktserve-cli-preview-0.1.3-linux-x86_64 -o ktserve && chmod +x ktserve
+curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-x86_64 -o ktserve && chmod +x ktserve
 printf '%s\n' '{"status":"ok"}' | ./ktserve serve -
 ```
 
@@ -19,7 +19,7 @@ Supply valid UTF-8 JSON. The CLI reads up to 1 MiB from stdin to EOF at startup 
 
 ## Serve a directory
 
-Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.3). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
+Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.4). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
 
 ### Build from source
 
@@ -100,6 +100,22 @@ Verify the HTTPS executable with Python and the OpenSSL command-line tool:
 python3 components/ktserve/experiments/cli/static/https_smoke.py \
   components/ktserve/experiments/cli/static/build/bin/native/releaseExecutable/ktserve.kexe
 ```
+
+## Run a Kotlin route from stdin
+
+Download the preview executable and use a Kotlin routing block as standard input:
+
+```sh
+./ktserve run - <<<'get("/health") { text("ok") }'
+```
+
+```sh
+curl -fsS http://127.0.0.1:8080/health
+```
+
+The CLI wraps the input in a `serve { … }` block, compiles it with its bundled project inputs and starts the resulting Native executable. Use a Gradle-compatible JDK such as JDK 21 on Linux x86-64 or on Apple Silicon macOS with full Xcode. The first invocation may download Gradle, the Kotlin/Native compiler and build dependencies.
+
+The compiled app defaults to IPv4 loopback at port 8080. Set `BIND_HOST` or `PORT` to change the listener.
 
 ## Run a Kotlin application
 

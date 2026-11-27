@@ -26,7 +26,8 @@ import kotlin.text.CharacterCodingException
 
 private const val USAGE = "Usage: ktserve serve [<directory>] [--mount <prefix> <directory>]... " +
     "[--cache-control <value>] [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
-    "       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]"
+    "       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
+    "       ktserve run -"
 private const val CLI_BODY_LIMIT = 1024 * 1024
 
 fun main(args: Array<String>) {
@@ -34,13 +35,14 @@ fun main(args: Array<String>) {
         println(USAGE)
         return
     }
-    val options = if (args.firstOrNull() == "serve") parseOptions(args.drop(1)) else null
-    if (options == null) {
-        fputs("$USAGE\n", stderr)
-        exit(2)
-        return
-    }
     try {
+        if (args.size == 2 && args[0] == "run" && args[1] == "-") runSnippet()
+        val options = if (args.firstOrNull() == "serve") parseOptions(args.drop(1)) else null
+        if (options == null) {
+            fputs("$USAGE\n", stderr)
+            exit(2)
+            return
+        }
         val configuredPort = getenv("PORT")?.toKString() ?: "8080"
         val port = configuredPort.toIntOrNull()
         require(port != null && port in 1..65535) { "PORT must be an integer between 1 and 65535" }
