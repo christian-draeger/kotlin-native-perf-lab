@@ -29,11 +29,28 @@ if (publicationVersion == null && targetOs == "macos") {
 }
 
 val interopHeaders = project.file("src/nativeInterop/cinterop")
+val opensslRoot = providers.gradleProperty("ktserve.opensslRoot").orNull?.let(project::file)
+require(opensslRoot == null || publicationVersion == null && targetOs == "linux") {
+    "ktserve.opensslRoot is available for the Linux HTTPS experiment"
+}
+
 fun KotlinNativeTarget.useKtServeInterop(macos: Boolean) {
     val interops = compilations.getByName("main").cinterops
     interops.create("ktServeSignals") { includeDirs(interopHeaders) }
     interops.create("staticFiles") { includeDirs(interopHeaders) }
     if (macos) interops.create("kqueue") { includeDirs(interopHeaders) }
+    if (opensslRoot != null) {
+        val triplet = when (konanTarget) {
+            org.jetbrains.kotlin.konan.target.KonanTarget.LINUX_ARM64 -> "aarch64-linux-gnu"
+            else -> "x86_64-linux-gnu"
+        }
+        interops.create("openssl") {
+            includeDirs(interopHeaders)
+            compilerOpts("-idirafter", "${opensslRoot}/include", "-idirafter", "${opensslRoot}/include/$triplet")
+        }
+        binaries.configureEach { linkerOpts("-L${opensslRoot}/lib/$triplet", "-L${opensslRoot}/lib") }
+        compilations.getByName("main").defaultSourceSet.kotlin.srcDir("src/tlsLinux/kotlin")
+    }
 }
 
 kotlin {
