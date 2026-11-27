@@ -43,6 +43,7 @@ concurrency:
 
 jobs:
   plan:
+    if: github.event_name != 'release' || startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     permissions:
@@ -64,10 +65,6 @@ jobs:
         run: |
           version="${STAGING_VERSION:-$(cat components/ktserve/VERSION)}"
           if [[ "$GITHUB_EVENT_NAME" == release ]]; then
-            if [[ "$GITHUB_REF" != refs/tags/v* ]]; then
-              echo 'Use a GitHub release tag such as v0.2.0-preview.2.' >&2
-              exit 1
-            fi
             version="${GITHUB_REF#refs/tags/v}"
           fi
           if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] || grep -iq -- '-snapshot$' <<< "$version"; then
@@ -198,10 +195,101 @@ jobs:
           chmod +x "$ARCH"
           python3 scripts/tests/ktserve_public_workers_smoke.py "./$ARCH"
 
+  stage-extensions:
+    name: Stage and test the extension preview
+    needs: [plan, stage]
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.rehearse_patch && !inputs.verify_published)
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      KTSERVE_VERSION: ${{ needs.plan.outputs.version }}
+      KTSERVE_CI_GRADLE_COMMAND: ./components/ktserve/gradlew
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ktserve-maven-${{ env.KTSERVE_VERSION }}
+          path: components/ktserve/build/maven-staging/${{ env.KTSERVE_VERSION }}/
+      - name: Stage the official extensions beside the core
+        run: |
+          project=components/ktserve
+          extensions="$project/extensions"
+          bash scripts/ci-gradle.sh -p "$extensions" "-Pktserve.version=$KTSERVE_VERSION" \
+            publishAllPublicationsToStagingRepository
+          group="build/maven-staging/$KTSERVE_VERSION/codes/draeger"
+          for pom in "$extensions/$group"/*/"$KTSERVE_VERSION"/*.pom; do
+            grep -Fq '<name>Apache License, Version 2.0</name>' "$pom"
+          done
+          for jar in "$extensions/$group"/*/"$KTSERVE_VERSION"/*.jar; do
+            unzip -p "$jar" META-INF/LICENSE | cmp - LICENSE
+          done
+          cp -R "$extensions/$group/." "$project/$group"
+      - name: Resolve and run the independent JVM and macOS consumers
+        run: |
+          example=components/ktserve/examples/extensions
+          version="-Pktserve.version=$KTSERVE_VERSION"
+          bash scripts/ci-gradle.sh -p "$example" "$version" -Pbenchmark.targetOs=macos \
+            installJvmConsumer linkReleaseExecutableNative
+          python3 "$example/smoke.py" java -cp "$example/build/macos/jvm-consumer/*" codes.draeger.examples.extensions.MainKt
+          python3 "$example/smoke.py" "$example/build/macos/bin/native/releaseExecutable/extension-consumer.kexe"
+      - name: Link the Linux consumers from Maven artifacts
+        run: |
+          example=components/ktserve/examples/extensions
+          mkdir "$RUNNER_TEMP/extension-consumers"
+          for arch in x86_64 aarch64; do
+            bash scripts/ci-gradle.sh -p "$example" "-Pktserve.version=$KTSERVE_VERSION" \
+              "-Pbenchmark.targetArch=$arch" linkReleaseExecutableNative
+            cp "$example/build/bin/native/releaseExecutable/extension-consumer.kexe" "$RUNNER_TEMP/extension-consumers/$arch"
+          done
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ktserve-linux-extension-consumers
+          path: ${{ runner.temp }}/extension-consumers/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: ktserve-extension-preview-${{ env.KTSERVE_VERSION }}
+          path: components/ktserve/build/maven-staging/${{ env.KTSERVE_VERSION }}/
+          if-no-files-found: error
+
+  linux-extension-consumer:
+    name: Test the extension preview on Linux (${{ matrix.arch }})
+    needs: stage-extensions
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: ktserve-linux-extension-consumers
+      - name: Run the independent extension consumer
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          test "$(uname -m)" = "$ARCH"
+          chmod +x "$ARCH"
+          python3 components/ktserve/examples/extensions/smoke.py "./$ARCH"
+
   rehearse-patch:
     name: Rehearse patch signing
-    needs: [plan, stage, linux-consumer]
-    if: github.event_name == 'workflow_dispatch' && inputs.rehearse_patch && !inputs.verify_published
+    needs: [plan, stage, linux-consumer, linux-extension-consumer]
+    if: github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.rehearse_patch && !inputs.verify_published)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -212,10 +300,10 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          name: ktserve-maven-${{ env.RELEASE_VERSION }}
+          name: ktserve-extension-preview-${{ env.RELEASE_VERSION }}
           path: ${{ runner.temp }}/ktserve-rehearsal/staging
       - name: Sign and verify the tested bundle
-        run: bash scripts/rehearse-ktserve-maven.sh "$RUNNER_TEMP/ktserve-rehearsal" "$RELEASE_VERSION"
+        run: bash scripts/rehearse-ktserve-maven.sh "$RUNNER_TEMP/ktserve-rehearsal" "$RELEASE_VERSION" --include-extensions
 
   publish:
     # Authorize the canonical repository across renames and keep the publisher bound to its owner.

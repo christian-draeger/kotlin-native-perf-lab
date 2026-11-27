@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 rehearsal="${1:?Usage: rehearse-ktserve-maven.sh WORK_DIRECTORY VERSION}"
 version="${2:?Expected staging version}"
+shift 2
 keys="$(mktemp -d)"
 export GNUPGHOME="$keys"
 trap 'gpgconf --kill gpg-agent; rm -rf -- "$keys"' EXIT
@@ -13,7 +14,7 @@ gpg --batch --pinentry-mode loopback --passphrase '' \
 fingerprint="$(gpg --batch --with-colons --list-secret-keys | awk -F: '$1 == "fpr" { print $10; exit }')"
 test -n "$fingerprint"
 python3 "$root/scripts/package-ktserve-maven.py" \
-  "$rehearsal/staging" "$version" "$fingerprint!" "$rehearsal/bundle.zip"
+  "$rehearsal/staging" "$version" "$fingerprint!" "$rehearsal/bundle.zip" "$@"
 unzip -q "$rehearsal/bundle.zip" -d "$rehearsal/verified"
 find "$rehearsal/verified" -type f -name '*.asc' -print0 |
   while IFS= read -r -d '' signature; do
