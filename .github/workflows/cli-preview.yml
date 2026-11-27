@@ -1,0 +1,132 @@
+name: ktServe CLI preview
+
+on:
+  push:
+    tags: ['cli-preview-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ktserve-cli-preview-${{ github.ref }}
+
+jobs:
+  package:
+    name: CLI preview (${{ matrix.platform }} ${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            arch: x86_64
+            runner: ubuntu-24.04
+          - platform: linux
+            arch: aarch64
+            runner: ubuntu-24.04-arm
+          - platform: macos
+            arch: arm64
+            runner: macos-15
+    env:
+      TARGET_PLATFORM: ${{ matrix.platform }}
+      TARGET_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Build the native HTTP CLI
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^cli-preview-[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(uname -m)" = "$TARGET_ARCH"
+          project=components/ktserve
+          "$project/gradlew" -p "$project/experiments/cli/static" \
+            "-Pbenchmark.targetOs=$TARGET_PLATFORM" "-Pbenchmark.targetArch=$TARGET_ARCH" \
+            linkReleaseExecutableNative
+      - name: Package and verify the downloadable CLI
+        run: |
+          cli=components/ktserve/experiments/cli
+          binary="$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
+          package="$RUNNER_TEMP/cli-release"
+          archive="ktserve-$GITHUB_REF_NAME-$TARGET_PLATFORM-$TARGET_ARCH.tar.gz"
+          ./scripts/package-ktserve.sh "$binary" "$GITHUB_REF_NAME" "$package" --cli
+          if [[ "$TARGET_PLATFORM" == linux ]]; then
+            (cd "$package" && sha256sum --strict -c "$archive.sha256")
+          else
+            (cd "$package" && shasum -a 256 -c "$archive.sha256")
+          fi
+
+          unpacked="$RUNNER_TEMP/cli-unpacked"
+          mkdir "$unpacked"
+          tar -xzf "$package/$archive" -C "$unpacked"
+          cmp "$binary" "$unpacked/ktserve"
+          cmp LICENSE "$unpacked/LICENSE"
+          python3 "$cli/static/smoke.py" "$unpacked/ktserve"
+
+          cd "$unpacked"
+          export BIND_HOST=127.0.0.1 PORT=18081
+          ./ktserve serve ./public > "$RUNNER_TEMP/cli-startup.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 \
+            "http://127.0.0.1:$PORT/api/status.json" -o "$RUNNER_TEMP/cli-response.json"
+          cmp public/api/status.json "$RUNNER_TEMP/cli-response.json"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/cli-release/
+          if-no-files-found: error
+          overwrite: true
+
+  publish:
+    name: Publish the CLI prerelease
+    needs: package
+    if: github.repository_id == '1468028252' && github.repository_owner == 'christian-draeger'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: cli-preview-*
+          path: ${{ runner.temp }}/cli-release
+          merge-multiple: true
+      - name: Publish the verified archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^cli-preview-[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          source_commit="$(git rev-parse HEAD)"
+          cd "$RUNNER_TEMP/cli-release"
+          assets=()
+          for target in linux-x86_64 linux-aarch64 macos-arm64; do
+            archive="ktserve-$GITHUB_REF_NAME-$target.tar.gz"
+            test -s "$archive"
+            sha256sum --strict -c "$archive.sha256"
+            assets+=("$archive" "$archive.sha256")
+          done
+          cat > release-notes.md <<'EOF'
+          Preview of the native ktServe CLI for serving static directories over HTTP. Download and unpack the archive for your platform, then run:
+
+          ```sh
+          ./ktserve serve ./public
+          ```
+
+          Open http://127.0.0.1:8080/ to try the included site. Each archive has a SHA-256 checksum.
+
+          [CLI documentation](https://christian-draeger.github.io/ktserve/docs.html#static-files)
+          EOF
+          printf '\n[Source commit](https://github.com/%s/tree/%s/components/ktserve/experiments/cli)\n' \
+            "$GITHUB_REPOSITORY" "$source_commit" >> release-notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --prerelease --latest=false --title "ktServe CLI Preview ${GITHUB_REF_NAME#cli-preview-}" \
+            --notes-file release-notes.md "${assets[@]}"
