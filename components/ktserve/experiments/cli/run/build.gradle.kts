@@ -6,6 +6,8 @@ plugins {
 
 repositories { mavenCentral() }
 
+val extraDependencies = providers.fileContents(layout.projectDirectory.file("dependencies.txt")).asText.orElse("")
+
 kotlin {
     val target = when (providers.gradleProperty("benchmark.targetOs").get()) {
         "linux" -> when (providers.gradleProperty("benchmark.targetArch").get()) {
@@ -21,6 +23,9 @@ kotlin {
         entryPoint = "main"
     }
     sourceSets.named("nativeMain") {
-        dependencies { implementation("codes.draeger:ktserve") }
+        dependencies {
+            implementation("codes.draeger:ktserve")
+            extraDependencies.get().lineSequence().filter(String::isNotEmpty).forEach { implementation(it) }
+        }
     }
 }

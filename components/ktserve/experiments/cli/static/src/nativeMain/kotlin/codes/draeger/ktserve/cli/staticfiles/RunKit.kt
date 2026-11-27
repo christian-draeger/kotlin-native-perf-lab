@@ -73,6 +73,7 @@ private val BOOTSTRAP = """
     cache="${'$'}{XDG_CACHE_HOME:-${'$'}{HOME:?Set HOME or XDG_CACHE_HOME}/.cache}/ktserve/run/${'$'}2"
     shift 2
     app="${'$'}(KTSERVE_CLI_BUILD_ROOT="${'$'}cache" /bin/bash "${'$'}core/experiments/cli/run/run.sh" --build-only "${'$'}@")"
+    while [[ "${'$'}1" == --dependency ]]; do shift 2; done
     if [[ "${'$'}1" == --app ]]; then shift; fi
     shift
     rm -rf -- "${'$'}work"

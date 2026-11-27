@@ -2,7 +2,9 @@
 set -euo pipefail
 
 usage() {
-    printf '%s\n' 'Usage: ktserve run App.kt [app arguments...]' '       ktserve run -' '       ktserve run --app -' >&2
+    printf '%s\n' 'Usage: ktserve run [--dependency <group:artifact:version>]... <App.kt> [app arguments...]' \
+        '       ktserve run [--dependency <group:artifact:version>]... -' \
+        '       ktserve run [--dependency <group:artifact:version>]... --app -' >&2
     exit 2
 }
 
@@ -11,6 +13,19 @@ if [[ "${1:-}" == --build-only ]]; then
     build_only=true
     shift
 fi
+
+dependencies=()
+coordinate_pattern='^[A-Za-z0-9_][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*:[A-Za-z0-9_][A-Za-z0-9_.-]*$'
+while [[ "${1:-}" == --dependency ]]; do
+    coordinate="${2:-}"
+    version="${coordinate##*:}"
+    if [[ ! "$coordinate" =~ $coordinate_pattern || "$version" == latest.* ]]; then
+        echo '--dependency expects group:artifact:version with a fixed version.' >&2
+        exit 2
+    fi
+    dependencies+=("$coordinate")
+    shift 2
+done
 
 app_mode=false
 if [[ "${1:-}" == --app ]]; then
@@ -108,6 +123,9 @@ else
     cp "$source_file" "$source_dir/App.kt"
 fi
 cp "$here/settings.gradle.kts" "$here/build.gradle.kts" "$work/"
+if (( ${#dependencies[@]} > 0 )); then
+    printf '%s\n' "${dependencies[@]}" > "$work/dependencies.txt"
+fi
 # Independent composite builds also need independent outputs for the included build.
 cp "$core/build.gradle.kts" "$core/settings.gradle.kts" "$core/gradle.properties" "$core_copy/"
 cp -R "$core/src" "$core_copy/"
@@ -130,7 +148,15 @@ fi
 
 # Each build gets a private input and output. Publish complete executables atomically
 # so another launch of the same input cannot observe a partially copied binary.
-digest="$("${checksum[@]}" < "$source_dir/App.kt")"
+digest="$(
+    {
+        cat "$source_dir/App.kt"
+        if [[ -f "$work/dependencies.txt" ]]; then
+            printf '\0'
+            cat "$work/dependencies.txt"
+        fi
+    } | "${checksum[@]}"
+)"
 app="$build_dir/apps/ktserve-app-$target_os-$arch-${digest%% *}"
 mv -f "$binary" "$app"
 if "$build_only"; then

@@ -15,6 +15,8 @@ from smoke import request
 
 
 ROUTE = b'get("/health") { text("ok") }\n'
+DATETIME = "org.jetbrains.kotlinx:kotlinx-datetime:0.7.1"
+SERIALIZATION = "org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0"
 
 
 def free_port():
@@ -74,6 +76,12 @@ def verify(binary, directory):
         return
 
     env = os.environ | {"XDG_CACHE_HOME": str(directory / "user cache")}
+    rejected = subprocess.run(
+        command + ["--dependency", "org.jetbrains.kotlinx:kotlinx-datetime", "-"],
+        input=ROUTE, cwd=directory, env=env, capture_output=True, timeout=15,
+    )
+    assert rejected.returncode == 2 and b"group:artifact:version" in rejected.stderr, rejected
+
     port = free_port()
     verify_app(
         command + ["-"], directory, port, env | {"BIND_HOST": "127.0.0.1", "PORT": str(port)},
@@ -93,18 +101,30 @@ def verify(binary, directory):
 
     source = directory / "sample App.kt"
     source.write_text('''import codes.draeger.ktserve.*
+import kotlinx.datetime.LocalDate
+import kotlinx.serialization.json.JsonPrimitive
 
 fun main(args: Array<String>) {
     serve(port = args[0].toInt()) {
         get("/health") { text(args[1]) }
+        get("/date") { text(JsonPrimitive(LocalDate(2026, 1, 1).toString()).content) }
+        get("/argument") { text(args[2]) }
     }
 }
 ''', encoding="utf-8")
     port = free_port()
+    app_arguments = [source.name, str(port), "file app", "--dependency"]
     verify_app(
-        command + [source.name, str(port), "file app"], directory, port, env,
-        [("/health", b"file app")],
+        command + ["--dependency", DATETIME, "--dependency", SERIALIZATION] + app_arguments,
+        directory, port, env,
+        [("/health", b"file app"), ("/date", b"2026-01-01"), ("/argument", b"--dependency")],
     )
+
+    missing_dependency = subprocess.run(
+        command + app_arguments, cwd=directory, env=env,
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=240,
+    )
+    assert missing_dependency.returncode != 0 and b"Unresolved reference" in missing_dependency.stderr, missing_dependency.stderr
 
 
 if __name__ == "__main__":

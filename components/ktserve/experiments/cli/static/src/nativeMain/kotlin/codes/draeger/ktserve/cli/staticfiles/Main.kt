@@ -27,9 +27,9 @@ import kotlin.text.CharacterCodingException
 private const val USAGE = "Usage: ktserve serve [<directory>] [--mount <prefix> <directory>]... " +
     "[--cache-control <value>] [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
     "       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]\n" +
-    "       ktserve run -\n" +
-    "       ktserve run --app -\n" +
-    "       ktserve run <App.kt> [app arguments...]"
+    "       ktserve run [--dependency <group:artifact:version>]... <App.kt> [app arguments...]\n" +
+    "       ktserve run [--dependency <group:artifact:version>]... -\n" +
+    "       ktserve run [--dependency <group:artifact:version>]... --app -"
 private const val CLI_BODY_LIMIT = 1024 * 1024
 
 fun main(args: Array<String>) {

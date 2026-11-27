@@ -229,6 +229,13 @@ jobs:
           ```
 
           Use `./ktserve run App.kt` for a complete Kotlin file with its own `main` function.
+          Declare additional Maven Central dependencies before the filename:
+
+          ```sh
+          ./ktserve run --dependency org.jetbrains.kotlinx:kotlinx-datetime:0.7.1 App.kt
+          ```
+
+          Repeat `--dependency` as needed. Use fixed versions and artifacts that support your Kotlin/Native target.
           The CLI bundles the project inputs and compiles the app locally with the Gradle wrapper.
           The preview is tested with JDK 21 on Linux x86-64 and Apple Silicon macOS with full Xcode.
           [Kotlin stdin quickstart](https://christian-draeger.github.io/ktserve/docs.html#cli-kotlin)
