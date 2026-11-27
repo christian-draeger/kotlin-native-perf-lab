@@ -1,0 +1,26 @@
+import org.jetbrains.kotlin.gradle.plugin.mpp.NativeBuildType.RELEASE
+
+plugins {
+    kotlin("multiplatform") version "2.4.21"
+}
+
+repositories { mavenCentral() }
+
+kotlin {
+    val target = when (providers.gradleProperty("benchmark.targetOs").get()) {
+        "linux" -> when (providers.gradleProperty("benchmark.targetArch").get()) {
+            "amd64", "x86_64" -> linuxX64("native")
+            "aarch64", "arm64" -> linuxArm64("native")
+            else -> error("Unsupported Linux architecture")
+        }
+        "macos" -> macosArm64("native")
+        else -> error("Unsupported native target OS")
+    }
+    target.binaries.executable(listOf(RELEASE)) {
+        baseName = "ktserve-app"
+        entryPoint = "main"
+    }
+    sourceSets.named("nativeMain") {
+        dependencies { implementation("codes.draeger:ktserve") }
+    }
+}

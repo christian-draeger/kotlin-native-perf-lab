@@ -86,6 +86,7 @@ The [Maven release guide](RELEASING.md) covers the versioned library and how to 
 
 ## Experiments
 
+- [Native CLI for static directories and Kotlin apps](experiments/cli/README.md)
 - [HTTP/2 with nghttp2 and TLS ingress](experiments/http2-nghttp2/README.md)
 - [Linux io_uring](experiments/linux-io-uring/README.md)
 - [Windows x64 IOCP](experiments/windows-iocp/README.md)
@@ -121,6 +122,8 @@ fun main() {
 Exact routes take precedence over parameter patterns. Parameter patterns with overlapping matches use declaration order. A route can read a typed integer path parameter or the raw query. The transport sets the content length and the connection policy. Handler exceptions produce HTTP 500.
 
 Use `request.header("accept")` for the first matching request value or `request.headers()` for the ordered header fields, including duplicates. Use `response(bytes, status, contentType)` for a pre-encoded body and `.withHeaders(HttpField("Cache-Control", "no-store"))` to add response headers. ktServe validates response fields and sets framing and connection headers. `ServerLimits.responseHeaderBytes` bounds application-added fields and the Content-Type field.
+
+Use `redirect("/new-path")` for a 308 response or pass 301, 302, 303, or 307 explicitly.
 
 Use `getSuspending` when an HTTP/1.x handler calls a suspending API.
 
@@ -162,6 +165,33 @@ The parser validates the wire structure as bytes before decoding application val
 
 The example handles Ctrl+C and SIGTERM by closing the listener and draining queued output for at most two seconds by default. An embedded application can pass a `stopRequested` callback to `serve` and retain control of its own signal handlers. The reactor polls that callback while it owns the listener.
 
+## Serve static files
+
+Call `staticFiles` inside `serve` for each directory. Files in `public` are served at `/`, and files in `docs` are served under `/docs/`. Dynamic routes can use the same listener.
+
+```kotlin
+import codes.draeger.ktserve.ServerLimits
+import codes.draeger.ktserve.serve
+import codes.draeger.ktserve.staticFiles
+import codes.draeger.ktserve.text
+
+fun main() = serve(limits = ServerLimits(responseBodyBytes = 1024 * 1024)) {
+    staticFiles("public")
+    staticFiles("docs", at = "/docs", cacheControl = "no-cache")
+    get("/status") { text("ok") }
+}
+```
+
+ktServe snapshots each directory during configuration. Directory URLs ending in `/` serve `index.html`. GET and HEAD are handled by the router, and duplicate GET paths fail configuration. The snapshot skips hidden entries and symlinks, with caps of 1 MiB per file, 16 MiB of file contents and 4,096 entries per directory tree, and 16 levels of subdirectories. `ServerLimits.responseBodyBytes` controls the maximum response size. Restart the application to pick up file changes.
+
+An index directory requested without its trailing slash gets a 308 redirect that preserves the query. An explicit GET route at that exact path takes precedence. Each snapshot assigns an opaque ETag to every file. Matching `If-None-Match` requests receive 304. A `cacheControl` value applies to successful representations and revalidation responses for that mount. [HTTP validators](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2) · [Cache-Control](https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2)
+
+A static GET accepts one closed, open-ended, or suffix byte range. A satisfiable range returns 206 and an unsatisfiable range returns 416. Multiple ranges fall back to the full response. A matching strong ETag in `If-Range` allows partial delivery. HEAD uses the full representation length. [Byte ranges](https://www.rfc-editor.org/rfc/rfc9110.html#section-14.2)
+
+The JVM loader requires the default filesystem provider to implement `SecureDirectoryStream`. The [CLI experiment](experiments/cli/README.md#serve-a-directory) calls the same API on Kotlin/Native.
+
+`serve { }` starts with an empty route table. The bundled benchmark application registers `/health`, `/json`, and `/users/{id}` explicitly. [Benchmark routes](src/nativeShared/kotlin/codes/draeger/ktserve/example/Example.kt)
+
 ## Standalone REST routes
 
 Register a bounded, suspending handler with `route("PUT", "/items/{id}") { request, body -> … }`.
@@ -186,6 +216,8 @@ Install a `ServerObserver` with `observe` inside the route configuration. It rec
 
 Callbacks run on the I/O loop. Keep the callback short and offload logging or export to a bounded queue. Use status and outcome for metric labels. Treat request identifiers as log fields. An observer exception leaves the server and its cleanup running.
 
+For an observer that only needs exchange fields, implement `ExchangeObserver`. ktServe passes the fields directly without allocating an exchange event. Override `forLoop()` to provide loop-local state, such as a queue drained by a background writer. A status of zero means the exchange ended before ktServe selected a response.
+
 Run the separate JVM example with `KTSERVE_OBSERVE=1` to exercise its [console observer](examples/hello-jvm/src/main/kotlin/codes/draeger/examples/hello/ConsoleObserver.kt). It exposes `/ready` on the example listener and emits structured exchange logs and cumulative counters. The queue records drops if the logging destination falls behind.
 
 ## Ownership and lifetime
@@ -202,6 +234,8 @@ Run the separate JVM example with `KTSERVE_OBSERVE=1` to exercise its [console o
 The protocol limits bound retained socket and buffer state. Application handler allocations are under the caller's control. Run portable parser and routing tests with `./gradlew jvmTest`. The shared smoke workflow covers the release executable on both architectures.
 
 Terminate TLS at an HTTPS ingress and forward HTTP/1.1 to the reactor on a private interface. The [loopback deployment recipe](deployment/http1/README.md) defines compatible limits, forwarding policy, and an upgrade and rollback procedure. Synchronous route handlers run on the I/O loop and should return promptly.
+
+The [native CLI HTTPS experiment](experiments/cli/README.md#serve-https-directly-on-linux) can also terminate TLS on a single Linux reactor using caller-provided certificates.
 
 The native resource suite uses a separate release fixture with short deadlines and large bodies to check slow and disconnected clients, descriptor caps and retained heap. To run it locally from the repository root on Linux x86_64:
 
