@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/cli-preview.yml'
       - 'components/ktserve/experiments/cli/**'
+      - 'scripts/ci-gradle.sh'
       - 'scripts/package-ktserve.sh'
       - 'scripts/smoke-ktserve-cli-package.sh'
   workflow_dispatch:
