@@ -41,7 +41,9 @@ jobs:
       - run: ./components/ktserve/gradlew -p components/ktserve jvmTest
       - name: Test optional ktServe extensions on the JVM
         if: matrix.arch == 'x86_64'
-        run: ./components/ktserve/gradlew -p components/ktserve/extensions jvmTest
+        env:
+          KTSERVE_CI_GRADLE_COMMAND: ./components/ktserve/gradlew
+        run: bash scripts/ci-gradle.sh -p components/ktserve/extensions jvmTest
       - name: Verify a separate JVM consumer
         env:
           EXPECTED_ARCH: ${{ matrix.arch }}

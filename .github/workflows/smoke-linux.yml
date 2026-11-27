@@ -133,7 +133,8 @@ jobs:
         if: inputs.arch == 'x86_64'
         run: |
           cli=components/ktserve/experiments/cli
-          ./components/ktserve/gradlew -p "$cli/static" linkReleaseExecutableNative
+          KTSERVE_CI_GRADLE_COMMAND=./components/ktserve/gradlew \
+            bash scripts/ci-gradle.sh -p "$cli/static" linkReleaseExecutableNative
           binary="$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
           python3 "$cli/static/smoke.py" "$binary"
           python3 "$cli/run/typed_smoke.py" "$binary"

@@ -45,7 +45,9 @@ jobs:
             jvmTest linkReleaseExecutableNative linkStressReleaseExecutableNative
           "$project/gradlew" -p "$project/examples/hello" -Pbenchmark.targetOs=macos linkReleaseExecutableNative
       - name: Test portable ktServe extensions on Native
-        run: ./components/ktserve/gradlew -p components/ktserve/extensions -Pbenchmark.targetOs=macos nativeTest
+        env:
+          KTSERVE_CI_GRADLE_COMMAND: ./components/ktserve/gradlew
+        run: bash scripts/ci-gradle.sh -p components/ktserve/extensions -Pbenchmark.targetOs=macos nativeTest
       - name: Test transport and resource contracts
         run: |
           fixture=components/ktserve/build/macos/bin/native/stressReleaseExecutable/ktserve-stress-fixture.kexe
