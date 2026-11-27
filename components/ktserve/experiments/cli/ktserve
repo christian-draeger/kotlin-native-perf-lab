@@ -7,7 +7,8 @@ usage() {
     '                     [--tls-cert <chain.pem> --tls-key <key.pem>]' \
     '       ktserve serve - [--access-log] [--tls-cert <chain.pem> --tls-key <key.pem>]' \
     '       ktserve run <App.kt> [app arguments...]' \
-    '       ktserve run -'
+    '       ktserve run -' \
+    '       ktserve run --app -'
 }
 
 cli_dir="$(cd "$(dirname "$0")" && pwd)"

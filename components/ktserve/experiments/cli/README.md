@@ -7,7 +7,7 @@ Use `serve` to publish JSON or a directory over HTTP. Use `run` to compile and s
 Download the standalone executable for your platform. This example uses Linux x86-64.
 
 ```sh
-curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.4/ktserve-cli-preview-0.1.4-linux-x86_64 -o ktserve && chmod +x ktserve
+curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.5/ktserve-cli-preview-0.1.5-linux-x86_64 -o ktserve && chmod +x ktserve
 printf '%s\n' '{"status":"ok"}' | ./ktserve serve -
 ```
 
@@ -19,7 +19,7 @@ Supply valid UTF-8 JSON. The CLI reads up to 1 MiB from stdin to EOF at startup 
 
 ## Serve a directory
 
-Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.4). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
+Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.5). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
 
 ### Build from source
 
@@ -117,9 +117,35 @@ The CLI wraps the input in a `serve { … }` block, compiles it with its bundled
 
 The compiled app defaults to IPv4 loopback at port 8080. Set `BIND_HOST` or `PORT` to change the listener.
 
+## Configure a Kotlin app from stdin
+
+Pass the contents of a Kotlin `main` function with `run --app -`. The CLI adds the ktServe import and the function wrapper. Configure the server directly in your `serve` call.
+
+```sh
+./ktserve run --app - <<'KOTLIN'
+serve(port = 8081, host = "127.0.0.1") {
+    get("/health") { text("ok") }
+    get("/ready") { text("ready") }
+}
+KOTLIN
+```
+
+```sh
+curl -fsS http://127.0.0.1:8081/health
+curl -fsS http://127.0.0.1:8081/ready
+```
+
 ## Run a Kotlin application
 
-Run a single `.kt` file that declares `main` in the default package and uses the ktServe Kotlin API. The launcher uses JDK 21, Gradle, and Kotlin/Native to compile the file, then starts the native executable. On Apple Silicon, set `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` if the system has Command Line Tools selected.
+Pass a single `.kt` file that declares `main` in the default package. The downloaded CLI uses the same local Gradle and Kotlin/Native build for the file. Arguments after the filename go to the compiled app.
+
+```sh
+./ktserve run App.kt
+```
+
+The bundled Gradle project declares ktServe for the Native target. For additional libraries, create a Kotlin Multiplatform project and declare dependencies that support your target. An import outside the bundled compile classpath produces a compiler error. [Kotlin Multiplatform dependencies](https://kotlinlang.org/docs/multiplatform/multiplatform-add-dependencies.html)
+
+The source checkout can also run the bundled application:
 
 ```sh
 cd components/ktserve/experiments/cli

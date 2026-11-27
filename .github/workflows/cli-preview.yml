@@ -217,6 +217,18 @@ jobs:
           ```
 
           Test it with `curl -fsS http://127.0.0.1:8080/health`.
+          To configure an app explicitly, pass the full server call to `run --app -`:
+
+          ```sh
+          ./ktserve run --app - <<'KOTLIN'
+          serve(port = 8081, host = "127.0.0.1") {
+              get("/health") { text("ok") }
+              get("/ready") { text("ready") }
+          }
+          KOTLIN
+          ```
+
+          Use `./ktserve run App.kt` for a complete Kotlin file with its own `main` function.
           The CLI bundles the project inputs and compiles the app locally with the Gradle wrapper.
           The preview is tested with JDK 21 on Linux x86-64 and Apple Silicon macOS with full Xcode.
           [Kotlin stdin quickstart](https://christian-draeger.github.io/ktserve/docs.html#cli-kotlin)

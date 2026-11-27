@@ -23,7 +23,7 @@ import platform.posix.mkdtemp
 import platform.posix.rmdir
 import platform.posix.unlink
 
-internal fun runSnippet(): Nothing {
+internal fun runKotlinApp(arguments: List<String>): Nothing {
     val temporary = getenv("TMPDIR")?.toKString()?.takeIf { it.startsWith('/') } ?: "/tmp"
     val directory = memScoped {
         mkdtemp("$temporary/ktserve-run.XXXXXXXX".cstr.getPointer(this))?.toKString()
@@ -31,7 +31,7 @@ internal fun runSnippet(): Nothing {
     val archive = "$directory/run-kit.tar.gz"
     try {
         writeRunKit(archive)
-        val command = listOf("bash", "-c", BOOTSTRAP, "ktserve-run", directory, RUN_KIT_ID)
+        val command = listOf("bash", "-c", BOOTSTRAP, "ktserve-run", directory, RUN_KIT_ID) + arguments
         memScoped {
             val argv = allocArray<CPointerVar<ByteVar>>(command.size + 1)
             for ((index, argument) in command.withIndex()) {
@@ -41,7 +41,7 @@ internal fun runSnippet(): Nothing {
             // On success Bash takes over the process and owns cleanup of the private directory.
             execv("/bin/bash", argv)
         }
-        error("Could not start Bash for ktserve run - (errno $errno)")
+        error("Could not start Bash for ktserve run (errno $errno)")
     } finally {
         unlink(archive)
         rmdir(directory)
@@ -63,7 +63,7 @@ private val BOOTSTRAP = """
     trap 'rm -rf -- "${'$'}work"' EXIT
     case "${'$'}(uname -s):${'$'}(uname -m)" in
         Linux:aarch64|Linux:arm64)
-            printf '%s\n' 'ktserve run - requires a Kotlin/Native compiler host. Linux ARM64 is unsupported. Use Linux x86-64 or Apple Silicon macOS.' >&2
+            printf '%s\n' 'ktserve run requires a Kotlin/Native compiler host. Linux ARM64 is unsupported. Use Linux x86-64 or Apple Silicon macOS.' >&2
             exit 2
             ;;
     esac
@@ -71,8 +71,11 @@ private val BOOTSTRAP = """
     core="${'$'}work/components/ktserve"
     chmod u+x "${'$'}core/gradlew"
     cache="${'$'}{XDG_CACHE_HOME:-${'$'}{HOME:?Set HOME or XDG_CACHE_HOME}/.cache}/ktserve/run/${'$'}2"
-    app="${'$'}(KTSERVE_CLI_BUILD_ROOT="${'$'}cache" /bin/bash "${'$'}core/experiments/cli/run/run.sh" --build-only -)"
+    shift 2
+    app="${'$'}(KTSERVE_CLI_BUILD_ROOT="${'$'}cache" /bin/bash "${'$'}core/experiments/cli/run/run.sh" --build-only "${'$'}@")"
+    if [[ "${'$'}1" == --app ]]; then shift; fi
+    shift
     rm -rf -- "${'$'}work"
     trap - EXIT
-    exec "${'$'}app"
+    exec "${'$'}app" "${'$'}@"
 """.trimIndent()
