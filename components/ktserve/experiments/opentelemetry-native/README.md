@@ -38,6 +38,12 @@ and shutdown to report the failed export.
 
 ## Preview scope
 
+The release executable built and ran on Linux x86-64 and Linux ARM64 in local
+containers. The OpenTelemetry Collector Contrib `0.165.0` received the expected
+trace and parent IDs, route and status from both runs. With an unreachable
+Collector, both runs returned HTTP 200 and exited after about five seconds,
+reporting the export failure from flush and shutdown.
+
 The official Maven SDK and OTLP exporter have Linux x86-64 and ARM64 variants.
 Both macOS ARM64 variants are absent in `0.11.0`. Upstream lists Linux as Tier 2
 and runs its own Linux CI tests on x86-64. The exporter uses the Ktor CIO client
