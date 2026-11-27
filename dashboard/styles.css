@@ -417,6 +417,12 @@ tbody tr:hover { background-color: #ffffff0c; }
 .docs-stack pre { padding: clamp(14px, 2vw, 22px); }
 .docs-note { border-left: 2px solid var(--kotlin-accent); padding-left: 12px; }
 .docs-page .integration-links { flex-wrap: wrap; }
+.cli-guide { display: grid; gap: 32px; margin-top: 30px; }
+.cli-guide :is(.docs-grid, .integration-links) { margin-top: 0; }
+.cli-guide h4 { margin: 0; color: var(--subtle); font-size: .95rem; }
+.docs-disclosure { min-width: 0; }
+.docs-disclosure summary { width: fit-content; cursor: pointer; font-weight: 650; }
+.docs-disclosure[open] > :not(summary) { margin-top: 12px; }
 
 @media (max-width: 1050px) {
   .shell { width: calc(100% - 66px); }
