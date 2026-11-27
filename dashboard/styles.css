@@ -129,7 +129,7 @@ section[id], h3[id] { scroll-margin-top: 22px; }
 }
 .hero-example-tabs button:hover { color: var(--text); }
 .hero-example-tabs button[aria-selected="true"] { background: #382b50; color: #eadbff; }
-.hero-terminal pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.hero-terminal pre { padding-inline: clamp(10px, 1.6vw, 22px); white-space: pre; }
 .hero-terminal .code-window-footer { flex-wrap: wrap; gap: 8px 12px; }
 .hero-visual::before {
   position: absolute;
