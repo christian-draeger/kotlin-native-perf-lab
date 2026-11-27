@@ -1,8 +1,12 @@
 # ktServe
 
-ktServe is an HTTP server for Kotlin/Native and the JVM. Use its Kotlin routing API in a standalone service, select it as a Ktor engine, or enable it in a Spring Boot WebFlux application.
+A standalone Kotlin HTTP server with two official `kotlinx` dependencies for coroutines and JSON serialization.
+
+Use its Kotlin routing API on Kotlin/Native or the JVM, select it as a Ktor engine, or enable it in a Spring Boot WebFlux application.
 
 The [ktServe website](https://christian-draeger.github.io/ktserve/) provides quickstarts for the library, CLI preview and framework integrations, alongside its architecture and benchmark results.
+
+Add optional modules for CORS, Bearer parsing, request validation, OpenAPI, access logging, and tracing. Each application chooses its own dependencies. The [extensions catalog](https://christian-draeger.github.io/ktserve/extensions.html) includes checkout installation and usage.
 
 ktServe is licensed under the [Apache License 2.0](LICENSE). Third-party assets retain their accompanying licenses.
 
@@ -28,6 +32,8 @@ fun main() = serve(port = 8080) {
 ```
 
 Start the application and check it with `curl -fsS http://127.0.0.1:8080/health`. The Ktor and Spring WebFlux integrations have separate checkout examples.
+
+**Single native executable. No JVM required.** Extract the snapshot archive for your platform and run `./ktserve` to start the bundled example. [Linux snapshots](components/ktserve/README.md#run-the-example) · [Apple Silicon snapshots](components/ktserve/README.md#develop-on-apple-silicon)
 
 | Start with | Example |
 | --- | --- |

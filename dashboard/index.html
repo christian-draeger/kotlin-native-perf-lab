@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Build HTTP services in Kotlin. Run ktServe as a native executable, use its routing API on the JVM, or plug it into Ktor and Spring WebFlux.">
+  <meta name="description" content="Build HTTP services on Kotlin/Native or the JVM. Add the ktServe extensions you need, from request validation to OpenAPI and observability.">
   <meta name="theme-color" content="#101019">
   <title>ktServe — HTTP serving, built in Kotlin</title>
   <link rel="stylesheet" href="./styles.css">
@@ -32,6 +32,7 @@
       <a class="wordmark" href="./index.html" aria-current="page"><span class="mark" aria-hidden="true"></span>ktServe</a>
       <nav aria-label="Main navigation">
         <a href="./docs.html">Docs</a>
+        <a href="./extensions.html">Extensions</a>
         <a href="./benchmarks.html">Benchmarks</a>
         <a href="./architecture.html">Architecture</a>
         <a class="repository-link" href="https://github.com/christian-draeger/ktserve">GitHub <span aria-hidden="true">↗</span></a>
@@ -196,6 +197,24 @@ KOTLIN</code></pre>
       </div>
     </section>
 
+    <section class="product-section home-extensions" id="extensions" aria-labelledby="extensions-title">
+      <div class="shell home-extensions-inner">
+        <div class="section-copy">
+          <h2 id="extensions-title">A small core. Add what you need.</h2>
+          <p>Validate incoming data, generate OpenAPI, or add tracing when your service needs it. Each extension is a separate dependency you install explicitly. Leave unused modules out of your server build.</p>
+          <a class="button button-secondary" href="./extensions.html">Explore extensions</a>
+        </div>
+        <ul class="home-extension-list" aria-label="Available extensions">
+          <li><a href="./extensions.html#cors"><strong>CORS</strong><span>Control browser access</span></a></li>
+          <li><a href="./extensions.html#bearer"><strong>Bearer</strong><span>Parse access tokens</span></a></li>
+          <li><a href="./extensions.html#validation"><strong>Validation</strong><span>Check JSON input</span></a></li>
+          <li><a href="./extensions.html#openapi"><strong>OpenAPI</strong><span>Describe typed routes</span></a></li>
+          <li><a href="./extensions.html#access-log"><strong>Access logging</strong><span>Record HTTP exchanges</span></a></li>
+          <li><a href="./extensions.html#opentelemetry"><strong>OpenTelemetry</strong><span>Trace requests on the JVM</span></a></li>
+        </ul>
+      </div>
+    </section>
+
     <section class="product-section use-cases" id="protocols" aria-labelledby="protocols-title">
       <div class="shell">
         <div class="section-heading">
@@ -313,6 +332,7 @@ KOTLIN</code></pre>
       <a class="wordmark" href="./index.html"><span class="mark" aria-hidden="true"></span>ktServe</a>
       <nav aria-label="Project links">
         <a href="./docs.html">Docs</a>
+        <a href="./extensions.html">Extensions</a>
         <a href="https://github.com/christian-draeger/ktserve/releases">Releases</a>
         <a href="https://github.com/christian-draeger/ktserve/blob/main/LICENSE">Apache 2.0</a>
       </nav>
