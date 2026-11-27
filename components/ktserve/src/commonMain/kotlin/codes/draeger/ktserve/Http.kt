@@ -34,6 +34,29 @@ class Request internal constructor(
         }
     }
 
+    /** Visit matching fields in wire order, decoding only the selected values. */
+    internal inline fun forEachMatchingHeader(names: Array<String>, action: (Int, String) -> Unit) {
+        if (rawFields == null) {
+            for (field in decodedFields) {
+                for (index in names.indices) {
+                    if (field.name.equals(names[index], ignoreCase = true)) {
+                        action(index, field.value.trim(' ', '\t'))
+                        break
+                    }
+                }
+            }
+            return
+        }
+        forEachField { fields, start, colon, valueStart, end ->
+            for (index in names.indices) {
+                if (fields.matchesAsciiIgnoreCase(start, colon, names[index])) {
+                    action(index, fields.decodeToString(valueStart, end))
+                    break
+                }
+            }
+        }
+    }
+
     private inline fun forEachField(action: (ByteArray, Int, Int, Int, Int) -> Unit) {
         val fields = rawFields ?: return
         var start = 0
@@ -48,6 +71,13 @@ class Request internal constructor(
 
     internal fun withParameters(values: Map<String, String>) =
         Request(method, path, query, values, bodyLength, rawFields, decodedFields, version)
+}
+
+private fun Char.asciiHexValue(): Int = when (this) {
+    in '0'..'9' -> this - '0'
+    in 'a'..'f' -> this - 'a' + 10
+    in 'A'..'F' -> this - 'A' + 10
+    else -> -1
 }
 
 class Response internal constructor(
@@ -76,7 +106,10 @@ class Response internal constructor(
             size += field.name.length.toLong() + field.value.length + 4
             if (field.name.equals("allow", ignoreCase = true)) allowed = null
         }
-        return Response(status, contentType, body, stream, allowed, fields + headers, size)
+        val updatedStream = if (stream is ResponseStream.Pull && stream.keepAliveHead != null) {
+            ResponseStream.Pull(stream.length, stream.source)
+        } else stream
+        return Response(status, contentType, body, updatedStream, allowed, fields + headers, size)
     }
 }
 
@@ -104,7 +137,7 @@ fun interface ResponseSource : AutoCloseable {
 }
 
 internal sealed class ResponseStream(val length: Int?) {
-    class Pull(length: Int?, val source: ResponseSource) : ResponseStream(length)
+    class Pull(length: Int?, val source: ResponseSource, val keepAliveHead: ByteArray? = null) : ResponseStream(length)
     class Produce(
         length: Int?,
         val onClose: () -> Unit,
@@ -182,6 +215,39 @@ internal fun jsonResponse(encoded: String, status: Int): Response =
 
 fun badRequest(): Response = emptyResponse(400)
 
+/** Redirect to a nonempty, ASCII URI reference. Percent-encode characters outside the URI syntax. */
+fun redirect(location: String, status: Int = 308): Response {
+    require(status == 301 || status == 302 || status == 303 || status == 307 || status == 308) {
+        "Expected a redirect status"
+    }
+    require(location.hasValidLocationCharacters()) { "Expected an encoded redirect location" }
+    return emptyResponse(status).withHeaders(HttpField("Location", location))
+}
+
+private fun String.hasValidLocationCharacters(): Boolean {
+    if (isEmpty()) return false
+    var index = 0
+    var fragment = false
+    while (index < length) {
+        val char = this[index++]
+        when {
+            char == '%' -> {
+                if (index + 1 >= length || this[index].asciiHexValue() < 0 || this[index + 1].asciiHexValue() < 0) {
+                    return false
+                }
+                index += 2
+            }
+            char == '#' -> {
+                if (fragment) return false
+                fragment = true
+            }
+            char in 'A'..'Z' || char in 'a'..'z' || char in '0'..'9' || char in "-._~:/?[]@!$&'()*+,;=" -> Unit
+            else -> return false
+        }
+    }
+    return true
+}
+
 internal fun emptyResponse(status: Int): Response = Response(status, null, ByteArray(0))
 
 internal fun methodNotAllowed(methods: String): Response = Response(405, null, ByteArray(0), allowedMethods = methods)
@@ -199,12 +265,20 @@ internal fun Response.encodeHead(version: String, keepAlive: Boolean, length: In
         200 -> "OK"
         201 -> "Created"
         204 -> "No Content"
+        206 -> "Partial Content"
+        301 -> "Moved Permanently"
+        302 -> "Found"
+        303 -> "See Other"
         304 -> "Not Modified"
+        307 -> "Temporary Redirect"
+        308 -> "Permanent Redirect"
         400 -> "Bad Request"
         403 -> "Forbidden"
         404 -> "Not Found"
         405 -> "Method Not Allowed"
+        412 -> "Precondition Failed"
         413 -> "Content Too Large"
+        416 -> "Range Not Satisfiable"
         417 -> "Expectation Failed"
         431 -> "Request Header Fields Too Large"
         500 -> "Internal Server Error"

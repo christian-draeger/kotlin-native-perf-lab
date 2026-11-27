@@ -38,6 +38,10 @@ class Routes {
         gets.add(path, GetHandler.Immediate(handler))
     }
 
+    internal fun fallbackGet(path: String, handler: (Request) -> Response) {
+        gets.addExactFallback(path, GetHandler.Immediate(handler))
+    }
+
     /**
      * Run a suspending HTTP/1.x GET outside the I/O loop. Handlers can run concurrently.
      * A disconnect, timeout, or shutdown cancels the handler's coroutine.
@@ -184,6 +188,7 @@ internal sealed interface PostBody {
 
 internal class MethodRoutes<Handler> {
     private val exact = mutableMapOf<String, Handler>()
+    private var exactFallbacks: MutableSet<String>? = null
     private val patterns = mutableListOf<RoutePattern<Handler>>()
     private var patternsBySize: Map<Int, PatternGroup<Handler>>? = null
 
@@ -203,7 +208,7 @@ internal class MethodRoutes<Handler> {
         }
         val parameters = names.filterNotNull()
         if (parameters.isEmpty()) {
-            require(path !in exact) { "Duplicate route $path" }
+            require(path !in exact || exactFallbacks?.remove(path) == true) { "Duplicate route $path" }
             exact[path] = handler
             return
         }
@@ -212,6 +217,13 @@ internal class MethodRoutes<Handler> {
         require(patterns.none { it.shape == shape }) { "Duplicate route pattern $path" }
         patterns.add(RoutePattern(shape, names, handler))
         patternsBySize = null
+    }
+
+    fun addExactFallback(path: String, handler: Handler) {
+        if (path in exact) return
+        exact[path] = handler
+        val fallbacks = exactFallbacks ?: mutableSetOf<String>().also { exactFallbacks = it }
+        fallbacks.add(path)
     }
 
     fun prepare() {

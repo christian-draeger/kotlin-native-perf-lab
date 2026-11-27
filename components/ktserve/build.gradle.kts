@@ -32,6 +32,7 @@ val interopHeaders = project.file("src/nativeInterop/cinterop")
 fun KotlinNativeTarget.useKtServeInterop(macos: Boolean) {
     val interops = compilations.getByName("main").cinterops
     interops.create("ktServeSignals") { includeDirs(interopHeaders) }
+    interops.create("staticFiles") { includeDirs(interopHeaders) }
     if (macos) interops.create("kqueue") { includeDirs(interopHeaders) }
 }
 
@@ -125,7 +126,12 @@ kotlin {
             if (targetOs == "linux") getByName("nativeTest").kotlin.srcDir("src/linuxTest/kotlin")
         }
     }
+    targets.withType<KotlinNativeTarget>().configureEach {
+        compilations.getByName("main").defaultSourceSet.kotlin.srcDir("src/staticNative/kotlin")
+    }
     sourceSets {
+        // Experimental backends reuse src/commonMain without the static-file platform adapters.
+        getByName("commonMain").kotlin.srcDir("src/staticCommon/kotlin")
         commonMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")

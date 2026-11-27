@@ -472,7 +472,10 @@ internal class HttpConnection(
                     AsyncResponseSource(checkNotNull(dispatcher).invoke(), stream, signalApplicationProgress)
             }
             this.stream = PendingStream(source, length ?: limits.responseBodyBytes, chunked)
-            setOutput(response.encodeHead(version, persistent, length ?: CHUNKED_RESPONSE_LENGTH))
+            val preparedHead = if (persistent && version == "HTTP/1.1" && stream is ResponseStream.Pull) {
+                stream.keepAliveHead
+            } else null
+            setOutput(preparedHead ?: response.encodeHead(version, persistent, length ?: CHUNKED_RESPONSE_LENGTH))
         }
     }
 
