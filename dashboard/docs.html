@@ -94,17 +94,17 @@ dependencies {
               <div class="docs-stack">
                 <h4>HTTP</h4>
                 <div class="cli-downloads" data-cli-downloads="HTTP">
-                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz">Linux x86-64 <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64.tar.gz">Linux ARM64 <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-macos-arm64.tar.gz">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-x86_64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz">Linux x86-64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-aarch64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64.tar.gz">Linux ARM64 <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="macos-arm64" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-macos-arm64.tar.gz">Apple Silicon macOS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>macOS may ask you to approve the ad hoc signed executable on first launch. <a class="text-link" href="https://support.apple.com/en-us/102445">Apple’s first-launch guidance <span aria-hidden="true">↗</span></a></p>
               </div>
               <div class="docs-stack">
                 <h4 id="direct-https">Direct HTTPS</h4>
                 <div class="cli-downloads" data-cli-downloads="Direct HTTPS">
-                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64-https.tar.gz">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
-                  <a class="button button-secondary" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64-https.tar.gz">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-x86_64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64-https.tar.gz">Linux x86-64 HTTPS <span aria-hidden="true">↓</span></a>
+                  <a class="button button-secondary" data-cli-target="linux-aarch64-https" href="https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-aarch64-https.tar.gz">Linux ARM64 HTTPS <span aria-hidden="true">↓</span></a>
                 </div>
                 <p>The HTTPS downloads use the system’s OpenSSL 3 libraries. On Ubuntu 24.04, install <code>libssl3t64</code> if needed. They can also serve plain HTTP.</p>
               </div>
@@ -115,10 +115,13 @@ dependencies {
               <p>Run this in an empty directory to create <code>./ktserve</code> and the sample <code>public/</code> folder.</p>
               <div class="cli-terminal-controls" hidden>
                 <label for="cli-terminal-target">Archive</label>
-                <select id="cli-terminal-target"></select>
+                <select id="cli-terminal-target">
+                  <option value="" disabled selected>Choose an archive</option>
+                </select>
                 <button class="button button-secondary" id="cli-copy" type="button" hidden>Copy command</button>
                 <span id="cli-copy-status" role="status"></span>
               </div>
+              <noscript><p>The terminal command below is for Linux x86-64. Use the buttons above to download any archive.</p></noscript>
               <div class="code-window cli-terminal-command">
                 <pre tabindex="0" aria-label="Download and extract ktServe"><code id="cli-install-command">curl -fsSL https://github.com/christian-draeger/ktserve/releases/download/cli-preview-0.1.2/ktserve-cli-preview-0.1.2-linux-x86_64.tar.gz | tar -xzf -</code></pre>
               </div>
@@ -253,30 +256,79 @@ dependencies {
       const command = document.querySelector("#cli-install-command");
       const copy = document.querySelector("#cli-copy");
       const status = document.querySelector("#cli-copy-status");
+      const links = new Map();
+      const canCopy = Boolean(navigator.clipboard?.writeText);
       for (const downloads of document.querySelectorAll("[data-cli-downloads]")) {
         const group = document.createElement("optgroup");
         group.label = downloads.dataset.cliDownloads;
-        for (const link of downloads.querySelectorAll("a[href]")) {
+        for (const link of downloads.querySelectorAll("[data-cli-target]")) {
+          const key = link.dataset.cliTarget;
           const label = link.firstChild.textContent.trim();
-          group.append(new Option(label, link.href));
+          links.set(key, link);
+          group.append(new Option(label, key));
+          link.addEventListener("click", () => {
+            target.value = key;
+            showCommand();
+          });
         }
         target.append(group);
       }
 
       function showCommand() {
-        command.textContent = `curl -fsSL ${target.value} | tar -xzf -`;
+        const selected = links.get(target.value);
+        for (const link of links.values()) {
+          link.classList.toggle("button-primary", link === selected);
+          link.classList.toggle("button-secondary", link !== selected);
+          if (link === selected) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+        }
+        command.textContent = selected ? `curl -fsSL ${selected.href} | tar -xzf -` : "";
+        command.closest(".cli-terminal-command").hidden = !selected;
+        copy.hidden = !canCopy || !selected;
         status.textContent = "";
       }
 
-      if (location.hash === "#direct-https") {
-        const https = target.querySelector('optgroup[label="Direct HTTPS"] option');
-        target.value = https.value;
+      async function detectTarget() {
+        const ua = navigator.userAgentData;
+        if (ua?.mobile || (ua?.platform && !["Linux", "macOS"].includes(ua.platform))) return "";
+        if (ua?.getHighEntropyValues) {
+          try {
+            const { platform, architecture, bitness } = await ua.getHighEntropyValues(["architecture", "bitness"]);
+            if (architecture && bitness) {
+              if (bitness !== "64") return "";
+              if (platform === "Linux" && architecture === "x86") return "linux-x86_64";
+              if (platform === "Linux" && architecture === "arm") return "linux-aarch64";
+              if (platform === "macOS" && architecture === "arm") return "macos-arm64";
+              return "";
+            }
+          } catch {
+            // Some browsers block architecture hints.
+          }
+        }
+
+        const agent = navigator.userAgent;
+        if (/\b(Android|CrOS|Mobile)\b/i.test(agent)) return "";
+        if (/\bLinux (?:aarch64|arm64)\b/i.test(agent)) return "linux-aarch64";
+        // Reduced Chromium user agents use Linux x86_64 on other architectures too.
+        if (/\bLinux (?:x86_64|amd64)\b/i.test(agent) && !/\b(?:Chrome|Chromium)\//.test(agent)) {
+          return "linux-x86_64";
+        }
+        return "";
       }
+
       target.addEventListener("change", showCommand);
       showCommand();
       target.parentElement.hidden = false;
+      detectTarget().then(key => {
+        if (!key || target.value) return;
+        const preferred = location.hash === "#direct-https" ? `${key}-https` : key;
+        if (links.has(preferred)) {
+          target.value = preferred;
+          showCommand();
+        }
+      });
 
-      if (navigator.clipboard?.writeText) {
+      if (canCopy) {
         copy.addEventListener("click", async () => {
           try {
             await navigator.clipboard.writeText(command.textContent);
@@ -285,7 +337,6 @@ dependencies {
             status.textContent = "Select the command to copy it.";
           }
         });
-        copy.hidden = false;
       }
     })();
   </script>
