@@ -10,6 +10,26 @@ fun interface ServerObserver {
     fun onEvent(event: ServerEvent)
 }
 
+/**
+ * Receives exchange fields directly on the owning I/O loop. Return promptly and offload any I/O.
+ * [onEvent] receives lifecycle and connection events. A response status of zero means no response was selected.
+ */
+fun interface ExchangeObserver : ServerObserver {
+    /** Called once for each I/O loop. Override to provide independent state for that loop. */
+    fun forLoop(): ExchangeObserver = this
+
+    override fun onEvent(event: ServerEvent) {}
+
+    fun onExchange(
+        connection: Long,
+        request: Long,
+        method: String?,
+        status: Int,
+        durationNanos: Long,
+        outcome: ExchangeOutcome,
+    )
+}
+
 sealed interface ServerEvent {
     enum class Lifecycle : ServerEvent { READY, DRAINING, STOPPED }
     data class Connections(val active: Int) : ServerEvent
@@ -34,14 +54,33 @@ enum class ExchangeOutcome {
     IDLE_TIMEOUT, REQUEST_HEAD_TIMEOUT, REQUEST_BODY_TIMEOUT, HANDLER_TIMEOUT, RESPONSE_TIMEOUT,
 }
 
-internal class ServerObservation(private val observer: ServerObserver, timeSource: TimeSource) {
+internal class ServerObservation(observer: ServerObserver, timeSource: TimeSource) {
+    private val loopObserver = if (observer is ExchangeObserver) observer.forLoop() else observer
+    private val exchangeObserver = loopObserver as? ExchangeObserver
     private val clock = timeSource.markNow()
 
     fun elapsedNanos(): Long = clock.elapsedNow().inWholeNanoseconds
 
-    fun emit(event: ServerEvent) {
+    fun emit(event: ServerEvent) = notifyObserver { loopObserver.onEvent(event) }
+
+    fun emitExchange(
+        connection: Long,
+        request: Long,
+        method: String?,
+        status: Int,
+        durationNanos: Long,
+        outcome: ExchangeOutcome,
+    ) = notifyObserver {
+        if (exchangeObserver != null) {
+            exchangeObserver.onExchange(connection, request, method, status, durationNanos, outcome)
+        } else {
+            loopObserver.onEvent(ServerEvent.Exchange(connection, request, method, status.takeIf { it != 0 }, durationNanos, outcome))
+        }
+    }
+
+    private inline fun notifyObserver(action: () -> Unit) {
         try {
-            observer.onEvent(event)
+            action()
         } catch (_: Exception) {
             // Observers are external callbacks. Serving and cleanup must still complete.
         }
@@ -72,13 +111,12 @@ internal class ExchangeObservation(private val server: ServerObservation, privat
 
     fun end(outcome: ExchangeOutcome) {
         if (started < 0) return
-        val event = ServerEvent.Exchange(
-            connection, sequence, method, status.takeIf { it != 0 },
-            (server.elapsedNanos() - started).coerceAtLeast(0), outcome,
-        )
+        val completedMethod = method
+        val completedStatus = status
+        val duration = (server.elapsedNanos() - started).coerceAtLeast(0)
         started = -1L
         method = null
         status = 0
-        server.emit(event)
+        server.emitExchange(connection, sequence, completedMethod, completedStatus, duration, outcome)
     }
 }
