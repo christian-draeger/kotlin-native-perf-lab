@@ -56,7 +56,7 @@ fun main(args: Array<String>) {
         require(port != null && port in 1..65535) { "PORT must be an integer between 1 and 65535" }
         val host = getenv("BIND_HOST")?.toKString() ?: "127.0.0.1"
         val scheme = if (options.tls == null) "http" else "https"
-        val stdinResponse = if (options.serveStdin) response(readStdin(), contentType = "application/json") else null
+        val contentRoutes = options.source.routes()
         check(ktserve_cli_install_signals() == 0) { "Could not install signal handlers (errno $errno)" }
         try {
             println("ktserve: starting at $scheme://$host:$port")
@@ -65,8 +65,7 @@ fun main(args: Array<String>) {
             withAccessLogSignals(options.accessLog) {
                 val configure: Routes.() -> Unit = {
                     if (options.accessLog) install(accessLog())
-                    if (stdinResponse != null) get("/") { stdinResponse }
-                    for ((at, directory, cacheControl) in options.mounts) staticFiles(directory, at, cacheControl)
+                    contentRoutes()
                 }
                 val tls = options.tls
                 if (tls == null) {
@@ -118,7 +117,21 @@ private data class Mount(val at: String, val directory: String, val cacheControl
 
 internal data class TlsFiles(val certificate: String, val key: String)
 
-private data class Options(val mounts: List<Mount>, val accessLog: Boolean, val tls: TlsFiles?, val serveStdin: Boolean)
+private sealed interface ServeSource {
+    data object Stdin : ServeSource
+    data class Mounts(val entries: List<Mount>) : ServeSource
+}
+
+private fun ServeSource.routes(): Routes.() -> Unit = when (this) {
+    ServeSource.Stdin -> response(readStdin(), contentType = "application/json").let { stdinResponse ->
+        { get("/") { stdinResponse } }
+    }
+    is ServeSource.Mounts -> {
+        { for ((at, directory, cacheControl) in entries) staticFiles(directory, at, cacheControl) }
+    }
+}
+
+private data class Options(val source: ServeSource, val accessLog: Boolean, val tls: TlsFiles?)
 
 private fun parseOptions(args: List<String>): Options? {
     val mounts = mutableListOf<Mount>()
@@ -159,7 +172,12 @@ private fun parseOptions(args: List<String>): Options? {
             }
         }
     }
-    if (serveStdin == mounts.isNotEmpty() || (certificate == null) != (key == null)) return null
+    if ((certificate == null) != (key == null)) return null
+    val source = when {
+        serveStdin && mounts.isEmpty() -> ServeSource.Stdin
+        !serveStdin && mounts.isNotEmpty() -> ServeSource.Mounts(mounts)
+        else -> return null
+    }
     val tls = if (certificate == null) null else TlsFiles(certificate, checkNotNull(key))
-    return Options(mounts, accessLog, tls, serveStdin)
+    return Options(source, accessLog, tls)
 }
