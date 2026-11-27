@@ -296,6 +296,26 @@ provider and configure its encoder for formats such as JSON. The default ktServe
 configuration writes its regular text batches directly to stderr.
 [kotlin-logging](https://github.com/oshai/kotlin-logging) · [SLF4J providers](https://www.slf4j.org/manual.html)
 
+## Static-file packaging
+
+Static-file serving stays in `ktserve` for the preview. The `staticFiles(...)` DSL and
+`ktserve serve ./public` both take a bounded snapshot during startup and register file
+handlers in the normal router. Apps that do not mount files do not read a directory,
+allocate a snapshot or install request hooks. The file loaders use the JVM or platform
+filesystem APIs, so this feature adds no external library to the core dependency graph.
+
+An optional module could publish the same `Routes.staticFiles(...)` syntax and use the
+same prepared handlers, so packaging alone would not improve request dispatch. It would
+need a public way to register literal file routes and lower-priority directory redirects
+without shadowing application routes. The extension startup API currently supports literal
+GET endpoints with collision checks. Moving the DSL would also require an additional app
+dependency, publication for each supported target and bundling the module into the CLI.
+
+Keep cache validation, byte ranges and directory redirects with the file handlers.
+If distribution size or a separately maintained file backend justifies moving the feature,
+retain route precedence and the existing DSL. TLS, scheduling and HTTP framing stay with
+the server and its transports.
+
 ## Build and stage
 
 From `components/ktserve`, run the module tests against the local core checkout.
