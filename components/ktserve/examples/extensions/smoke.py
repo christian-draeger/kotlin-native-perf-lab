@@ -45,6 +45,8 @@ def smoke(command):
         assert "access-control-request-method" in headers["Vary"].lower()
         status, headers, _ = request("OPTIONS", "/health", {**preflight, "Origin": "https://denied.example"})
         assert status == 403 and "Access-Control-Allow-Origin" not in headers
+        status, headers, _ = request("OPTIONS", "/health", {**preflight, "Access-Control-Request-Headers": "X-Denied"})
+        assert status == 403 and "Access-Control-Allow-Origin" not in headers
 
         status, headers, body = request("GET", "/health", {"Origin": origin})
         assert (status, body) == (400, b"Missing region")
@@ -60,16 +62,20 @@ def smoke(command):
         assert headers["X-Region"] == "EU" and headers["Access-Control-Allow-Credentials"] == "true"
         status, headers, _ = request("GET", "/health", {**context, "Origin": "https://denied.example"})
         assert status == 401 and "Access-Control-Allow-Origin" not in headers
+        status, _, body = request("OPTIONS", "/health", context)
+        assert (status, body) == (200, b"ordinary OPTIONS")
 
         typed = {**context, "Content-Type": "application/json"}
-        status, headers, _ = request("POST", "/api/users", typed, b'{"name":"A"}')
+        status, headers, body = request("POST", "/api/users", typed, b'{"name":"A"}')
         assert status == 422 and headers["Content-Type"] == "application/problem+json"
+        assert json.loads(body)["errors"][0]["pointer"] == "/name"
         status, _, body = request("POST", "/api/users", typed, b'{"name":"Ada"}')
         assert status == 201 and json.loads(body) == {"name": "Ada"}
         status, _, body = request("GET", "/openapi.json", context)
         assert status == 200
         schema = json.loads(body)["paths"]["/api/users"]["post"]["requestBody"]["content"]["application/json"]["schema"]
-        assert schema["properties"]["name"]["minLength"] == 2
+        assert any(branch.get("properties", {}).get("name", {}).get("minLength") == 2
+                   for branch in schema.get("allOf", [schema])), schema
     finally:
         client.close()
         server.terminate()

@@ -12,7 +12,10 @@ import codes.draeger.ktserve.extension
 import codes.draeger.ktserve.openapi.openApi
 import codes.draeger.ktserve.serve
 import codes.draeger.ktserve.text
-import codes.draeger.ktserve.validation.*
+import codes.draeger.ktserve.validation.KonformRules
+import codes.draeger.ktserve.validation.ValidateWith
+import codes.draeger.ktserve.validation.rules
+import codes.draeger.ktserve.validation.validation
 import kotlinx.serialization.Serializable
 
 private val region = RequestAttribute<String>("region")
@@ -59,6 +62,7 @@ internal fun runServer(args: Array<String>, platformExtensions: Routes.() -> Uni
                 else -> text("Bearer credential required", status = 401)
             }
         }
+        route("OPTIONS", "/health") { _, _ -> text("ordinary OPTIONS") }
         api("/api") {
             post("/users", status = 201) { input: CreateUser -> input }
         }
