@@ -7,14 +7,76 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ktserve-cli-preview-${{ github.ref }}
 
 jobs:
   package:
-    name: CLI preview (${{ matrix.platform }} ${{ matrix.arch }})
+    name: Build CLI preview (${{ matrix.platform }} ${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            arch: x86_64
+            host_arch: x86_64
+            runner: ubuntu-24.04
+          - platform: linux
+            arch: aarch64
+            host_arch: x86_64
+            runner: ubuntu-24.04
+          - platform: macos
+            arch: arm64
+            host_arch: arm64
+            runner: macos-15
+    env:
+      TARGET_PLATFORM: ${{ matrix.platform }}
+      TARGET_ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
+      - name: Build the native HTTP CLI
+        env:
+          HOST_ARCH: ${{ matrix.host_arch }}
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^cli-preview-[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(uname -m)" = "$HOST_ARCH"
+          project=components/ktserve
+          "$project/gradlew" -p "$project/experiments/cli/static" \
+            "-Pbenchmark.targetOs=$TARGET_PLATFORM" "-Pbenchmark.targetArch=$TARGET_ARCH" \
+            linkReleaseExecutableNative
+      - name: Package the downloadable CLI
+        run: |
+          cli=components/ktserve/experiments/cli
+          binary="$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
+          package="$RUNNER_TEMP/cli-release"
+          archive="ktserve-$GITHUB_REF_NAME-$TARGET_PLATFORM-$TARGET_ARCH.tar.gz"
+          ./scripts/package-ktserve.sh "$binary" "$GITHUB_REF_NAME" "$package" --cli
+          tar -xOzf "$package/$archive" ktserve | cmp "$binary" -
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/cli-release/
+          if-no-files-found: error
+          overwrite: true
+
+  verify:
+    name: Test CLI preview (${{ matrix.platform }} ${{ matrix.arch }})
+    needs: package
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -35,26 +97,16 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
-          distribution: temurin
-          java-version: '21'
-      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5.0.2
-      - name: Build the native HTTP CLI
+          name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/cli-release
+      - name: Test the downloadable CLI on the target machine
         run: |
-          [[ "$GITHUB_REF_NAME" =~ ^cli-preview-[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$(uname -m)" = "$TARGET_ARCH"
-          project=components/ktserve
-          "$project/gradlew" -p "$project/experiments/cli/static" \
-            "-Pbenchmark.targetOs=$TARGET_PLATFORM" "-Pbenchmark.targetArch=$TARGET_ARCH" \
-            linkReleaseExecutableNative
-      - name: Package and verify the downloadable CLI
-        run: |
           cli=components/ktserve/experiments/cli
-          binary="$cli/static/build/bin/native/releaseExecutable/ktserve.kexe"
           package="$RUNNER_TEMP/cli-release"
           archive="ktserve-$GITHUB_REF_NAME-$TARGET_PLATFORM-$TARGET_ARCH.tar.gz"
-          ./scripts/package-ktserve.sh "$binary" "$GITHUB_REF_NAME" "$package" --cli
           if [[ "$TARGET_PLATFORM" == linux ]]; then
             (cd "$package" && sha256sum --strict -c "$archive.sha256")
           else
@@ -64,7 +116,6 @@ jobs:
           unpacked="$RUNNER_TEMP/cli-unpacked"
           mkdir "$unpacked"
           tar -xzf "$package/$archive" -C "$unpacked"
-          cmp "$binary" "$unpacked/ktserve"
           cmp LICENSE "$unpacked/LICENSE"
           python3 "$cli/static/smoke.py" "$unpacked/ktserve"
 
@@ -76,16 +127,10 @@ jobs:
           curl -fsS --retry 8 --retry-connrefused --retry-max-time 10 \
             "http://127.0.0.1:$PORT/api/status.json" -o "$RUNNER_TEMP/cli-response.json"
           cmp public/api/status.json "$RUNNER_TEMP/cli-response.json"
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: cli-preview-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ${{ runner.temp }}/cli-release/
-          if-no-files-found: error
-          overwrite: true
 
   publish:
     name: Publish the CLI prerelease
-    needs: package
+    needs: verify
     if: github.repository_id == '1468028252' && github.repository_owner == 'christian-draeger'
     runs-on: ubuntu-24.04
     timeout-minutes: 10

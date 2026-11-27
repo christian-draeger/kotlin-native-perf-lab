@@ -4,11 +4,19 @@ Use `serve` to publish a directory over HTTP or `run` to compile and start an ap
 
 ## Serve a directory
 
+Download the archive for your platform from the [CLI preview release](https://github.com/christian-draeger/ktserve/releases/tag/cli-preview-0.1.1). Extract it and run `./ktserve serve ./public` from the extracted directory. Open http://127.0.0.1:8080/ to try the bundled site.
+
+### Build from source
+
 Build the executable from the repository root. Use JDK 21 for Gradle.
 
 ```sh
-# Linux x86_64 or ARM64
+# Linux x86_64
 ./components/ktserve/gradlew -p components/ktserve/experiments/cli/static linkReleaseExecutableNative
+
+# Linux ARM64 target from a Linux x86_64 build host
+./components/ktserve/gradlew -p components/ktserve/experiments/cli/static \
+  -Pbenchmark.targetArch=aarch64 linkReleaseExecutableNative
 
 # Apple Silicon macOS with full Xcode
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
