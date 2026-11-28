@@ -250,6 +250,9 @@ fun main() = serve {
 This uses the same logger, batched UTF-8 format and stderr destination as the CLI's
 `--access-log`. Each I/O loop records completions in a bounded ring. The background
 writer drains the rings after the listener stops and reports any overflow.
+The writer drains queued batches continuously. Once the queues are empty, it
+polls at a nominal 4 ms interval and uses 1 ms for the next poll after seeing
+a full batch. This gives sparse records a short window to collect into one write.
 
 Use `accessLog { event -> … }` to format structured events or hand them to your logging
 backend. The callback runs on the writer and receives `AccessLogEvent.Exchange` and

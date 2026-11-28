@@ -56,6 +56,7 @@ internal expect fun writeAccessLogToStderr(bytes: ByteArray, length: Int)
 
 internal const val ACCESS_LOG_CAPACITY = 4096
 private const val ACCESS_LOG_BATCH_SIZE = 64
+private const val ACCESS_LOG_LIGHT_POLL_MS = 4L
 
 internal class AccessLog(private val writer: AccessLogWriter) : ExchangeObserver {
     private val loops = AtomicReference<List<LoopAccessLog>?>(emptyList())
@@ -105,15 +106,18 @@ internal class AccessLog(private val writer: AccessLogWriter) : ExchangeObserver
         }
     }
 
-    private suspend inline fun writeTo(drain: (LoopAccessLog) -> Boolean, reportDropped: (Long) -> Unit) {
+    private suspend inline fun writeTo(drain: (LoopAccessLog) -> Int, reportDropped: (Long) -> Unit) {
         var dropped = 0L
+        var busy = false
         while (true) {
             // Observe serve's return before taking the final snapshot of the queues.
             val done = stopping.load()
             val current = loops.load() ?: return
             var wrote = false
             for (loop in current) {
-                if (drain(loop)) wrote = true
+                val count = drain(loop)
+                wrote = wrote || count > 0
+                busy = busy || count == ACCESS_LOG_BATCH_SIZE
                 if (loop.isDrained()) {
                     dropped += loop.dropped
                     unregister(loop)
@@ -125,7 +129,9 @@ internal class AccessLog(private val writer: AccessLogWriter) : ExchangeObserver
                     if (dropped > 0) reportDropped(dropped)
                     return
                 }
-                delay(1)
+                // Give sparse records time to form a batch. Poll sooner after a full batch.
+                delay(if (busy) 1L else ACCESS_LOG_LIGHT_POLL_MS)
+                busy = false
             }
         }
     }
@@ -146,11 +152,11 @@ internal sealed interface AccessLogWriter
 internal class BatchedAccessLogWriter(private val writeChunk: (ByteArray, Int) -> Unit) : AccessLogWriter {
     private val batch = AccessLogBatch()
 
-    fun drain(loop: LoopAccessLog): Boolean {
+    fun drain(loop: LoopAccessLog): Int {
         batch.clear()
-        if (!loop.drain(batch::appendExchange)) return false
-        batch.writeTo(writeChunk)
-        return true
+        val count = loop.drain(batch::appendExchange)
+        if (count > 0) batch.writeTo(writeChunk)
+        return count
     }
 
     fun dropped(count: Long) {
@@ -161,7 +167,7 @@ internal class BatchedAccessLogWriter(private val writeChunk: (ByteArray, Int) -
 }
 
 internal class EventAccessLogWriter(private val sink: (AccessLogEvent) -> Unit) : AccessLogWriter {
-    fun drain(loop: LoopAccessLog): Boolean = loop.drain { method, status, nanos, outcome ->
+    fun drain(loop: LoopAccessLog): Int = loop.drain { method, status, nanos, outcome ->
         sink(AccessLogEvent.Exchange(method, status.takeIf { it != 0 }, nanos, outcome))
     }
 
@@ -206,9 +212,10 @@ internal class LoopAccessLog : ExchangeObserver {
         if (event == ServerEvent.Lifecycle.STOPPED) stopped.store(true)
     }
 
-    inline fun drain(append: (String?, Int, Long, ExchangeOutcome) -> Unit): Boolean {
-        val end = minOf(published.load(), nextRead + ACCESS_LOG_BATCH_SIZE)
-        if (nextRead == end) return false
+    inline fun drain(append: (String?, Int, Long, ExchangeOutcome) -> Unit): Int {
+        val start = nextRead
+        val end = minOf(published.load(), start + ACCESS_LOG_BATCH_SIZE)
+        if (start == end) return 0
         while (nextRead < end) {
             val slot = nextRead.toInt() and (ACCESS_LOG_CAPACITY - 1)
             append(methods[slot], statuses[slot], durations[slot], ExchangeOutcome.entries[outcomes[slot]])
@@ -216,7 +223,7 @@ internal class LoopAccessLog : ExchangeObserver {
             nextRead++
         }
         consumed.store(nextRead)
-        return true
+        return (end - start).toInt()
     }
 
     fun isDrained(): Boolean = stopped.load() && nextRead == published.load()
