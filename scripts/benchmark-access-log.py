@@ -104,7 +104,7 @@ def count_records(path, start, end):
     return completed, other, drops
 
 
-def attack(args, rate, seconds, url, prefix, remote):
+def attack(args, rate, seconds, url, prefix, remote, *, request=None):
     raw = prefix.with_suffix(".vegeta.bin")
     timing = prefix.with_suffix(".client.txt")
     target = f"{remote}/{raw.name}" if remote else str(raw)
@@ -114,8 +114,13 @@ def attack(args, rate, seconds, url, prefix, remote):
                f"-connections={args.connections}", f"-max-connections={args.connections}",
                "-keepalive=true", "-timeout=2s", "-http2=false", "-redirects=-1", "-max-body=0",
                "-output", target]
+    if request is None:
+        targets = f"GET {url}\n"
+    else:
+        command.append("-format=json")
+        targets = json.dumps({**request, "url": url}) + "\n"
     with timing.open("wb") as stderr:
-        subprocess.run(load_command(args, *command), input=f"GET {url}\n".encode(),
+        subprocess.run(load_command(args, *command), input=targets.encode(),
                        stderr=stderr, check=True, timeout=seconds + 20)
     return raw, timing, target
 
