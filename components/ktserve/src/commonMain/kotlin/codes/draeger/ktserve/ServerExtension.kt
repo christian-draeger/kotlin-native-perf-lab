@@ -110,9 +110,20 @@ data class ExchangeCompletion(val status: Int?, val durationNanos: Long, val out
 class ResponseHeaders internal constructor(private val response: Response) {
     val status: Int get() = response.status
     private var edited: MutableList<HttpField>? = null
+    private var prepared: PreparedResponseHeaders? = null
 
     fun values(name: String): List<String> =
-        (edited ?: response.fields).mapNotNull { field -> field.value.takeIf { field.name.equals(name, ignoreCase = true) } }
+        currentFields().mapNotNull { field -> field.value.takeIf { field.name.equals(name, ignoreCase = true) } }
+
+    /** Append prevalidated fields when there are no application fields. Return false otherwise. */
+    fun appendIfEmpty(headers: PreparedResponseHeaders): Boolean {
+        if (currentFields().isNotEmpty()) return false
+        if (headers.fields.isNotEmpty()) {
+            prepared = headers
+            edited = null
+        }
+        return true
+    }
 
     fun set(name: String, value: String) {
         val field = HttpField(name, value)
@@ -130,15 +141,18 @@ class ResponseHeaders internal constructor(private val response: Response) {
 
     /** Remove all application field values with this name. */
     fun remove(name: String) {
-        if ((edited ?: response.fields).any { it.name.equals(name, ignoreCase = true) }) {
+        if (currentFields().any { it.name.equals(name, ignoreCase = true) }) {
             mutableFields().removeAll { it.name.equals(name, ignoreCase = true) }
         }
     }
 
-    private fun mutableFields(): MutableList<HttpField> =
-        edited ?: response.fields.toMutableList().also { edited = it }
+    private fun currentFields(): List<HttpField> = edited ?: prepared?.fields ?: response.fields
 
-    internal fun apply(): Response = edited?.let(response::replaceApplicationFields) ?: response
+    private fun mutableFields(): MutableList<HttpField> =
+        edited ?: currentFields().toMutableList().also { edited = it }
+
+    internal fun apply(): Response =
+        edited?.let(response::replaceApplicationFields) ?: prepared?.let(response::replaceApplicationFields) ?: response
 }
 
 /**

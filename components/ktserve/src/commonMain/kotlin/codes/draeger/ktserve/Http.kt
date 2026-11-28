@@ -209,6 +209,9 @@ class Response internal constructor(
         return withApplicationFields(headers.toList(), size, allowed)
     }
 
+    internal fun replaceApplicationFields(headers: PreparedResponseHeaders): Response =
+        withApplicationFields(headers.fields, headers.wireBytes, allowedMethods.takeUnless { headers.hasAllow })
+
     private fun withApplicationFields(headers: List<HttpField>, size: Long, allowed: String?): Response {
         val updatedStream = if (stream is ResponseStream.Pull && stream.keepAliveHead != null) {
             ResponseStream.Pull(stream.length, stream.source)
