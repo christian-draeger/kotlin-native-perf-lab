@@ -34,6 +34,7 @@ HEADERS = {"Content-Type": "application/json", "Authorization": "Bearer taskboar
            "Origin": "http://localhost:5173"}
 REQUEST = {"method": "POST", "header": {key: [value] for key, value in HEADERS.items()},
            "body": base64.b64encode(BODY).decode()}
+COMPLETED = re.compile(rb"event=exchange method=POST status=200 duration_ns=[0-9]+ outcome=COMPLETED\n")
 MEASUREMENTS = ("startup_to_response_ms", "ready_rss_kib", "peak_rss_kib", "completed_rps", "p50_us",
                 "p95_us", "p99_us", "cpu_seconds_per_million")
 
@@ -98,12 +99,19 @@ def trial(args, command, rate, repeat, mode, remote):
     measured, timing = fixed.report(args, load, rate * args.duration)
     cpu = end - start
     requests = measured["ok"]
-    return dict(mode=mode, rate=rate, repeat=repeat, valid=warm["valid"] and measured["valid"] and cpu >= 0,
+    log_size = log.stat().st_size
+    logs_expected = logs_written = drops_reported = None
+    if mode in ("access-log", "all"):
+        logs_expected = 1 + warm["ok"] + requests  # The readiness request also writes an access record.
+        logs_written, _, drops_reported = fixed.count_records(log, 0, log_size, completed_record=COMPLETED)
+    logging_valid = logs_written == logs_expected and not drops_reported
+    return dict(mode=mode, rate=rate, repeat=repeat,
+                valid=warm["valid"] and measured["valid"] and cpu >= 0 and logging_valid,
                 attempted=measured["attempted"], completed=requests, completed_rps=requests / args.duration,
                 startup_to_response_ms=round(startup_ms, 3), ready_rss_kib=ready_rss, peak_rss_kib=peak,
                 end_rss_kib=rss, cpu_seconds=round(cpu, 6),
                 cpu_seconds_per_million=round(cpu * 1_000_000 / requests, 3) if requests else None,
-                stderr_bytes=log.stat().st_size,
+                stderr_bytes=log_size, logs_expected=logs_expected, logs_written=logs_written, drops_reported=drops_reported,
                 **{f"p{p}_us": measured["latencies"][f"{p}th"] / 1000 for p in (50, 95, 99)}, **timing)
 
 

@@ -89,13 +89,13 @@ def wait_for_logs(path):
     raise RuntimeError(f"Access-log output did not settle: {path}")
 
 
-def count_records(path, start, end):
+def count_records(path, start, end, *, completed_record=COMPLETED):
     completed = other = drops = 0
     with path.open("rb") as stream:
         stream.seek(start)
         while stream.tell() < end:
             line = stream.readline(end - stream.tell())
-            if COMPLETED.fullmatch(line):
+            if completed_record.fullmatch(line):
                 completed += 1
             elif match := DROPPED.fullmatch(line):
                 drops += int(match[1])

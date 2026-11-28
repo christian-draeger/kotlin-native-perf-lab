@@ -60,10 +60,12 @@ same-host diagnostics.
 - `runs.csv` records successful requests/sec, p50/p95/p99, process CPU time, CPU per
   million successful requests, startup-to-first-response time, initial RSS and peak
   RSS. The peak covers startup, warm-up and timed load. CPU for access-log modes
-  includes the wait for the file writer to settle.
+  includes the wait for the file writer to settle. Logging rows also show expected
+  and written records and the drops reported in the log.
 - `summary.json` gives median, min and max and median paired deltas from `none`.
   Only runs with valid offered load, successful responses and load-generator CPU
-  headroom contribute. Raw Vegeta data, reports and server logs remain alongside it.
+  headroom contribute. Logging runs also require complete delivery. Raw Vegeta data,
+  reports and server logs remain alongside it.
 
 The [original logger benchmark](benchmark-access-log.md) covers log delivery and
 the previous logger implementation. The pre-extension fast-path comparison and
