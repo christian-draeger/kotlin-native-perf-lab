@@ -32,49 +32,62 @@ def smoke(command):
                     raise
                 time.sleep(0.1)
 
-        origin = "https://app.example"
+        origin = "http://localhost:5173"
         preflight = {
             "Origin": origin,
             "Access-Control-Request-Method": "GET",
-            "Access-Control-Request-Headers": "Authorization, X-Region",
+            "Access-Control-Request-Headers": "Authorization, X-Workspace",
         }
-        status, headers, body = request("OPTIONS", "/health", preflight)
+        status, _, body = request("GET", "/health")
+        assert (status, body) == (200, b"ok")
+        status, headers, body = request("OPTIONS", "/api/tasks", preflight)
         assert (status, body) == (204, b"")
         assert headers.get_all("Access-Control-Allow-Origin") == [origin]
         assert headers["Access-Control-Allow-Credentials"] == "true"
         assert "access-control-request-method" in headers["Vary"].lower()
-        status, headers, _ = request("OPTIONS", "/health", {**preflight, "Origin": "https://denied.example"})
+        status, headers, _ = request("OPTIONS", "/api/tasks", {**preflight, "Origin": "https://denied.example"})
         assert status == 403 and "Access-Control-Allow-Origin" not in headers
-        status, headers, _ = request("OPTIONS", "/health", {**preflight, "Access-Control-Request-Headers": "X-Denied"})
+        status, headers, _ = request("OPTIONS", "/api/tasks", {**preflight, "Access-Control-Request-Headers": "X-Denied"})
         assert status == 403 and "Access-Control-Allow-Origin" not in headers
 
-        status, headers, body = request("GET", "/health", {"Origin": origin})
-        assert (status, body) == (400, b"Missing region")
+        status, headers, body = request("GET", "/api/tasks", {"Origin": origin})
+        assert (status, body) == (401, b"Invalid demo token")
+        assert headers["WWW-Authenticate"] == "Bearer"
         assert headers.get_all("Access-Control-Allow-Origin") == [origin]
-        assert "X-Region" not in headers
+        assert "X-Workspace" not in headers
 
-        context = {"Origin": origin, "X-Region": "EU"}
-        status, headers, body = request("GET", "/health", context)
-        assert (status, body) == (401, b"Bearer credential required")
-        assert headers["X-Region"] == "EU" and headers["Access-Control-Allow-Origin"] == origin
-        status, headers, body = request("GET", "/health", {**context, "Authorization": "Bearer example"})
-        assert (status, body) == (200, b"ok")
-        assert headers["X-Region"] == "EU" and headers["Access-Control-Allow-Credentials"] == "true"
-        status, headers, _ = request("GET", "/health", {**context, "Origin": "https://denied.example"})
-        assert status == 401 and "Access-Control-Allow-Origin" not in headers
-        status, _, body = request("OPTIONS", "/health", context)
+        authorized = {"Origin": origin, "Authorization": "Bearer taskboard-demo"}
+        status, headers, body = request("GET", "/api/tasks", authorized)
+        assert (status, body) == (400, b"Select a workspace")
+        assert headers["Access-Control-Allow-Origin"] == origin
+        context = {**authorized, "X-Workspace": "design"}
+        status, headers, body = request("GET", "/api/tasks", context)
+        assert (status, json.loads(body)) == (200, [])
+        assert headers["X-Workspace"] == "design" and headers["Access-Control-Allow-Credentials"] == "true"
+        status, headers, _ = request("GET", "/api/tasks", {**context, "Origin": "https://denied.example"})
+        assert status == 200 and "Access-Control-Allow-Origin" not in headers
+        status, _, body = request("OPTIONS", "/api/tasks", context)
         assert (status, body) == (200, b"ordinary OPTIONS")
 
         typed = {**context, "Content-Type": "application/json"}
-        status, headers, body = request("POST", "/api/users", typed, b'{"name":"A"}')
+        status, headers, body = request("POST", "/api/tasks", typed, b'{"title":"A"}')
         assert status == 422 and headers["Content-Type"] == "application/problem+json"
-        assert json.loads(body)["errors"][0]["pointer"] == "/name"
-        status, _, body = request("POST", "/api/users", typed, b'{"name":"Ada"}')
-        assert status == 201 and json.loads(body) == {"name": "Ada"}
-        status, _, body = request("GET", "/openapi.json", context)
+        assert json.loads(body)["errors"][0]["pointer"] == "/title"
+        status, _, body = request("POST", "/api/tasks", typed, b'{"title":"Review design"}')
+        created = {"id": 1, "title": "Review design", "done": False}
+        assert status == 201 and json.loads(body) == created
+        status, _, body = request("GET", "/api/tasks", context)
+        assert (status, json.loads(body)) == (200, [created])
+        status, _, body = request("GET", "/api/tasks", {**context, "X-Workspace": "other"})
+        assert (status, json.loads(body)) == (200, [])
+        status, _, _ = request("PATCH", "/api/tasks/1", {**typed, "X-Workspace": "other"}, b'{"done":true}')
+        assert status == 404
+        status, _, body = request("PATCH", "/api/tasks/1", typed, b'{"done":true}')
+        assert status == 200 and json.loads(body) == {**created, "done": True}
+        status, _, body = request("GET", "/openapi.json")
         assert status == 200
-        schema = json.loads(body)["paths"]["/api/users"]["post"]["requestBody"]["content"]["application/json"]["schema"]
-        assert any(branch.get("properties", {}).get("name", {}).get("minLength") == 2
+        schema = json.loads(body)["paths"]["/api/tasks"]["post"]["requestBody"]["content"]["application/json"]["schema"]
+        assert any(branch.get("properties", {}).get("title", {}).get("minLength") == 3
                    for branch in schema.get("allOf", [schema])), schema
     finally:
         client.close()

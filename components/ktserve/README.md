@@ -151,6 +151,8 @@ Typed request handlers check the JSON media type and use the existing request si
 
 [Validation and OpenAPI](extensions/README.md) use the same typed routes. Install validation once for annotated request types and optionally override a validator on a route or an enclosing API group. The OpenAPI extension uses the resolved media types, statuses, input and output contracts during startup.
 
+The [Taskboard example](examples/extensions/README.md) combines typed routes, CORS, Bearer parsing, workspace hooks, validation, OpenAPI, access logging and JVM tracing in a runnable app.
+
 ### Request and response helpers
 
 Use `request.header("accept")` for the first matching request value or `request.headers()` for the ordered header fields, including duplicates. Use `response(bytes, status, contentType)` for a pre-encoded body and `.withHeaders(HttpField("Cache-Control", "no-store"))` to add response headers. ktServe validates response fields and sets framing and connection headers. `ServerLimits.responseHeaderBytes` bounds application-added fields and the Content-Type field.
