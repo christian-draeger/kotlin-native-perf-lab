@@ -2,6 +2,7 @@ package codes.draeger.ktserve.cors
 
 import codes.draeger.ktserve.HttpField
 import codes.draeger.ktserve.Routes
+import codes.draeger.ktserve.extension
 import codes.draeger.ktserve.serve
 import codes.draeger.ktserve.text
 import java.net.ServerSocket
@@ -95,6 +96,43 @@ class JvmCorsTest {
         val wildcardVary = request(port, "GET", "/wild", "Origin" to appOrigin)
         assertEquals("*", wildcardVary.header("Vary"))
         assertEquals(appOrigin, wildcardVary.header("Access-Control-Allow-Origin"))
+    }
+
+    @Test
+    fun ordinaryResponsesPreserveOriginChecksAndAllowLaterHeaderEdits() = withServer({
+        install(cors {
+            allowOrigins(appOrigin, "https://second.example")
+            allowCredentials = true
+        })
+        install(extension("test.headers-after-cors") {
+            onResponseHeaders { _, headers ->
+                headers.values("Vary").singleOrNull()?.let {
+                    headers.set("Vary", "$it, Accept")
+                }
+                headers.append("X-After-Cors", "ok")
+            }
+        })
+        get("/items") { text("payload") }
+    }) { port ->
+        val origin = "https://second.example"
+        val allowed = request(port, "GET", "/items", "Origin" to origin)
+        assertEquals(200, allowed.statusCode())
+        assertEquals("payload", allowed.body())
+        assertEquals(origin, allowed.header("Access-Control-Allow-Origin"))
+        assertEquals("true", allowed.header("Access-Control-Allow-Credentials"))
+
+        val absent = request(port, "GET", "/items")
+        val duplicate = request(port, "GET", "/items", "Origin" to origin, "Origin" to origin)
+        for (result in listOf(absent, duplicate)) {
+            assertEquals(allowed.statusCode(), result.statusCode())
+            assertEquals(allowed.body(), result.body())
+            assertNull(result.header("Access-Control-Allow-Origin"))
+            assertNull(result.header("Access-Control-Allow-Credentials"))
+        }
+        for (result in listOf(allowed, absent, duplicate)) {
+            assertEquals(listOf("Origin, Accept"), result.headers().allValues("Vary"))
+            assertEquals("ok", result.header("X-After-Cors"))
+        }
     }
 
     private fun withServer(configure: Routes.() -> Unit, assertResponses: (Int) -> Unit) {

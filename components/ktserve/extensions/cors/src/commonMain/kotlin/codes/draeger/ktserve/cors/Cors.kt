@@ -1,6 +1,8 @@
 package codes.draeger.ktserve.cors
 
+import codes.draeger.ktserve.HttpField
 import codes.draeger.ktserve.KtServeExtensionDsl
+import codes.draeger.ktserve.PreparedResponseHeaders
 import codes.draeger.ktserve.RequestAttribute
 import codes.draeger.ktserve.RequestDecision
 import codes.draeger.ktserve.ResponseHeaders
@@ -18,6 +20,8 @@ private const val ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials"
 
 private val defaultMethods = setOf("GET", "HEAD", "POST")
 private val preflightResult = RequestAttribute<Preflight>("codes.draeger.ktserve.cors.preflight")
+private val originVary = HttpField("Vary", ORIGIN)
+private val varyOnly = PreparedResponseHeaders(originVary)
 private val acceptedPreflight = RequestDecision.Respond(response(ByteArray(0), status = 204))
 private val deniedPreflight = RequestDecision.Respond(response(ByteArray(0), status = 403))
 
@@ -89,8 +93,6 @@ fun cors(configure: CorsConfiguration.() -> Unit): ServerExtension {
         onResponseHeaders { context, headers ->
             val request = context.request
             val options = request.method == "OPTIONS"
-            headers.varyByCors(options)
-
             val preflight = context[preflightResult]
             val origin = if (preflight != null) {
                 preflight.origin
@@ -100,6 +102,8 @@ fun cors(configure: CorsConfiguration.() -> Unit): ServerExtension {
                 else policy.allowedOrigin(origins, request.method)
             }
 
+            if (!options && headers.appendIfEmpty(policy.responseHeaders(origin))) return@onResponseHeaders
+            headers.varyByCors(options)
             if (origin == null) headers.remove(ALLOW_ORIGIN) else headers.set(ALLOW_ORIGIN, origin)
             if (origin != null && policy.allowCredentials) headers.set(ALLOW_CREDENTIALS, "true")
             else headers.remove(ALLOW_CREDENTIALS)
@@ -127,6 +131,16 @@ internal class CorsPolicy(
 ) {
     val advertisedMethods = methods.joinToString(", ")
     val advertisedHeaders = headers.takeIf { it.isNotEmpty() }?.joinToString(", ")
+    private val ordinaryHeaders = (if (anyOrigin) setOf("*") else origins).associateWith { origin ->
+        val allowOrigin = HttpField(ALLOW_ORIGIN, origin)
+        if (allowCredentials) {
+            PreparedResponseHeaders(originVary, allowOrigin, HttpField(ALLOW_CREDENTIALS, "true"))
+        } else {
+            PreparedResponseHeaders(originVary, allowOrigin)
+        }
+    }
+
+    fun responseHeaders(origin: String?): PreparedResponseHeaders = ordinaryHeaders[origin] ?: varyOnly
 
     fun allowedOrigin(origins: List<String>, method: String): String? {
         if (method !in methods) return null

@@ -3,6 +3,7 @@ package codes.draeger.ktserve
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -91,6 +92,29 @@ class ServerExtensionTest {
             }
         }
         assertTrue(failure.message.orEmpty().contains("example.headers"))
+    }
+
+    @Test
+    fun preparedFieldsAreVisibleToLaterHooksAndKeepIndependentEdits() {
+        val prepared = PreparedResponseHeaders(HttpField("Vary", "Origin"), HttpField("Allow", "GET, POST"))
+        val response = emptyResponse(405)
+        val first = ResponseHeaders(response)
+        assertTrue(first.appendIfEmpty(prepared))
+        assertEquals(listOf("Origin"), first.values("vary"))
+        assertFalse(first.appendIfEmpty(PreparedResponseHeaders(HttpField("X-Added", "ignored"))))
+        first.set("Vary", "Origin, Accept")
+        first.remove("Allow")
+        assertEquals(listOf(HttpField("Vary", "Origin, Accept")), first.apply().fields)
+
+        val next = ResponseHeaders(response)
+        assertTrue(next.appendIfEmpty(prepared))
+        val result = next.apply()
+        assertEquals(listOf(HttpField("Vary", "Origin"), HttpField("Allow", "GET, POST")), result.fields)
+        assertEquals(32L, result.applicationHeaderBytes)
+        assertNull(result.allowedMethods)
+        assertFailsWith<IllegalArgumentException> {
+            PreparedResponseHeaders(HttpField("Content-Length", "0"))
+        }
     }
 
     @Test
