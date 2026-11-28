@@ -331,9 +331,8 @@ with the platform toolchains for the artifacts being staged. The extension build
 writes its artifacts under `extensions/build/maven-staging/<version>`. Stage the
 core separately at the same version when testing a Maven consumer.
 
-The [standalone extension consumer](../examples/extensions) resolves the staged
-artifacts without a composite build. It installs the official modules alongside a
-custom extension that continues requests with a typed attribute or returns an early
-response. The Maven staging workflow runs the same HTTP checks on JDK 21, Linux
+The [Taskboard example](../examples/extensions/README.md) installs the official modules
+alongside a custom workspace hook. It can use the checkout or resolve the staged Maven
+artifacts in an independent Gradle build. The Maven staging workflow runs its HTTP checks on JDK 21, Linux
 x86-64, Linux ARM64 and macOS ARM64. Use the workflow's `rehearse_patch` option to
 verify the signed artifacts with a temporary key without uploading them to Central.

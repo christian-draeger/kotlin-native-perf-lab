@@ -5,12 +5,13 @@ plugins {
     kotlin("plugin.serialization") version "2.4.21"
 }
 
-val ktserveVersion = providers.gradleProperty("ktserve.version").get()
+val ktserveVersion = providers.gradleProperty("ktserve.version").orNull
 val useMavenCentral = providers.gradleProperty("ktserve.publicRepository").orNull == "true"
+fun ktserveArtifact(name: String) = "codes.draeger:$name${ktserveVersion?.let { ":$it" }.orEmpty()}"
 
 repositories {
     mavenCentral()
-    if (!useMavenCentral) exclusiveContent {
+    if (ktserveVersion != null && !useMavenCentral) exclusiveContent {
         forRepository { maven { url = uri("../../build/maven-staging/$ktserveVersion") } }
         filter { includeGroup("codes.draeger") }
     }
@@ -21,7 +22,9 @@ val architecture = providers.gradleProperty("benchmark.targetArch").getOrElse(Sy
 if (macos) layout.buildDirectory.set(layout.projectDirectory.dir("build/macos"))
 
 kotlin {
-    val jvm = jvm { compilerOptions.jvmTarget.set(JvmTarget.JVM_21) }
+    val jvm = jvm {
+        if (ktserveVersion != null) compilerOptions.jvmTarget.set(JvmTarget.JVM_21)
+    }
     val native = when {
         macos -> macosArm64("native")
         architecture in setOf("amd64", "x86_64") -> linuxX64("native")
@@ -34,13 +37,15 @@ kotlin {
     }
     sourceSets {
         commonMain.dependencies {
-            implementation("codes.draeger:ktserve:$ktserveVersion")
+            implementation(ktserveArtifact("ktserve"))
             for (name in listOf("access-log", "bearer", "cors", "openapi", "validation")) {
-                implementation("codes.draeger:ktserve-$name:$ktserveVersion")
+                implementation(ktserveArtifact("ktserve-$name"))
             }
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
         }
         jvmMain.dependencies {
-            implementation("codes.draeger:ktserve-opentelemetry:$ktserveVersion")
+            implementation(ktserveArtifact("ktserve-opentelemetry"))
+            implementation("io.opentelemetry:opentelemetry-sdk:1.68.0")
         }
     }
     tasks.register<Sync>("installJvmConsumer") {
