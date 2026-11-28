@@ -19,10 +19,23 @@ MODULES = {
     "ktserve-linuxarm64": ".klib",
     "ktserve-macosarm64": ".klib",
 }
+PORTABLE_EXTENSIONS = ("access-log", "bearer", "cors", "openapi", "validation")
 
 
-def release_files(repository, version):
-    for module, extension in MODULES.items():
+def release_modules(include_extensions):
+    yield from MODULES.items()
+    if include_extensions:
+        for name in (*PORTABLE_EXTENSIONS, "opentelemetry"):
+            artifact = f"ktserve-{name}"
+            yield artifact, ".jar"
+            yield f"{artifact}-jvm", ".jar"
+            if name in PORTABLE_EXTENSIONS:
+                for target in ("linuxx64", "linuxarm64", "macosarm64"):
+                    yield f"{artifact}-{target}", ".klib"
+
+
+def release_files(repository, version, include_extensions):
+    for module, extension in release_modules(include_extensions):
         directory = repository / GROUP_PATH / module / version
         stem = f"{module}-{version}"
         required = {stem + suffix for suffix in (extension, ".pom", ".module", "-sources.jar", "-javadoc.jar")}
@@ -48,10 +61,10 @@ def release_files(repository, version):
             yield artifact.relative_to(repository), data, checksums
 
 
-def build_bundle(repository, version, signing_key, output):
+def build_bundle(repository, version, signing_key, output, include_extensions):
     if output.exists():
         raise FileExistsError(f"Bundle already exists at {output}")
-    files = list(release_files(repository, version))
+    files = list(release_files(repository, version, include_extensions))
     passphrase = os.environ.pop("SIGNING_IN_MEMORY_KEY_PASSWORD", None)
     gpg_command = ["gpg"]
     gpg_input = None
@@ -88,12 +101,14 @@ def main():
     parser.add_argument("version")
     parser.add_argument("signing_key", help="Fingerprint of the release key in the local GnuPG keyring")
     parser.add_argument("output", type=Path)
+    parser.add_argument("--include-extensions", action="store_true", help="Require all official extension artifacts")
     args = parser.parse_args()
     version_pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?"
     if not re.fullmatch(version_pattern, args.version) or args.version.upper().endswith("-SNAPSHOT"):
         parser.error("provide the staged release version, such as 0.2.0-preview.2")
     try:
-        build_bundle(args.staged_repository.resolve(), args.version, args.signing_key, args.output.absolute())
+        build_bundle(args.staged_repository.resolve(), args.version, args.signing_key, args.output.absolute(),
+                     args.include_extensions)
     except (OSError, ValueError, subprocess.CalledProcessError) as error:
         parser.exit(1, f"Could not create the Central bundle. {error}\n")
 
